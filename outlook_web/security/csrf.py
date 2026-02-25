@@ -14,6 +14,13 @@ except ImportError:  # pragma: no cover
     print("Warning: flask-wtf not installed. CSRF protection is disabled. Install with: pip install flask-wtf")
 
 
+def generate_csrf():
+    """生成 CSRF token（模块级别导出）"""
+    if _generate_csrf is not None:
+        return _generate_csrf()
+    return None
+
+
 def init_csrf(app) -> Tuple[Optional[object], Callable, Optional[Callable]]:
     """
     初始化 CSRF 保护（如果可用）
