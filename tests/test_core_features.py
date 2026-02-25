@@ -11,6 +11,9 @@ class CoreFeatureTests(unittest.TestCase):
     def setUpClass(cls):
         cls.module = import_web_app_module()
         cls.app = cls.module.app
+        # 导入 graph_service 用于 mock
+        from outlook_web.services import graph as graph_service
+        cls.graph_service = graph_service
 
     def _login(self, client, password: str = "testpass123"):
         resp = client.post("/login", json={"password": password})
@@ -202,7 +205,7 @@ class CoreFeatureTests(unittest.TestCase):
         finally:
             conn.close()
 
-        with patch.object(self.module.impl, "test_refresh_token", return_value=(True, None)):
+        with patch.object(self.graph_service, "test_refresh_token", return_value=(True, None)):
             resp = client.get("/api/accounts/refresh-all")
 
         self.assertEqual(resp.status_code, 200)

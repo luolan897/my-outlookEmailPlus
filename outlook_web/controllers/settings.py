@@ -55,7 +55,9 @@ def api_get_settings() -> Any:
 def api_update_settings() -> Any:
     """更新设置"""
     # 延迟导入避免循环依赖
-    from outlook_web.legacy import init_scheduler, configure_scheduler_jobs
+    from outlook_web.services import scheduler as scheduler_service
+    from outlook_web.services import graph as graph_service
+    from flask import current_app
 
     data = request.json
     updated = []
@@ -194,9 +196,11 @@ def api_update_settings() -> Any:
         scheduler_reloaded = None
         if scheduler_reload_needed:
             try:
-                scheduler = init_scheduler()
+                scheduler = scheduler_service.get_scheduler_instance()
                 if scheduler:
-                    configure_scheduler_jobs(scheduler)
+                    scheduler_service.configure_scheduler_jobs(
+                        scheduler, current_app, graph_service.test_refresh_token
+                    )
                     scheduler_reloaded = True
                 else:
                     scheduler_reloaded = False

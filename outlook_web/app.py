@@ -21,8 +21,8 @@ def create_app(*, autostart_scheduler: Optional[bool] = None):
         from werkzeug.middleware.proxy_fix import ProxyFix
         from werkzeug.exceptions import HTTPException
 
-        from outlook_web import config, legacy
-        from outlook_web.db import register_db
+        from outlook_web import config
+        from outlook_web.db import register_db, init_db
         from outlook_web.security.csrf import init_csrf
         from outlook_web.middleware import (
             ensure_trace_id,
@@ -45,13 +45,27 @@ def create_app(*, autostart_scheduler: Optional[bool] = None):
         )
 
         # 初始化（DB/目录等）
-        legacy.init_app()
-
         repo_root = Path(__file__).resolve().parents[1]
+        templates_dir = repo_root / "templates"
+        static_dir = repo_root / "static"
+
+        # 确保目录存在
+        templates_dir.mkdir(parents=True, exist_ok=True)
+        static_dir.mkdir(parents=True, exist_ok=True)
+
+        # 确保数据目录存在
+        data_dir = config.get_database_path()
+        if data_dir:
+            import os
+            os.makedirs(os.path.dirname(data_dir) if os.path.dirname(data_dir) else ".", exist_ok=True)
+
+        # 初始化数据库
+        init_db()
+
         app = Flask(
             __name__,
-            template_folder=str(repo_root / "templates"),
-            static_folder=str(repo_root / "static"),
+            template_folder=str(templates_dir),
+            static_folder=str(static_dir),
             static_url_path="/static",
         )
 
@@ -87,16 +101,26 @@ def create_app(*, autostart_scheduler: Optional[bool] = None):
         app.register_blueprint(system.create_blueprint())
         app.register_blueprint(audit.create_blueprint())
 
+        # 打印初始化信息
+        print("=" * 60)
+        print("Outlook 邮件 Web 应用已初始化")
+        print(f"数据库文件: {config.get_database_path()}")
+        print(f"GPTMail API: {config.get_gptmail_base_url()}")
+        print("=" * 60)
+
         _APP_INSTANCE = app
 
+    # 调度器启动控制
     if autostart_scheduler is None:
-        from outlook_web import legacy
+        from outlook_web.services import scheduler as scheduler_service
+        from outlook_web.services import graph as graph_service
 
-        if legacy.should_autostart_scheduler():
-            legacy.init_scheduler()
+        if scheduler_service.should_autostart_scheduler():
+            scheduler_service.init_scheduler(_APP_INSTANCE, graph_service.test_refresh_token)
     elif autostart_scheduler:
-        from outlook_web import legacy
+        from outlook_web.services import scheduler as scheduler_service
+        from outlook_web.services import graph as graph_service
 
-        legacy.init_scheduler()
+        scheduler_service.init_scheduler(_APP_INSTANCE, graph_service.test_refresh_token)
 
     return _APP_INSTANCE

@@ -4,8 +4,8 @@
 Outlook 邮件 Web 应用（兼容入口）
 
 目标：
-- 保持部署入口兼容：`web_outlook_app:app`
-- 内部实现逐步迁移到 `outlook_web/`（后续将继续模块化/Blueprint 化）
+- 保���部署入口兼容：`web_outlook_app:app`
+- 内部实现已迁移到 `outlook_web/` 模块化架构
 
 关联文档：
 - PRD：docs/PRD/Outlook邮件管理工具-前后端拆分与模块化PRD.md
@@ -16,29 +16,36 @@ Outlook 邮件 Web 应用（兼容入口）
 
 import os
 
-from outlook_web import legacy as impl
 from outlook_web.app import create_app
+from outlook_web.services import scheduler as scheduler_service
+from outlook_web.services import graph as graph_service
+from outlook_web.db import create_sqlite_connection
+
+# 兼容导入：从各模块导出常用函数
+from outlook_web.security.auth import MAX_LOGIN_ATTEMPTS
+from outlook_web.errors import sanitize_error_details, build_error_payload
+from outlook_web.security.crypto import decrypt_data, encrypt_data
+from outlook_web.repositories.distributed_locks import (
+    acquire_distributed_lock,
+    release_distributed_lock,
+)
 
 # 在脚本运行场景（__main__）中，调度器由 main block 统一控制，
 # 避免 debug reloader 父进程误启后台线程。
 app = create_app(autostart_scheduler=None if __name__ != "__main__" else False)
 
 
-__all__ = ["app", "impl"]
-
-
-def __getattr__(name: str):
-    """
-    迁移期兼容：将历史上从 `web_outlook_app` 直接访问的符号代理到 legacy 实现。
-
-    - 避免 `from outlook_web.legacy import *` 造成命名污染/覆盖（例如覆盖 `app`）。
-    - 保持 `from web_outlook_app import some_function` 的兼容性（PEP 562）。
-    """
-    return getattr(impl, name)
-
-
-def __dir__():
-    return sorted(set(globals().keys()) | set(dir(impl)))
+__all__ = [
+    "app",
+    "create_sqlite_connection",
+    "MAX_LOGIN_ATTEMPTS",
+    "sanitize_error_details",
+    "build_error_payload",
+    "decrypt_data",
+    "encrypt_data",
+    "acquire_distributed_lock",
+    "release_distributed_lock",
+]
 
 
 if __name__ == "__main__":
@@ -55,7 +62,7 @@ if __name__ == "__main__":
 
     # 初始化定时任务（与旧版行为保持一致）
     if not debug or os.getenv("WERKZEUG_RUN_MAIN") == "true":
-        impl.init_scheduler()
+        scheduler_service.init_scheduler(app, graph_service.test_refresh_token)
     else:
         print("✓ 调试重载器父进程：跳过启动调度器")
 
