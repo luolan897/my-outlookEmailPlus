@@ -73,6 +73,13 @@ def create_app(*, autostart_scheduler: Optional[bool] = None):
             static_url_path="/static",
         )
 
+        # 注入版本号到所有模板（用于 UI 显示）
+        from outlook_web import __version__ as APP_VERSION
+
+        @app.context_processor
+        def inject_app_version():
+            return {"APP_VERSION": APP_VERSION}
+
         app.secret_key = config.require_secret_key()
         app.config["PERMANENT_SESSION_LIFETIME"] = 60 * 60 * 24 * 7  # 7 天
         app.config["SESSION_COOKIE_HTTPONLY"] = True

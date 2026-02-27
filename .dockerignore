@@ -12,6 +12,8 @@ build/
 venv/
 env/
 ENV/
+.venv/
+.pytest_cache/
 
 # IDE
 .vscode/
@@ -23,10 +25,15 @@ ENV/
 .git/
 .gitignore
 
+# Node / Jest
+node_modules/
+tests/
+
 # 数据库文件（使用 volume 挂载）
 *.db
 *.sqlite
 *.sqlite3
+data/
 
 # 日志
 *.log

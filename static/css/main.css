@@ -35,6 +35,13 @@
             gap: 8px;
         }
 
+        .navbar-brand .app-version {
+            font-size: 12px;
+            font-weight: 500;
+            color: #999;
+            margin-left: 2px;
+        }
+
         .navbar-brand svg {
             width: 24px;
             height: 24px;
