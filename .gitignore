@@ -26,6 +26,15 @@ data/
 *.swp
 *.swo
 
+# Node / Jest
+node_modules/
+tests/layout-system/coverage/
+
+# 本地临时文件/素材（避免误提交）
+PixPin_*.png
+exeample/
+2026-02-26-api-key-credit-monitoring.md
+
 # 日志
 *.log
 

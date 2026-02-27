@@ -34,21 +34,29 @@ Web 应用 - Flask 后端 + 传统前端
 
 ```
 outlookEmail/
-├── web_outlook_app.py          # 应用入口 (兼容层)
+├── web_outlook_app.py          # 应用入口
 ├── outlook_mail_reader.py      # 命令行邮件读取工具
 ├── outlook_web/                # 主应用模块
 │   ├── app.py                  # Flask 应用工厂
 │   ├── config.py               # 配置管理
 │   ├── db.py                   # 数据库操作
-│   ├── legacy.py               # 旧版实现 (迁移中)
 │   ├── audit.py                # 审计日志
 │   ├── errors.py               # 错误处理
 │   ├── routes/                 # 路由层 (Blueprint)
+│   ├── controllers/            # 控制器层
 │   ├── services/               # 服务层
 │   ├── repositories/           # 数据访问层
-│   └── security/               # 安全模块
+│   ├── security/               # 安全模块
+│   └── middleware/             # 中间件
 ├── templates/                  # HTML 模板
+│   ├── index.html              # 主页面
+│   ├── login.html              # 登录页
+│   └── partials/               # 页面片段
 ├── static/                     # 静态资源
+│   ├── css/                    # 样式文件
+│   └── js/                     # JavaScript 文件
+│       ├── features/           # 功能模块
+│       └── layout-*.js         # 布局系统
 ├── tests/                      # 测试
 ├── docs/                       # 文档
 └── data/                       # 数据目录
@@ -100,7 +108,14 @@ outlookEmail/
 - 连续错误自动停止
 - 可配置轮询间隔/次数
 
-### 8. 安全特性
+### 8. 可调整布局系统
+- 四栏式响应式布局
+- 拖拽调整栏宽
+- 布局状态持久化
+- 支持折叠/展开
+- 自适应窗口大小
+
+### 9. 安全特性
 - XSS 防护 (DOMPurify + iframe 沙箱)
 - CSRF 防护 (Flask-WTF)
 - 数据加密 (Fernet 对称加密)
@@ -137,10 +152,10 @@ Database (SQLite)
 ### 应用工厂模式
 使用 `create_app()` 工厂函数创建 Flask 应用实例,便于测试和配置管理。
 
-### 迁移中架构
-- `legacy.py` 包含旧版实现 (约 20 万字节)
-- 正在逐步迁移到新的分层架构
-- 保持向后兼容性
+### 完整分层架构
+- 已完成从单体架构到分层架构的迁移
+- Routes → Controllers → Services → Repositories 清晰分层
+- 中间件统一处理横切关注点
 
 ## 数据模型
 
@@ -195,13 +210,14 @@ python web_outlook_app.py
 - ✅ 验证码提取 (Graph → IMAP 回退)
 - ✅ 自动轮询与通知
 - ✅ 批量删除邮箱
+- ✅ 架构迁移完成 (legacy.py 已移除)
+- ✅ 可调整布局系统
 
 ### 进行中
-- 🔄 架构迁移 (legacy.py → 分层架构)
 - 🔄 前后端分离准备
+- 🔄 单元测试覆盖率提升
 
 ### 待优化
-- ⏳ 完全移除 legacy.py
 - ⏳ 前后端完全分离
 - ⏳ API 文档完善
-- ⏳ 单元测试覆盖率提升
+- ⏳ 性能优化与监控

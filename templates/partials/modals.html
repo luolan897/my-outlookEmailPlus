@@ -667,6 +667,24 @@
         </div>
     </div>
 
+    <!-- 恢复默认布局确认模态框（可调整布局系统：F3） -->
+    <div class="modal" id="resetLayoutModal" onclick="if(event.target === this) hideResetLayoutModal()">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>恢复默认布局</h3>
+                <button class="modal-close" onclick="hideResetLayoutModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>确定要恢复到默认布局吗？</p>
+                <p class="text-muted">当前的面板宽度和折叠状态将被重置。</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="hideResetLayoutModal()">取消</button>
+                <button class="btn btn-primary" onclick="confirmResetLayout()">确定</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 消息提示 -->
     <div class="toast" id="toast"></div>
 

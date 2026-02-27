@@ -129,7 +129,7 @@
 
         /* 分组面板 */
         .group-panel {
-            width: 200px;
+            width: var(--group-panel-width, 200px);
             background-color: #fafafa;
             border-right: 1px solid #e5e5e5;
             display: flex;
@@ -259,7 +259,7 @@
 
         /* 邮箱账号面板 */
         .account-panel {
-            width: 260px;
+            width: var(--account-panel-width, 260px);
             background-color: #ffffff;
             border-right: 1px solid #e5e5e5;
             display: flex;
@@ -500,7 +500,7 @@
 
         /* 邮件列表面板 */
         .email-list-panel {
-            width: 380px;
+            width: var(--email-list-panel-width, 380px);
             background-color: #ffffff;
             border-right: 1px solid #e5e5e5;
             display: flex;
@@ -1249,39 +1249,23 @@
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
-        /* 响应式 */
-        @media (max-width: 1200px) {
-            .group-panel {
-                width: 180px;
-            }
-
-            .account-panel {
-                width: 220px;
-            }
-
-            .email-list-panel {
-                width: 320px;
-            }
-        }
-
-        @media (max-width: 1024px) {
-            .group-panel {
-                width: 160px;
-            }
-
-            .account-panel {
-                width: 200px;
-            }
-
-            .email-list-panel {
-                width: 280px;
-            }
-        }
+        /* 响应式
+           说明：可调整布局系统的断点折叠逻辑由 LayoutManager（JS）负责，
+           此处移除旧的“固定宽度缩放”规则，避免与用户拖动/持久化状态冲突。 */
 
         @media (max-width: 768px) {
 
-            .group-panel,
-            .account-panel {
+            /*
+             * 移动端历史样式（侧栏滑入/滑出）：
+             * - 旧逻辑依赖 `.show` 类控制 left。
+             * - 当前版本的可调整布局系统由 LayoutManager（JS）负责折叠/展开与指示器渲染；
+             *   若继续在窄屏下把面板强制 `left:-280px`，会导致折叠指示器也被移出屏幕，
+             *   出现“全部折叠后无法再展开”的严重交互问题。
+             * - 因此仅在布局系统未启用时保留该历史规则，避免影响可调整布局系统。
+             */
+
+            html:not(.layout-system-enabled) .group-panel,
+            html:not(.layout-system-enabled) .account-panel {
                 position: fixed;
                 left: -280px;
                 top: 56px;
@@ -1290,8 +1274,8 @@
                 transition: left 0.3s;
             }
 
-            .group-panel.show,
-            .account-panel.show {
+            html:not(.layout-system-enabled) .group-panel.show,
+            html:not(.layout-system-enabled) .account-panel.show {
                 left: 0;
             }
 

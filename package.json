@@ -1,0 +1,15 @@
+{
+  "name": "outlook-email-layout-system",
+  "private": true,
+  "scripts": {
+    "test": "jest --config tests/layout-system/jest.config.js",
+    "test:watch": "jest --config tests/layout-system/jest.config.js --watch",
+    "test:coverage": "jest --config tests/layout-system/jest.config.js --coverage",
+    "test:unit": "jest --config tests/layout-system/jest.config.js tests/layout-system/unit",
+    "test:integration": "jest --config tests/layout-system/jest.config.js tests/layout-system/integration --collectCoverage=false"
+  },
+  "devDependencies": {
+    "jest": "^30.1.3",
+    "jest-environment-jsdom": "^30.1.3"
+  }
+}

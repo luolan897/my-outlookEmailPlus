@@ -8,6 +8,8 @@
     <!-- DOMPurify for XSS protection -->
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <!-- 可调整布局系统：需在 main.css 之后引入以覆盖旧布局样式 -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout.css') }}">
 </head>
 
 <body>
@@ -37,6 +39,14 @@
             <button class="navbar-btn" onclick="showRefreshModal()">全量刷新Token</button>
             <button class="navbar-btn" onclick="showExportModal()">导出邮箱</button>
             <button class="navbar-btn" onclick="showSettingsModal()">⚙️ 设置</button>
+            <button class="navbar-btn reset-layout-btn" onclick="showResetLayoutModal()"
+                aria-label="恢复默认布局" title="恢复默认布局">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polyline points="1 4 1 10 7 10"></polyline>
+                    <path d="M3.51 15a9 9 0 102.13-9.36L1 10"></path>
+                </svg>
+            </button>
             <button class="navbar-btn" onclick="logout()" style="color: #dc3545;">退出登录</button>
         </div>
     </nav>
@@ -44,18 +54,27 @@
     <!-- 主容器 -->
     <div class="main-container">
         <!-- 分组面板 -->
-        <div class="group-panel" id="groupPanel">
+        <div class="group-panel resizable-panel" id="groupPanel" data-panel="groups">
             <div class="panel-header">
                 <span class="panel-title">分组</span>
-                <button class="panel-action-btn" onclick="showAddGroupModal()" title="添加分组">+</button>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                    <button class="panel-action-btn" onclick="showAddGroupModal()" title="添加分组">+</button>
+                    <button class="panel-action-btn collapse-btn" data-panel="groups" aria-label="折叠分组面板"
+                        aria-expanded="true" title="折叠分组面板">
+                        ←
+                    </button>
+                </div>
             </div>
             <div class="group-list" id="groupList">
                 <!-- 分组列表将通过 JS 动态加载 -->
             </div>
+            <div class="resizer" role="separator" aria-orientation="vertical" aria-label="调整分组面板宽度"
+                aria-valuenow="200" aria-valuemin="150" aria-valuemax="400" tabindex="0" data-resizer="groups">
+            </div>
         </div>
 
         <!-- 邮箱账号面板 -->
-        <div class="account-panel" id="accountPanel">
+        <div class="account-panel resizable-panel" id="accountPanel" data-panel="accounts">
             <div class="account-panel-header">
                 <div class="account-panel-title" id="accountPanelTitle">
                     <span class="group-color" id="currentGroupColor" style="background-color: #666"></span>
@@ -70,6 +89,10 @@
                             <path fill-rule="evenodd"
                                 d="M8 2a.75.75 0 01.75.75v4.5h4.5a.75.75 0 010 1.5h-4.5v4.5a.75.75 0 01-1.5 0v-4.5h-4.5a.75.75 0 010-1.5h4.5v-4.5A.75.75 0 018 2z" />
                         </svg>
+                    </button>
+                    <button class="panel-action-btn collapse-btn" data-panel="accounts" aria-label="折叠账号面板"
+                        aria-expanded="true" title="折叠账号面板">
+                        ←
                     </button>
                 </div>
             </div>
@@ -120,74 +143,82 @@
             <div class="account-panel-footer">
                 <button class="add-account-btn" onclick="showAddAccountModal()">+ 导入邮箱</button>
             </div>
+            <div class="resizer" role="separator" aria-orientation="vertical" aria-label="调整账号面板宽度"
+                aria-valuenow="260" aria-valuemin="180" aria-valuemax="500" tabindex="0" data-resizer="accounts">
+            </div>
         </div>
 
-        <!-- 内容区域 -->
-        <div class="content-area">
-            <!-- 邮件列表面板 -->
-            <div class="email-list-panel" id="emailListPanel">
-                <div class="email-list-header">
-                    <div
-                        style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                        <div class="folder-tabs" id="folderTabs" style="display: none;">
-                            <button class="folder-tab active" data-folder="inbox" onclick="switchFolder('inbox')">
-                                📨 收件箱
-                            </button>
-                            <button class="folder-tab" data-folder="junkemail" onclick="switchFolder('junkemail')">
-                                ⚠️ 垃圾邮件
-                            </button>
-                        </div>
-                        <button class="refresh-btn" onclick="refreshEmails()">获取邮件</button>
+        <!-- 邮件列表面板 -->
+        <div class="email-list-panel resizable-panel" id="emailListPanel" data-panel="emails">
+            <div class="email-list-header">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                    <div class="folder-tabs" id="folderTabs" style="display: none;">
+                        <button class="folder-tab active" data-folder="inbox" onclick="switchFolder('inbox')">
+                            📨 收件箱
+                        </button>
+                        <button class="folder-tab" data-folder="junkemail" onclick="switchFolder('junkemail')">
+                            ⚠️ 垃圾邮件
+                        </button>
                     </div>
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <h2 style="margin: 0; font-size: 16px; font-weight: 600;">
-                            邮件
-                            <span class="email-count" id="emailCount"></span>
-                        </h2>
-                        <span class="method-tag" id="methodTag" style="display:none;"></span>
+                        <button class="refresh-btn" onclick="refreshEmails()">获取邮件</button>
+                        <button class="panel-action-btn collapse-btn" data-panel="emails" aria-label="折叠邮件列表面板"
+                            aria-expanded="true" title="折叠邮件列表面板">
+                            ←
+                        </button>
                     </div>
                 </div>
-                <div class="email-list" id="emailList">
-                    <div class="empty-state">
-                        <div class="empty-state-icon">📬</div>
-                        <div class="empty-state-text">请从左侧选择一个邮箱账号</div>
-                    </div>
-                </div>
-                <!-- Email Batch Action Bar -->
-                <div id="emailBatchActionBar"
-                    style="display: none; padding: 8px 16px; border-top: 1px solid #e5e5e5; background: #f8f9fa; gap: 8px; align-items: center;">
-                    <span id="emailSelectedCount" style="font-size: 12px; color: #666;">已选 0 项</span>
-                    <div style="flex: 1;"></div>
-                    <button class="batch-btn danger" onclick="confirmBatchDeleteEmails()">
-                        🗑️ 删除
-                    </button>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <h2 style="margin: 0; font-size: 16px; font-weight: 600;">
+                        邮件
+                        <span class="email-count" id="emailCount"></span>
+                    </h2>
+                    <span class="method-tag" id="methodTag" style="display:none;"></span>
                 </div>
             </div>
-
-            <!-- 邮件详情面板 -->
-            <div class="email-detail-panel">
-                <div class="email-detail-toolbar" id="emailDetailToolbar" style="display:none;">
-                    <button class="back-btn" onclick="showEmailList()">← 返回</button>
-                    <button class="toggle-list-btn" onclick="toggleEmailList()">
-                        <span id="toggleListText">隐藏列表</span>
-                    </button>
-                    <button class="fullscreen-btn" onclick="openFullscreenEmail()">🔍 全屏查看</button>
-                    <label
-                        style="display: flex; align-items: center; gap: 6px; font-size: 13px; margin-left: 12px; cursor: pointer;">
-                        <input type="checkbox" id="trustEmailCheckbox" onchange="toggleTrustMode(this)">
-                        <span style="user-select: none;">信任此邮件</span>
-                    </label>
-                    <div style="flex: 1;"></div>
-                    <button class="batch-btn danger" onclick="confirmDeleteCurrentEmail()"
-                        style="padding: 4px 8px; font-size: 12px;">
-                        🗑️ 删除
-                    </button>
+            <div class="email-list" id="emailList">
+                <div class="empty-state">
+                    <div class="empty-state-icon">📬</div>
+                    <div class="empty-state-text">请从左侧选择一个邮箱账号</div>
                 </div>
-                <div id="emailDetail">
-                    <div class="empty-state">
-                        <div class="empty-state-icon">📄</div>
-                        <div class="empty-state-text">选择一封邮件查看详情</div>
-                    </div>
+            </div>
+            <!-- Email Batch Action Bar -->
+            <div id="emailBatchActionBar"
+                style="display: none; padding: 8px 16px; border-top: 1px solid #e5e5e5; background: #f8f9fa; gap: 8px; align-items: center;">
+                <span id="emailSelectedCount" style="font-size: 12px; color: #666;">已选 0 项</span>
+                <div style="flex: 1;"></div>
+                <button class="batch-btn danger" onclick="confirmBatchDeleteEmails()">
+                    🗑️ 删除
+                </button>
+            </div>
+            <div class="resizer" role="separator" aria-orientation="vertical" aria-label="调整邮件列表面板宽度"
+                aria-valuenow="380" aria-valuemin="280" aria-valuemax="600" tabindex="0" data-resizer="emails">
+            </div>
+        </div>
+
+        <!-- 邮件详情面板（不可折叠） -->
+        <div class="email-detail-panel">
+            <div class="email-detail-toolbar" id="emailDetailToolbar" style="display:none;">
+                <button class="back-btn" onclick="showEmailList()">← 返回</button>
+                <button class="toggle-list-btn" onclick="toggleEmailList()">
+                    <span id="toggleListText">隐藏列表</span>
+                </button>
+                <button class="fullscreen-btn" onclick="openFullscreenEmail()">🔍 全屏查看</button>
+                <label
+                    style="display: flex; align-items: center; gap: 6px; font-size: 13px; margin-left: 12px; cursor: pointer;">
+                    <input type="checkbox" id="trustEmailCheckbox" onchange="toggleTrustMode(this)">
+                    <span style="user-select: none;">信任此邮件</span>
+                </label>
+                <div style="flex: 1;"></div>
+                <button class="batch-btn danger" onclick="confirmDeleteCurrentEmail()"
+                    style="padding: 4px 8px; font-size: 12px;">
+                    🗑️ 删除
+                </button>
+            </div>
+            <div id="emailDetail">
+                <div class="empty-state">
+                    <div class="empty-state-icon">📄</div>
+                    <div class="empty-state-text">选择一封邮件查看详情</div>
                 </div>
             </div>
         </div>

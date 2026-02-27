@@ -462,18 +462,53 @@
             }
         }
 
+        // 同步“邮件列表显示/隐藏”与可调整布局系统（Grid 列宽）
+        function syncEmailListVisibility(visible) {
+            const panel = document.getElementById('emailListPanel');
+            if (!panel) return;
+
+            try {
+                const lm = window.layoutManager;
+                if (lm && typeof lm.applyCollapsedLayoutVars === 'function' && typeof lm.applyExpandedLayoutVars === 'function') {
+                    if (visible) {
+                        panel.classList.remove('hidden');
+
+                        // 若面板处于折叠状态，先自动展开（不抢焦点/不保存），保持“移动端临时显示”语义
+                        if (panel.classList.contains('collapsed') && typeof lm.expandPanel === 'function') {
+                            lm.expandPanel('emails', true);
+                        }
+
+                        lm.applyExpandedLayoutVars('emails');
+                    } else {
+                        panel.classList.add('hidden');
+                        lm.applyCollapsedLayoutVars('emails');
+                    }
+                    return;
+                }
+            } catch (e) {
+                // 降级：忽略布局系统异常，不影响主业务
+                console.warn('syncEmailListVisibility failed:', e);
+            }
+
+            // 无布局系统时保持旧逻辑
+            if (visible) {
+                panel.classList.remove('hidden');
+            } else {
+                panel.classList.add('hidden');
+            }
+        }
+
         // 切换邮件列表显示
         function toggleEmailList() {
-            const panel = document.getElementById('emailListPanel');
             const toggleText = document.getElementById('toggleListText');
 
             isListVisible = !isListVisible;
 
             if (isListVisible) {
-                panel.classList.remove('hidden');
+                syncEmailListVisibility(true);
                 toggleText.textContent = '隐藏列表';
             } else {
-                panel.classList.add('hidden');
+                syncEmailListVisibility(false);
                 toggleText.textContent = '显示列表';
             }
         }
@@ -621,7 +656,7 @@
 
         // 显示邮件列表（移动端）
         function showEmailList() {
-            document.getElementById('emailListPanel').classList.remove('hidden');
+            syncEmailListVisibility(true);
             isListVisible = true;
             document.getElementById('toggleListText').textContent = '隐藏列表';
         }

@@ -35,12 +35,11 @@
 - `app.py` - Flask 应用工厂,负责应用初始化和 Blueprint 注册
 - `config.py` - 配置管理,环境变量读取
 - `db.py` - 数据库连接管理,Schema 初始化和升级
-- `legacy.py` - 旧版实现,正在迁移中 (约 5000 行)
 - `audit.py` - 审计日志记录
 - `errors.py` - 错误处理和 trace_id 生成
 
 #### routes/ 路由层
-Blueprint 模块化路由,每个文件对应一个功能模块:
+Blueprint 模块化路由,每个文件对应一个功能模块 (共 11 个):
 
 - `pages.py` - 页面路由 (首页/登录页)
 - `accounts.py` - 邮箱账号 CRUD
@@ -54,8 +53,23 @@ Blueprint 模块化路由,每个文件对应一个功能模块:
 - `system.py` - 系统操作 (导出/密码修改)
 - `audit.py` - 审计日志查询
 
+#### controllers/ 控制器层
+请求处理和参数验证,每个文件对应一个路由模块 (共 11 个):
+
+- `pages.py` - 页面控制器
+- `accounts.py` - 账号管理控制器
+- `groups.py` - 分组管理控制器
+- `tags.py` - 标签控制器
+- `emails.py` - 邮件操作控制器
+- `temp_emails.py` - 临时邮箱控制器
+- `oauth.py` - OAuth 控制器
+- `settings.py` - 系统设置控制器
+- `scheduler.py` - 调度器控制器
+- `system.py` - 系统控制器
+- `audit.py` - 审计控制器
+
 #### services/ 服务层
-业务逻辑实现,封装外部 API 调用:
+业务逻辑实现,封装外部 API 调用 (共 9 个):
 
 - `graph.py` - Microsoft Graph API 封装
   - 获取邮件列表
@@ -72,6 +86,9 @@ Blueprint 模块化路由,每个文件对应一个功能模块:
   - 定时刷新调度
 - `email_delete.py` - 邮件删除服务
   - 多 API 回退策略
+- `scheduler.py` - 定时任务调度器
+  - APScheduler 封装
+  - 任务管理
 - `gptmail.py` - GPTMail API 封装
 - `http.py` - HTTP 客户端封装 (支持代理)
 - `verification_extractor.py` - 验证码提取服务
@@ -80,7 +97,7 @@ Blueprint 模块化路由,每个文件对应一个功能模块:
   - 正则表达式匹配
 
 #### repositories/ 数据访问层
-数据库 CRUD 操作封装:
+数据库 CRUD 操作封装 (共 8 个):
 
 - `accounts.py` - 邮箱账号数据访问
   - 增删改查
@@ -94,8 +111,18 @@ Blueprint 模块化路由,每个文件对应一个功能模块:
 - `refresh_runs.py` - 刷新运行记录数据访问
 - `distributed_locks.py` - 分布式锁实现
 
+#### middleware/ 中间件
+横切关注点处理 (共 2 个):
+
+- `trace.py` - trace_id 中间件
+  - 请求追踪 ID 生成
+  - 日志关联
+- `error_handler.py` - 错误处理中间件
+  - 统一错误响应
+  - 异常捕获
+
 #### security/ 安全模块
-安全相关功能封装:
+安全相关功能封装 (共 3 个):
 
 - `auth.py` - 认证授权
   - 登录验证
@@ -287,17 +314,53 @@ Repository 层封装数据访问,业务逻辑与数据库解耦。
 - Blueprint 可独立部署
 - 服务层可抽取为独立服务
 
-## 迁移策略
+## 前端架构
 
-### 当前状态
-- `legacy.py` 包含旧版实现
-- 新架构逐步替换旧实现
-- 保持 API 兼容性
+### 静态资源结构
+```
+static/
+├── css/
+│   ├── main.css           # 主样式
+│   └── layout.css         # 布局系统样式
+└── js/
+    ├── main.js            # 主入口
+    ├── layout-manager.js  # 布局管理器
+    ├── layout-bootstrap.js # 布局初始化
+    ├── state-manager.js   # 状态管理
+    └── features/          # 功能模块
+        ├── accounts.js    # 账号管理
+        ├── emails.js      # 邮件操作
+        ├── groups.js      # 分组管理
+        └── temp_emails.js # 临时邮箱
+```
 
-### 迁移步骤
+### 模板结构
+```
+templates/
+├── index.html             # 主页面
+├── login.html             # 登录页
+└── partials/              # 页面片段
+    ├── modals.html        # 模态框
+    └── scripts.html       # 脚本引用
+```
+
+### 布局系统
+- 四栏式可调整布局 (分组/账号/邮件列表/邮件详情)
+- 拖拽调整栏宽,实时保存
+- 支持折叠/展开
+- 响应式设计,自适应窗口大小
+
+## 架构演进
+
+### 已完成的迁移
 1. ✅ 创建新的分层结构
 2. ✅ Blueprint 模块化路由
-3. 🔄 逐步迁移业务逻辑到 Services
-4. 🔄 数据访问迁移到 Repositories
-5. ⏳ 移除 legacy.py
-6. ⏳ 前后端完全分离
+3. ✅ 业务逻辑迁移到 Services
+4. ✅ 数据访问迁移到 Repositories
+5. ✅ 移除 legacy.py
+6. ✅ 中间件统一处理
+
+### 下一步计划
+- ⏳ 前后端完全分离 (RESTful API)
+- ⏳ 前端框架引入 (Vue.js/React)
+- ⏳ API 文档完善 (OpenAPI/Swagger)
