@@ -32,7 +32,7 @@
 
             // 禁用按钮
             const refreshBtn = document.querySelector('.refresh-btn');
-            const folderTabs = document.querySelectorAll('.folder-tab');
+            const folderTabs = document.querySelectorAll('.email-tab');
             if (refreshBtn) {
                 refreshBtn.disabled = true;
                 refreshBtn.textContent = '获取中...';

@@ -66,7 +66,13 @@
             closeSidebar();
             // Load page data
             if (page === 'dashboard') loadDashboard();
-            if (page === 'mailbox' && groups.length === 0) loadGroups();
+            if (page === 'mailbox') {
+                if (groups.length === 0) {
+                    loadGroups();
+                } else if (currentGroupId) {
+                    loadAccountsByGroup(currentGroupId);
+                }
+            }
             if (page === 'temp-emails' && typeof loadTempEmails === 'function') loadTempEmails(true);
             if (page === 'settings') loadSettings();
             if (page === 'refresh-log') loadRefreshLogPage();
@@ -429,7 +435,7 @@
 
             // 禁用按钮
             const refreshBtn = document.querySelector('.refresh-btn');
-            const folderTabs = document.querySelectorAll('.folder-tab');
+            const folderTabs = document.querySelectorAll('.email-tab');
             if (refreshBtn) {
                 refreshBtn.disabled = true;
             }
@@ -494,7 +500,7 @@
             currentFolder = folder;
 
             // 更新按钮状态
-            document.querySelectorAll('.folder-tab').forEach(tab => {
+            document.querySelectorAll('.email-tab').forEach(tab => {
                 tab.classList.toggle('active', tab.dataset.folder === folder);
             });
 

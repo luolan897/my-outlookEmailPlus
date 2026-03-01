@@ -25,7 +25,7 @@
             const folderTabs = document.getElementById('folderTabs');
             if (folderTabs) {
                 folderTabs.style.display = 'flex';
-                document.querySelectorAll('.folder-tab').forEach(tab => {
+                document.querySelectorAll('.email-tab').forEach(tab => {
                     tab.classList.toggle('active', tab.dataset.folder === 'inbox');
                 });
             }

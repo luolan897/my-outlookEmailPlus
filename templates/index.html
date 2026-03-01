@@ -275,7 +275,7 @@
                     <!-- Temp Email Messages Column -->
                     <div class="emails-column">
                         <div class="column-header">
-                            <span class="column-title" id="tempEmailCurrentName">选择一个临时邮箱</span>
+                            <span class="column-title" id="tempEmailCurrentName" onclick="copyTempEmailCurrent()" title="点击复制邮箱地址" style="cursor:pointer;">选择一个临时邮箱</span>
                             <div style="display:flex;gap:4px;">
                                 <button class="btn btn-sm btn-ghost" id="tempEmailRefreshBtn" onclick="if(currentAccount && isTempEmailGroup) loadTempEmailMessages(currentAccount)" style="display:none;">🔄 获取邮件</button>
                             </div>

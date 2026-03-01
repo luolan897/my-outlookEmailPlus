@@ -21,20 +21,16 @@ data/
 # 环境变量
 .env
 
-# IDE
+# IDE 配置
 .vscode/
 .idea/
 *.swp
 *.swo
 .kiro/
 
-# Node / Jest
-node_modules/
-package.json
-package-lock.json
-tests/layout-system/coverage/
-tests/layout-system/accessibility/
-tests/layout-system/performance/
+# 测试文件（不开源）
+tests/
+.pytest_cache/
 
 # 文档目录（不开源）
 docs/
@@ -42,29 +38,34 @@ PRD/
 我们的文档/
 img/
 
-# 临时文件和迁移痕迹
+# GitHub 配置（不开源）
+.github/
+
+# 项目文档（不开源）
+CONTRIBUTING.md
+SECURITY.md
+
+# Node.js
+node_modules/
+package.json
+package-lock.json
+
+# 临时文件
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+.mcp.json
+.ace-tool/
+.claude/
+
+# 其他不需要的文件
 PixPin_*.png
 exeample/
 ui-preview.html
-.mcp.json
 AI_EXECUTION_PROMPT.md
 AI工作提示词*.md
 *api-key-credit-monitoring.md
-
-# 日志
-*.log
-
-# 系统文件
-.DS_Store
-Thumbs.db
-.pytest_cache/
-
-# 配置文件（不开源）
-/get_oauth_token.py
-/test*
-!/tests/
-!/tests/**
-.ace-tool/
-/CLAUDE.md
-/.claude/
+CLAUDE.md
 安全漏洞.md
+get_oauth_token.py

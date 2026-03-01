@@ -32,6 +32,12 @@
                                 loadAccountsByGroup(currentGroupId, true);
                             }
                         }
+                    } else {
+                        // 首次进入：自动选中第一个非临时邮箱分组
+                        const firstNormalGroup = groups.find(g => g.name !== '临时邮箱');
+                        if (firstNormalGroup) {
+                            selectGroup(firstNormalGroup.id);
+                        }
                     }
                 }
             } catch (error) {
@@ -86,6 +92,21 @@
             if (searchInput) {
                 searchInput.value = '';
             }
+
+            // 重置右侧邮件列 UI（清除上一个分组的残留状态）
+            currentAccount = null;
+            const accountBar = document.getElementById('currentAccountBar');
+            if (accountBar) accountBar.style.display = 'none';
+            const emailListEl = document.getElementById('emailList');
+            if (emailListEl) emailListEl.innerHTML = '<div class="empty-state"><span class="empty-icon">📬</span><p>请从左侧选择一个邮箱账号</p></div>';
+            const detailSection = document.getElementById('emailDetailSection');
+            if (detailSection) detailSection.style.display = 'none';
+            const folderTabs = document.getElementById('folderTabs');
+            if (folderTabs) folderTabs.style.display = 'none';
+            const emailCount = document.getElementById('emailCount');
+            if (emailCount) emailCount.textContent = '';
+            const methodTag = document.getElementById('methodTag');
+            if (methodTag) methodTag.style.display = 'none';
 
             // 检查是否是临时邮箱分组
             const group = groups.find(g => g.id === groupId);

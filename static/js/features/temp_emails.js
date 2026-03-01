@@ -1,5 +1,13 @@
         // ==================== 临时邮箱相关 ====================
 
+        // 复制临时邮箱页面顶栏当前邮箱地址
+        function copyTempEmailCurrent() {
+            const el = document.getElementById('tempEmailCurrentName');
+            if (el && el.textContent && el.textContent !== '选择一个临时邮箱') {
+                copyEmail(el.textContent.trim());
+            }
+        }
+
         // 加载临时邮箱列表
         async function loadTempEmails(forceRefresh = false) {
             const container = document.getElementById('accountList');
