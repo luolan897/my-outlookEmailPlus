@@ -179,7 +179,7 @@ def stream_refresh_all_accounts(
                     """
                     INSERT INTO account_refresh_logs (account_id, account_email, refresh_type, status, error_message, run_id)
                     VALUES (?, ?, ?, ?, ?, ?)
-                    """,
+                """,
                     (
                         account_id,
                         account_email,
@@ -196,7 +196,7 @@ def stream_refresh_all_accounts(
                         UPDATE accounts
                         SET last_refresh_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
                         WHERE id = ?
-                        """,
+                    """,
                         (account_id,),
                     )
                 conn.commit()
@@ -316,7 +316,7 @@ def stream_trigger_scheduled_refresh(
                   AND finished_at IS NOT NULL
                 ORDER BY finished_at DESC
                 LIMIT 1
-                """
+            """
             ).fetchone()
 
             if row and row["finished_at"]:
@@ -405,7 +405,7 @@ def stream_trigger_scheduled_refresh(
                         """
                         INSERT INTO account_refresh_logs (account_id, account_email, refresh_type, status, error_message, run_id)
                         VALUES (?, ?, ?, ?, ?, ?)
-                        """,
+                    """,
                         (
                             account_id,
                             account_email,
@@ -450,7 +450,7 @@ def stream_trigger_scheduled_refresh(
                     """
                     INSERT INTO account_refresh_logs (account_id, account_email, refresh_type, status, error_message, run_id)
                     VALUES (?, ?, ?, ?, ?, ?)
-                    """,
+                """,
                     (
                         account_id,
                         account_email,
@@ -467,7 +467,7 @@ def stream_trigger_scheduled_refresh(
                         UPDATE accounts
                         SET last_refresh_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
                         WHERE id = ?
-                        """,
+                    """,
                         (account_id,),
                     )
 
@@ -557,7 +557,7 @@ def refresh_failed_accounts(
         ) latest ON a.id = latest.account_id
         INNER JOIN account_refresh_logs l ON a.id = l.account_id AND l.created_at = latest.last_refresh
         WHERE l.status = 'failed' AND a.status = 'active'
-        """
+    """
     )
     accounts = cursor.fetchall()
 

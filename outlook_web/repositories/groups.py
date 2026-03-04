@@ -15,7 +15,7 @@ def load_groups() -> List[Dict]:
         ORDER BY
             CASE WHEN name = '临时邮箱' THEN 0 ELSE 1 END,
             id
-        """
+    """
     )
     rows = cursor.fetchall()
     return [dict(row) for row in rows]
@@ -42,7 +42,7 @@ def add_group(
             """
             INSERT INTO groups (name, description, color, proxy_url)
             VALUES (?, ?, ?, ?)
-            """,
+        """,
             (name, description, color, proxy_url or ""),
         )
         db.commit()
@@ -65,7 +65,7 @@ def update_group(
             """
             UPDATE groups SET name = ?, description = ?, color = ?, proxy_url = ?
             WHERE id = ?
-            """,
+        """,
             (name, description, color, proxy_url or "", group_id),
         )
         db.commit()

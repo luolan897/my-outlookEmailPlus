@@ -18,7 +18,7 @@ def load_accounts(group_id: int = None) -> List[Dict]:
             LEFT JOIN groups g ON a.group_id = g.id
             WHERE a.group_id = ?
             ORDER BY a.created_at DESC
-            """,
+        """,
             (group_id,),
         )
     else:
@@ -28,7 +28,7 @@ def load_accounts(group_id: int = None) -> List[Dict]:
             FROM accounts a
             LEFT JOIN groups g ON a.group_id = g.id
             ORDER BY a.created_at DESC
-            """
+        """
         )
     rows = cursor.fetchall()
 
@@ -127,7 +127,7 @@ def get_account_by_id(account_id: int) -> Optional[Dict]:
         FROM accounts a
         LEFT JOIN groups g ON a.group_id = g.id
         WHERE a.id = ?
-        """,
+    """,
         (account_id,),
     )
     row = cursor.fetchone()
@@ -197,7 +197,7 @@ def add_account(
                 group_id, remark
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
+        """,
             (
                 email_addr,
                 encrypted_password,
@@ -239,7 +239,7 @@ def update_account(
             SELECT password, client_id, refresh_token, account_type, imap_password
             FROM accounts
             WHERE id = ?
-            """,
+        """,
             (account_id,),
         ).fetchone()
         if not existing:
@@ -267,7 +267,7 @@ def update_account(
                     status = ?,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
-                """,
+            """,
                 (
                     email_addr,
                     encrypted_imap_password,
@@ -299,7 +299,7 @@ def update_account(
             SET email = ?, password = ?, client_id = ?, refresh_token = ?,
                 group_id = ?, remark = ?, status = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
-            """,
+        """,
             (
                 email_addr,
                 encrypted_password,

@@ -124,14 +124,8 @@ def init_db(database_path: Optional[str] = None):
         )
 
         # 在锁内读取当前 schema 版本（保证一致性）
-        row = cursor.execute(
-            "SELECT value FROM settings WHERE key = ?",
-            (DB_SCHEMA_VERSION_KEY,),
-        ).fetchone()
-        try:
-            current_version = int(row["value"]) if row and row["value"] is not None else 0
-        except Exception:
-            current_version = 0
+        row = cursor.execute("SELECT value FROM settings WHERE key = ?", (DB_SCHEMA_VERSION_KEY,)).fetchone()
+        current_version = int(row["value"]) if row and row["value"] is not None else 0
 
         upgrading = current_version < DB_SCHEMA_VERSION
         if upgrading:
@@ -151,7 +145,7 @@ def init_db(database_path: Optional[str] = None):
                 """
                 INSERT INTO schema_migrations (from_version, to_version, status, started_at, trace_id)
                 VALUES (?, ?, 'running', ?, ?)
-                """,
+            """,
                 (current_version, DB_SCHEMA_VERSION, time.time(), migration_trace_id),
             )
             migration_id = cursor.lastrowid
@@ -171,7 +165,7 @@ def init_db(database_path: Optional[str] = None):
                 is_system INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-            """
+        """
         )
 
         # 邮箱账号表
@@ -196,7 +190,7 @@ def init_db(database_path: Optional[str] = None):
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (group_id) REFERENCES groups (id)
             )
-            """
+        """
         )
 
         # 临时邮箱表
@@ -209,7 +203,7 @@ def init_db(database_path: Optional[str] = None):
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-            """
+        """
         )
 
         # 临时邮件表（存储从 GPTMail 获取的邮件）

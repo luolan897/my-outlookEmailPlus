@@ -166,13 +166,9 @@ def api_system_diagnostics() -> Any:
 
         # 数据库升级状态（可验证）
         schema_version_row = conn.execute(
-            "SELECT value, updated_at FROM settings WHERE key = ?",
-            (DB_SCHEMA_VERSION_KEY,),
+            "SELECT value, updated_at FROM settings WHERE key = ?", (DB_SCHEMA_VERSION_KEY,)
         ).fetchone()
-        try:
-            schema_version = int(schema_version_row["value"]) if schema_version_row else 0
-        except Exception:
-            schema_version = 0
+        schema_version = int(schema_version_row["value"]) if schema_version_row else 0
 
         last_migration = None
         try:
@@ -217,22 +213,14 @@ def api_system_upgrade_status() -> Any:
 
     conn = create_sqlite_connection()
     try:
-        row = conn.execute(
-            "SELECT value, updated_at FROM settings WHERE key = ?",
-            (DB_SCHEMA_VERSION_KEY,),
-        ).fetchone()
-        try:
-            schema_version = int(row["value"]) if row and row["value"] is not None else 0
-        except Exception:
-            schema_version = 0
+        row = conn.execute("SELECT value, updated_at FROM settings WHERE key = ?", (DB_SCHEMA_VERSION_KEY,)).fetchone()
+        schema_version = int(row["value"]) if row and row["value"] is not None else 0
 
         last_trace_row = conn.execute(
-            "SELECT value FROM settings WHERE key = ?",
-            (DB_SCHEMA_LAST_UPGRADE_TRACE_ID_KEY,),
+            "SELECT value FROM settings WHERE key = ?", (DB_SCHEMA_LAST_UPGRADE_TRACE_ID_KEY,)
         ).fetchone()
         last_error_row = conn.execute(
-            "SELECT value FROM settings WHERE key = ?",
-            (DB_SCHEMA_LAST_UPGRADE_ERROR_KEY,),
+            "SELECT value FROM settings WHERE key = ?", (DB_SCHEMA_LAST_UPGRADE_ERROR_KEY,)
         ).fetchone()
 
         last_migration = None

@@ -1075,10 +1075,7 @@ REFRESH_LOCK_NAME = "refresh_all_tokens"
 def api_refresh_account(account_id: int) -> Any:
     """刷新单个账号的 token"""
     db = get_db()
-    cursor = db.execute(
-        "SELECT id, email, client_id, refresh_token, group_id FROM accounts WHERE id = ?",
-        (account_id,),
-    )
+    cursor = db.execute("SELECT id, email, client_id, refresh_token, group_id FROM accounts WHERE id = ?", (account_id,))
     account = cursor.fetchone()
 
     if not account:

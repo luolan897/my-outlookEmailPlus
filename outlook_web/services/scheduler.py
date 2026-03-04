@@ -246,7 +246,7 @@ def scheduled_refresh_task(app, test_refresh_token):
             FROM accounts
             WHERE status = 'active'
               AND (account_type = 'outlook' OR account_type IS NULL)
-            """
+        """
         ).fetchall()
         total = len(accounts)
 
