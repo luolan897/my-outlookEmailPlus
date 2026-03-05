@@ -17,18 +17,16 @@
 
 ---
 
-## BUG-TG-002: 推送启用账号视觉区分度不够
+## BUG-TG-002: 推送启用账号视觉区分度不够（已修复 ✅）
 
 **现象**: 账号卡片上的 🔔 按钮仅通过 `.tg-push-active` 颜色高亮，在深色/浅色主题下不够明显。
 
-**影响**: 用户难以快速辨别哪些账号开启了推送。
+**修复方案**: 在账号标签区域添加 `🔔 推送` 标签（Telegram 蓝 #0088cc 背景），与现有标签一致风格。
+- 点击标签 → 关闭推送（标签消失）
+- 🔔 按钮 → 开启推送（标签出现）
+- 样式: `.tg-push-tag` 类，hover 半透明反馈
 
-**建议修复**:
-- 方案 A: 切换图标 🔕/🔔 + 颜色变化
-- 方案 B: 添加小徽标/角标 (badge)
-- 方案 C: 在账号卡片标题旁显示 "推送中" 标签
-
-**状态**: 待修复
+**状态**: ✅ 已修复
 
 ---
 
@@ -68,3 +66,30 @@ ConnectTimeoutError: Connection to login.microsoftonline.com timed out. (connect
 **建议修复**: 用户需在「分组管理」中为对应分组填写代理地址。
 
 **状态**: 非代码问题 / 配置相关
+
+---
+
+## BUG-TG-005: 禁用后重新启用推送会推送所有历史邮件（已修复 ✅）
+
+**现象**: 用户关闭推送后再次开启，推送 Job 会将关闭期间所有邮件一次性推送到 Telegram。
+
+**根因**: `toggle_telegram_push()` 在重新启用时未重置 `telegram_last_checked_at` 游标，旧游标指向很久之前的时间点，导致拉取大量历史邮件。
+
+**原代码逻辑**:
+```python
+if enabled:
+    if row["telegram_last_checked_at"] is None:
+        # 仅首次启用重置游标
+        db.execute("UPDATE ... SET telegram_last_checked_at = ?", (now,))
+    else:
+        # 重新启用：保留旧游标 ← BUG
+        db.execute("UPDATE ... SET telegram_push_enabled = 1")
+```
+
+**修复内容**:
+- 检测 `telegram_push_enabled` 当前值：
+  - 从 0 → 1（状态切换）: 总是重置游标到当前 UTC 时间
+  - 已经 1 → 1（幂等重复）: 不做任何修改，保持游标不变
+- 新增测试 T-12b 验证重新启用行为
+
+**状态**: ✅ 已修复

@@ -370,23 +370,27 @@ def update_account_credentials(account_id: int, **fields) -> bool:
 
 
 def toggle_telegram_push(account_id: int, enabled: bool) -> bool:
-    """切换账号 Telegram 推送开关。首次开启时自动设置游标为当前 UTC 时间。"""
+    """切换账号 Telegram 推送开关。从禁用切换到启用时重置游标为当前 UTC 时间，
+    已启用时重复调用不改变游标（幂等）。"""
     from datetime import datetime, timezone
 
     db = get_db()
-    row = db.execute("SELECT id, telegram_last_checked_at FROM accounts WHERE id = ?", (account_id,)).fetchone()
+    row = db.execute(
+        "SELECT id, telegram_push_enabled, telegram_last_checked_at FROM accounts WHERE id = ?",
+        (account_id,),
+    ).fetchone()
     if not row:
         return False
 
     if enabled:
-        if row["telegram_last_checked_at"] is None:
-            now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
-            db.execute(
-                "UPDATE accounts SET telegram_push_enabled = 1, telegram_last_checked_at = ? WHERE id = ?",
-                (now_utc, account_id),
-            )
-        else:
-            db.execute("UPDATE accounts SET telegram_push_enabled = 1 WHERE id = ?", (account_id,))
+        already_enabled = bool(row["telegram_push_enabled"])
+        if already_enabled:
+            return True
+        now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+        db.execute(
+            "UPDATE accounts SET telegram_push_enabled = 1, telegram_last_checked_at = ? WHERE id = ?",
+            (now_utc, account_id),
+        )
     else:
         db.execute("UPDATE accounts SET telegram_push_enabled = 0 WHERE id = ?", (account_id,))
 

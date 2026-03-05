@@ -253,6 +253,30 @@ class TestToggleTelegramPush(unittest.TestCase):
             ).fetchone()["telegram_last_checked_at"]
             self.assertEqual(cursor_t1, cursor_t2, "重复开启不应重置游标")
 
+    def test_t12b_reenable_resets_cursor(self):
+        """T-12b：禁用后重新启用应重置游标到当前时间"""
+        with self.app.app_context():
+            from outlook_web.repositories.accounts import toggle_telegram_push
+            from outlook_web.db import get_db
+            db = get_db()
+            # 先开启
+            toggle_telegram_push(self._account_id, True)
+            # 手动设置一个明显更早的游标
+            db.execute(
+                "UPDATE accounts SET telegram_last_checked_at = '2020-01-01T00:00:00' WHERE id = ?",
+                (self._account_id,),
+            )
+            db.commit()
+            # 关闭
+            toggle_telegram_push(self._account_id, False)
+            # 重新开启
+            toggle_telegram_push(self._account_id, True)
+            cursor_new = db.execute(
+                "SELECT telegram_last_checked_at FROM accounts WHERE id = ?",
+                (self._account_id,)
+            ).fetchone()["telegram_last_checked_at"]
+            self.assertGreater(cursor_new, "2020-01-01T00:00:00", "重新启用应重置游标到更新的时间")
+
 
 # ===========================================================================
 # T-13：update_telegram_cursor Repository
