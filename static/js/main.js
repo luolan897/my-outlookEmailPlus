@@ -242,6 +242,14 @@
 
         // ==================== 三栏拖拽调整 ====================
 
+        function updateAccountPanelDensity() {
+            const panel = document.getElementById('accountPanel');
+            if (!panel) return;
+            const width = panel.getBoundingClientRect().width;
+            panel.classList.toggle('is-narrow', width < 240);
+            panel.classList.toggle('is-compact', width < 170);
+        }
+
         function initResizeHandles() {
             document.querySelectorAll('.resize-handle').forEach(handle => {
                 handle.addEventListener('mousedown', function(e) {
@@ -263,6 +271,7 @@
                         const delta = ev.clientX - startX;
                         const newWidth = Math.max(120, Math.min(startWidth + delta, 500));
                         leftPanel.style.width = newWidth + 'px';
+                        updateAccountPanelDensity();
                     }
 
                     function onMouseUp() {
@@ -294,6 +303,9 @@
                     if (el && width) el.style.width = width;
                 });
             } catch(e) {}
+
+            updateAccountPanelDensity();
+            window.addEventListener('resize', updateAccountPanelDensity, { passive: true });
         }
 
         // ==================== 邮件详情显示控制 ====================

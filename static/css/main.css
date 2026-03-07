@@ -231,6 +231,8 @@ input, textarea, select { font-family: inherit; }
   flex-shrink: 0;
 }
 .column-title { font-size: 0.9rem; font-weight: 600; color: var(--text); }
+.accounts-column .column-title { min-width: 0; }
+.accounts-column #currentGroupName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .column-search {
   padding: 0.5rem 1rem; border-bottom: 1px solid var(--border-light); flex-shrink: 0;
 }
@@ -413,7 +415,15 @@ textarea.form-input {
   font-size: 0.85rem; color: white; font-weight: 600;
 }
 .account-info { flex: 1; min-width: 0; }
-.account-email { font-family: var(--font-mono); font-size: 0.8rem; color: var(--clr-primary); font-weight: 600; word-break: break-all; }
+.account-email {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--clr-primary);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .account-group-name { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.15rem; }
 .account-token-badge { position: absolute; top: 0.6rem; right: 0.6rem; }
 
@@ -437,6 +447,30 @@ textarea.form-input {
 }
 .account-card:hover .account-actions { opacity: 1; }
 .account-select-checkbox { margin-right: 0.3rem; }
+
+.accounts-column.is-narrow .account-card { padding: 0.7rem 0.8rem; }
+.accounts-column.is-narrow .account-card-bottom { font-size: 0.7rem; }
+
+/* 账号列极窄时：仅保留头像，隐藏复杂信息，避免挤压变形 */
+.accounts-column.is-compact .account-card {
+  padding: 0.55rem;
+  margin: 0.45rem 0.5rem;
+}
+.accounts-column.is-compact .account-card::before { display: none; }
+.accounts-column.is-compact .account-token-badge { display: none; }
+.accounts-column.is-compact .account-info { display: none; }
+.accounts-column.is-compact .account-card-bottom { display: none; }
+.accounts-column.is-compact .account-card-top { justify-content: center; gap: 0; }
+.accounts-column.is-compact .account-avatar { width: 40px; height: 40px; font-size: 0.95rem; }
+.accounts-column.is-compact .account-select-checkbox {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  margin: 0;
+  opacity: 0;
+}
+.accounts-column.is-compact .account-card:hover .account-select-checkbox,
+.accounts-column.is-compact .account-select-checkbox:checked { opacity: 1; }
 
 /* 批量操作栏 */
 .batch-action-bar {
