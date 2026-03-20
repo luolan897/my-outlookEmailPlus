@@ -35,7 +35,7 @@
             const folderTabs = document.querySelectorAll('.email-tab');
             if (refreshBtn) {
                 refreshBtn.disabled = true;
-                refreshBtn.textContent = '获取中...';
+                refreshBtn.textContent = translateAppTextLocal('获取中...');
             }
             folderTabs.forEach(tab => tab.disabled = true);
 
@@ -43,7 +43,7 @@
             currentSkip = 0;
             hasMoreEmails = true;
 
-            container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> 获取中…</div>';
+            container.innerHTML = `<div class="loading-overlay"><span class="spinner"></span> ${translateAppTextLocal('获取中…')}</div>`;
 
             try {
                 // 每次只查询20封邮件
@@ -105,7 +105,7 @@
                     }
                     container.innerHTML = `
                         <div class="empty-state">
-                            <span class="empty-icon">⚠️</span><p>获取邮件失败，<a href="javascript:void(0)" id="showEmailErrorLink" style="color:#409eff;text-decoration:underline;">点击查看详情</a></p>
+                            <span class="empty-icon">⚠️</span><p>${translateAppTextLocal('获取邮件失败，')}<a href="javascript:void(0)" id="showEmailErrorLink" style="color:#409eff;text-decoration:underline;">${translateAppTextLocal('点击查看详情')}</a></p>
                         </div>
                     `;
                     lastFetchErrorDetails = data.details || {};
@@ -119,14 +119,14 @@
                 console.error('加载邮件列表失败:', error);
                 container.innerHTML = `
                     <div class="empty-state">
-                        <span class="empty-icon">⚠️</span><p>网络错误，请重试</p>
+                        <span class="empty-icon">⚠️</span><p>${translateAppTextLocal('网络错误，请重试')}</p>
                     </div>
                 `;
             } finally {
                 // 启用按钮
                 if (refreshBtn) {
                     refreshBtn.disabled = false;
-                    refreshBtn.textContent = '获取邮件';
+                    refreshBtn.textContent = translateAppTextLocal('获取邮件');
                 }
                 folderTabs.forEach(tab => tab.disabled = false);
             }
@@ -145,7 +145,7 @@
                 container.innerHTML = `
                     <div class="empty-state">
                         <span class="empty-icon">📭</span>
-                        <p>收件箱为空</p>
+                        <p>${translateAppTextLocal('收件箱为空')}</p>
                     </div>
                 `;
                 selectedEmailIds.clear();
@@ -261,13 +261,10 @@
                         showToast(`部分删除失败 (${result.failed_count} 封)`, 'warning');
                     }
                 } else {
-                    let msg = '未知错误';
-                    if (typeof result.error === 'string') {
-                        msg = result.error;
-                    } else if (result.error && result.error.message) {
-                        msg = result.error.message;
-                    }
-                    showToast('删除失败: ' + msg, 'error');
+                    const msg = window.resolveApiErrorMessage
+                        ? window.resolveApiErrorMessage(result.error || result, '删除失败', 'Delete failed')
+                        : (typeof result.error === 'string' ? result.error : (result.error && result.error.message) || '未知错误');
+                    showToast(`删除失败: ${msg}`, 'error', result.error && typeof result.error === 'object' ? result.error : null);
                 }
             } catch (e) {
                 showToast('网络错误', 'error');
@@ -320,7 +317,7 @@
                     handleApiError(data, '加载邮件详情失败');
                     container.innerHTML = `
                         <div class="empty-state">
-                            <span class="empty-icon">⚠️</span><p>${data.error && data.error.message ? data.error.message : '加载失败'}</p>
+                            <span class="empty-icon">⚠️</span><p>${window.resolveApiErrorMessage ? window.resolveApiErrorMessage(data.error || data, '加载失败', 'Load failed') : (data.error && data.error.message ? data.error.message : '加载失败')}</p>
                         </div>
                     `;
                 }

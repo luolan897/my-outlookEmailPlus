@@ -8,7 +8,7 @@ from flask import jsonify, request
 from outlook_web import config
 from outlook_web.audit import log_audit
 from outlook_web.db import get_db
-from outlook_web.errors import build_error_payload
+from outlook_web.errors import build_error_payload, build_error_response
 from outlook_web.repositories import accounts as accounts_repo
 from outlook_web.repositories import groups as groups_repo
 from outlook_web.security.auth import api_key_required, login_required
@@ -35,14 +35,7 @@ def api_get_emails(email_addr: str) -> Any:
     account = accounts_repo.get_account_by_email(email_addr)
 
     if not account:
-        error_payload = build_error_payload(
-            "ACCOUNT_NOT_FOUND",
-            "账号不存在",
-            "NotFoundError",
-            404,
-            f"email={email_addr}",
-        )
-        return jsonify({"success": False, "error": error_payload})
+        return build_error_response("ACCOUNT_NOT_FOUND", "账号不存在", message_en="Account not found", err_type="NotFoundError", status=404, details=f"email={email_addr}")
 
     folder = request.args.get("folder", "inbox")  # inbox, junkemail, deleteditems
     skip = int(request.args.get("skip", 0))
@@ -121,12 +114,14 @@ def api_get_emails(email_addr: str) -> Any:
             "ProxyError",
             "ConnectionError",
         ):
-            return jsonify(
-                {
-                    "success": False,
-                    "error": "代理连接失败，请检查分组代理设置",
-                    "details": all_errors,
-                }
+            return build_error_response(
+                "EMAIL_PROXY_CONNECTION_FAILED",
+                "代理连接失败，请检查分组代理设置",
+                message_en="Proxy connection failed. Please check the group proxy settings",
+                err_type="ProxyError",
+                status=502,
+                details=all_errors,
+                extra={"details": all_errors},
             )
 
     imap_new_result = imap_service.get_emails_imap_with_server(
@@ -172,12 +167,13 @@ def api_get_emails(email_addr: str) -> Any:
     else:
         all_errors["imap_old"] = imap_old_result.get("error")
 
-    return jsonify(
-        {
-            "success": False,
-            "error": "无法获取邮件，所有方式均失败",
-            "details": all_errors,
-        }
+    return build_error_response(
+        "EMAIL_FETCH_ALL_METHODS_FAILED",
+        "无法获取邮件，所有方式均失败",
+        message_en="Failed to fetch emails. All methods failed",
+        status=502,
+        details=all_errors,
+        extra={"details": all_errors},
     )
 
 
@@ -189,11 +185,11 @@ def api_delete_emails() -> Any:
     message_ids = data.get("ids", [])
 
     if not email_addr or not message_ids:
-        return jsonify({"success": False, "error": "参数不完整"})
+        return build_error_response("INVALID_PARAM", "参数不完整", message_en="Missing required parameters")
 
     account = accounts_repo.get_account_by_email(email_addr)
     if not account:
-        return jsonify({"success": False, "error": "账号不存在"})
+        return build_error_response("ACCOUNT_NOT_FOUND", "账号不存在", message_en="Account not found", status=404)
 
     # PRD-00005：IMAP 账号不支持远程删除（避免误操作与跨厂商副作用）
     account_type = (account.get("account_type") or "outlook").strip().lower()
@@ -249,7 +245,7 @@ def api_get_email_detail(email_addr: str, message_id: str) -> Any:
 
     if not account:
         _LOGGER.warning("email_detail_account_not_found email=%s", email_addr)
-        return jsonify({"success": False, "error": "账号不存在"})
+        return build_error_response("ACCOUNT_NOT_FOUND", "账号不存在", message_en="Account not found", status=404)
 
     account_type = (account.get("account_type") or "outlook").strip().lower()
     folder = request.args.get("folder", "inbox")
@@ -269,7 +265,13 @@ def api_get_email_detail(email_addr: str, message_id: str) -> Any:
             _LOGGER.info("email_detail_imap_ok email=%s subject=%s", email_addr, detail.get("subject", "?")[:40])
             return jsonify({"success": True, "email": detail})
         _LOGGER.warning("email_detail_imap_failed email=%s message_id=%s", email_addr, message_id)
-        return jsonify({"success": False, "error": "获取邮件详情失败"})
+        return build_error_response(
+            "EMAIL_DETAIL_FETCH_FAILED",
+            "获取邮件详情失败",
+            message_en="Failed to fetch email details",
+            status=502,
+            details=f"email={email_addr} message_id={message_id}",
+        )
 
     method = request.args.get("method", "graph")
 
@@ -314,7 +316,13 @@ def api_get_email_detail(email_addr: str, message_id: str) -> Any:
     if detail:
         return jsonify({"success": True, "email": detail})
 
-    return jsonify({"success": False, "error": "获取邮件详情失败"})
+    return build_error_response(
+        "EMAIL_DETAIL_FETCH_FAILED",
+        "获取邮件详情失败",
+        message_en="Failed to fetch email details",
+        status=502,
+        details=f"email={email_addr} message_id={message_id}",
+    )
 
 
 @login_required

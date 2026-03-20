@@ -14,7 +14,7 @@ from typing import Any, Dict
 
 from flask import g, request
 
-from outlook_web.errors import build_error_payload, generate_trace_id
+from outlook_web.errors import build_error_payload, generate_trace_id, resolve_message_en
 
 
 def ensure_trace_id():
@@ -68,6 +68,9 @@ def attach_trace_id_and_normalize_errors(response):
             if not error_obj.get("message"):
                 error_obj["message"] = "请求失败"
                 mutated = True
+            if not error_obj.get("message_en"):
+                error_obj["message_en"] = resolve_message_en(error_obj.get("code"), int(error_obj.get("status") or 500))
+                mutated = True
 
             # 如果 error 中有 status 字段，且当前 HTTP 状态码是 200，则修正为正确的状态码
             error_status = error_obj.get("status")
@@ -75,9 +78,14 @@ def attach_trace_id_and_normalize_errors(response):
                 response.status_code = error_status
                 mutated = True
 
+            new_data = dict(data)
+            new_data["error"] = error_obj
+            for key in ("trace_id", "code", "message", "message_en", "status"):
+                if new_data.get(key) != error_obj.get(key):
+                    new_data[key] = error_obj.get(key)
+                    mutated = True
+
             if mutated:
-                new_data = dict(data)
-                new_data["error"] = error_obj
                 response.set_data(json.dumps(new_data, ensure_ascii=False))
             return response
 
@@ -95,6 +103,11 @@ def attach_trace_id_and_normalize_errors(response):
             )
             new_data = dict(data)
             new_data["error"] = error_payload
+            new_data["trace_id"] = error_payload.get("trace_id")
+            new_data["code"] = error_payload.get("code")
+            new_data["message"] = error_payload.get("message")
+            new_data["message_en"] = error_payload.get("message_en")
+            new_data["status"] = error_payload.get("status")
             # legacy 错误默认使用 400 状态码（如果当前是 200）
             if response.status_code == 200:
                 response.status_code = 400

@@ -559,8 +559,8 @@ class TestRunTelegramPushJob(unittest.TestCase):
             ]
             self.assertEqual(cursor, "2026-03-01T00:00:00")
 
-    def test_t22_send_failure_silent_cursor_updated(self):
-        """T-22：Telegram 发送失败 → 不抛出，游标仍更新"""
+    def test_t22_send_failure_silent_cursor_preserved_for_retry(self):
+        """T-22：Telegram 发送失败 → 不抛出，游标保留以便重试"""
         with self.app.app_context():
             from outlook_web.db import get_db
 
@@ -580,11 +580,11 @@ class TestRunTelegramPushJob(unittest.TestCase):
                 except Exception as e:
                     self.fail(f"run_telegram_push_job raised unexpectedly: {e}")
 
-            # 游标仍更新
+            # 游标保留旧值，避免失败消息被直接吞掉
             cursor = db.execute("SELECT telegram_last_checked_at FROM accounts WHERE id = ?", (acc_id,)).fetchone()[
                 "telegram_last_checked_at"
             ]
-            self.assertNotEqual(cursor, "2026-03-01T00:00:00")
+            self.assertEqual(cursor, "2026-03-01T00:00:00")
 
 
 # ===========================================================================
@@ -968,7 +968,7 @@ class TestFetchAccountEmails(unittest.TestCase):
         self.assertIsInstance(error, ConnectionError)
 
     def test_outlook_uses_graph_fetch(self):
-        """Outlook 账号使用 Graph API fetch"""
+        """Outlook 账号使用 Graph API fetch，并覆盖 inbox/junkemail 目录"""
         from outlook_web.services.telegram_push import _fetch_account_emails
 
         account = {"id": 1, "email": "x@outlook.com", "provider": "outlook", "telegram_last_checked_at": "2026-03-01T00:00:00"}
@@ -977,7 +977,11 @@ class TestFetchAccountEmails(unittest.TestCase):
             "outlook_web.services.telegram_push._fetch_new_emails_imap"
         ) as mock_imap:
             _fetch_account_emails(account)
-        mock_graph.assert_called_once()
+        self.assertEqual(mock_graph.call_count, 2)
+        self.assertEqual(
+            [call.kwargs.get("folder") for call in mock_graph.call_args_list],
+            ["inbox", "junkemail"],
+        )
         mock_imap.assert_not_called()
 
 
@@ -1123,8 +1127,8 @@ class TestParallelJobBehavior(unittest.TestCase):
             interval = _get_telegram_interval(self.app)
             self.assertEqual(interval, 600)
 
-    def test_recency_filter_skips_old_emails(self):
-        """PUSH_RECENCY_HOURS: 超过 12 小时的邮件应被跳过"""
+    def test_old_email_after_cursor_still_sent(self):
+        """启用后的游标负责截断历史，游标之后的旧邮件仍应发送"""
         with self.app.app_context():
             from outlook_web.db import get_db
 
@@ -1149,10 +1153,10 @@ class TestParallelJobBehavior(unittest.TestCase):
             ), patch("outlook_web.services.telegram_push.TELEGRAM_PUSH_DELAY_SEC", 0):
                 self._run_job()
 
-            self.assertEqual(len(send_calls), 0, "超过 12 小时的邮件不应推送")
+            self.assertEqual(len(send_calls), 1, "只要位于游标之后，就不应再被额外年龄过滤拦截")
 
-    def test_recent_email_passes_recency_filter(self):
-        """PUSH_RECENCY_HOURS: 12 小时内的邮件应正常推送"""
+    def test_recent_email_after_cursor_sent_once_across_folders(self):
+        """最近邮件在 inbox+junkemail 双目录扫描下仍只发送一次"""
         with self.app.app_context():
             from outlook_web.db import get_db
 
@@ -1177,7 +1181,7 @@ class TestParallelJobBehavior(unittest.TestCase):
             ), patch("outlook_web.services.telegram_push.TELEGRAM_PUSH_DELAY_SEC", 0):
                 self._run_job()
 
-            self.assertEqual(len(send_calls), 1, "1 小时内的邮件应正常推送")
+            self.assertEqual(len(send_calls), 1, "同一封邮件跨目录不应重复发送")
 
 
 class TestCursorClockSkew(unittest.TestCase):
@@ -1245,8 +1249,8 @@ class TestCursorClockSkew(unittest.TestCase):
             # 游标必须 >= future_time，否则下一轮会重复拉取
             self.assertGreaterEqual(cursor, future_time, f"游标 {cursor} 应 >= 邮件时间 {future_time}，否则会重复推送")
 
-    def test_cursor_uses_job_start_when_emails_older(self):
-        """正常场景：邮件 received_at < job_start_time，游标 = job_start_time"""
+    def test_cursor_advances_to_last_successful_message_when_emails_older(self):
+        """正常场景：旧邮件发送成功后，游标推进到最后连续成功消息时间而不是盲目推进到 job_start_time"""
         with self.app.app_context():
             from outlook_web.db import get_db
 
@@ -1267,8 +1271,6 @@ class TestCursorClockSkew(unittest.TestCase):
                 }
             ]
 
-            before_job = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
-
             with patch("outlook_web.services.telegram_push._fetch_new_emails_imap", return_value=emails), patch(
                 "outlook_web.services.telegram_push._send_telegram_message", return_value=True
             ), patch("outlook_web.services.telegram_push.TELEGRAM_PUSH_DELAY_SEC", 0):
@@ -1277,10 +1279,8 @@ class TestCursorClockSkew(unittest.TestCase):
             cursor = db.execute("SELECT telegram_last_checked_at FROM accounts WHERE id = ?", (acc_id,)).fetchone()[
                 "telegram_last_checked_at"
             ]
-            # 游标应 >= job 开始前的时间（即 job_start_time）
-            self.assertGreaterEqual(cursor, before_job, f"游标 {cursor} 应 >= {before_job}")
-            # 游标应 > 邮件时间
-            self.assertGreater(cursor, past_time)
+            # 游标应推进到最后连续成功消息时间，避免失败时吞掉后续重试机会
+            self.assertGreaterEqual(cursor, past_time, f"游标 {cursor} 应 >= 成功消息时间 {past_time}")
 
     def test_no_duplicate_after_clock_skew(self):
         """BUG-00011 端到端: 时钟偏差邮件推送 1 次后不应再被推送"""

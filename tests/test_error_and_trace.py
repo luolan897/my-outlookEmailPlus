@@ -217,7 +217,7 @@ class ErrorAndTraceTests(unittest.TestCase):
         self.assertTrue(data["error"].get("trace_id"))
         self.assertEqual(resp.headers.get("X-Trace-Id"), data["error"].get("trace_id"))
 
-    def test_legacy_error_string_is_normalized_to_structured_error(self):
+    def test_group_not_found_returns_structured_error_contract(self):
         client = self.app.test_client()
 
         # 登录
@@ -225,14 +225,15 @@ class ErrorAndTraceTests(unittest.TestCase):
         self.assertEqual(login.status_code, 200)
         self.assertEqual(login.get_json().get("success"), True)
 
-        # 触发一个 legacy 的字符串错误（现在应返回正确的 400 状态码）
+        # 分组不存在应返回统一结构化错误，而不是裸字符串
         resp = client.get("/api/groups/999999")
-        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.status_code, 404)
         data = resp.get_json()
         self.assertEqual(data.get("success"), False)
         self.assertIsInstance(data.get("error"), dict)
-        self.assertEqual(data["error"].get("code"), "LEGACY_ERROR")
+        self.assertEqual(data["error"].get("code"), "GROUP_NOT_FOUND")
         self.assertEqual(data["error"].get("message"), "分组不存在")
+        self.assertEqual(data["error"].get("message_en"), "Group not found")
         self.assertTrue(data["error"].get("trace_id"))
 
         # 响应体应是 JSON（确保 after_request 的 set_data 没破坏格式）
@@ -336,8 +337,46 @@ class ErrorAndTraceTests(unittest.TestCase):
         self.assertEqual(data.get("success"), False)
         self.assertEqual(data.get("need_verify"), True)
         self.assertIsInstance(data.get("error"), dict)
+        self.assertEqual(data["error"].get("code"), "EXPORT_VERIFY_REQUIRED")
+        self.assertEqual(data["error"].get("message_en"), "Additional verification is required")
         self.assertEqual(data["error"].get("status"), 401)
         self.assertTrue(data["error"].get("trace_id"))
+
+    def test_group_export_verify_failure_uses_detailed_error_contract(self):
+        client = self.app.test_client()
+        login = client.post("/login", json={"password": "testpass123"})
+        self.assertEqual(login.status_code, 200)
+
+        with patch(
+            "outlook_web.controllers.groups.consume_export_verify_token",
+            return_value=(False, "验证失败：IP 不匹配"),
+        ):
+            resp = client.get("/api/groups/1/export")
+
+        self.assertEqual(resp.status_code, 401)
+        data = resp.get_json()
+        self.assertEqual(data.get("success"), False)
+        self.assertEqual(data.get("need_verify"), True)
+        self.assertEqual(data["error"].get("code"), "EXPORT_VERIFY_IP_MISMATCH")
+        self.assertEqual(data["error"].get("message_en"), "Verification failed because the client IP changed")
+
+    def test_import_failure_uses_structured_error_contract(self):
+        client = self.app.test_client()
+        login = client.post("/login", json={"password": "testpass123"})
+        self.assertEqual(login.status_code, 200)
+
+        resp = client.post(
+            "/api/accounts",
+            json={"account_string": "bad-import-line", "group_id": 1},
+        )
+        self.assertEqual(resp.status_code, 400)
+        data = resp.get_json()
+        self.assertEqual(data.get("success"), False)
+        self.assertEqual(data.get("code"), "ACCOUNT_IMPORT_FAILED")
+        self.assertEqual(data.get("message_en"), "Account import failed")
+        self.assertIsInstance(data.get("summary"), dict)
+        self.assertIsInstance(data.get("errors"), list)
+        self.assertTrue(data.get("trace_id"))
 
     def test_accounts_list_and_search_include_tags_and_last_refresh(self):
         client = self.app.test_client()
@@ -432,6 +471,7 @@ class ErrorAndTraceTests(unittest.TestCase):
         self.assertIsInstance(data.get("error"), dict)
         self.assertEqual(data["error"].get("code"), "SYSTEM_GROUP_PROTECTED")
         self.assertEqual(data["error"].get("status"), 403)
+        self.assertEqual(data["error"].get("message_en"), "System groups cannot be deleted")
 
     def test_account_cannot_be_moved_to_system_group_via_update(self):
         client = self.app.test_client()

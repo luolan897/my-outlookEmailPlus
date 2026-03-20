@@ -46,3 +46,20 @@ class SettingsSchedulerReloadTests(unittest.TestCase):
         self.assertEqual(kwargs, {}, "此处调用应使用位置参数，避免未来签名变化导致静默错配")
         self.assertIs(args[0], fake_scheduler)
         self.assertIs(args[1], self.app)
+
+    def test_configure_scheduler_jobs_prefers_account_level_telegram_push_job(self):
+        fake_scheduler = MagicMock(name="scheduler")
+
+        with patch("outlook_web.services.scheduler._configure_telegram_push_job") as configure_telegram, patch(
+            "outlook_web.services.scheduler._configure_email_notification_job"
+        ) as configure_email, patch(
+            "outlook_web.services.scheduler._configure_probe_poll_job"
+        ), patch(
+            "outlook_web.services.scheduler._configure_pool_maintenance_jobs"
+        ):
+            from outlook_web.services import scheduler as scheduler_service
+
+            scheduler_service.configure_scheduler_jobs(fake_scheduler, self.app, lambda *_args, **_kwargs: None)
+
+        configure_telegram.assert_called_once_with(fake_scheduler, self.app)
+        configure_email.assert_not_called()

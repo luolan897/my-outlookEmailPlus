@@ -3,7 +3,7 @@
         // 加载分组列表
         async function loadGroups() {
             const container = document.getElementById('groupList');
-            container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> 加载中…</div>';
+            container.innerHTML = `<div class="loading-overlay"><span class="spinner"></span> ${translateAppTextLocal('加载中…')}</div>`;
 
             try {
                 const response = await fetch('/api/groups');
@@ -41,8 +41,8 @@
                     }
                 }
             } catch (error) {
-                container.innerHTML = '<div class="empty-state"><p>加载失败</p></div>';
-                showToast('加载分组失败', 'error');
+                container.innerHTML = `<div class="empty-state"><p>${translateAppTextLocal('加载失败')}</p></div>`;
+                showToast(translateAppTextLocal('加载分组失败'), 'error');
             }
         }
 
@@ -57,7 +57,7 @@
                 container.innerHTML = `
                     <div class="empty-state">
                         <span class="empty-icon">📁</span>
-                        <p>暂无分组</p>
+                        <p>${translateAppTextLocal('暂无分组')}</p>
                     </div>
                 `;
                 return;
@@ -168,7 +168,7 @@
 
             // forceRefresh 时不显示 loading（保持旧内容，静默刷新）
             if (!forceRefresh) {
-                container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> 加载中…</div>';
+                container.innerHTML = `<div class="loading-overlay"><span class="spinner"></span> ${translateAppTextLocal('加载中…')}</div>`;
             }
 
             try {
@@ -185,7 +185,7 @@
                     }
                 }
             } catch (error) {
-                container.innerHTML = '<div class="empty-state"><p>加载失败</p></div>';
+                container.innerHTML = `<div class="empty-state"><p>${translateAppTextLocal('加载失败')}</p></div>`;
             }
         }
 
@@ -195,14 +195,14 @@
             const labels = {
                 outlook: 'Outlook',
                 gmail: 'Gmail',
-                qq: 'QQ邮箱',
-                '163': '163邮箱',
-                '126': '126邮箱',
-                yahoo: 'Yahoo邮箱',
+                qq: 'QQ 邮箱',
+                '163': '163 邮箱',
+                '126': '126 邮箱',
+                yahoo: 'Yahoo 邮箱',
                 aliyun: '阿里邮箱',
-                custom: '自定义IMAP'
+                custom: '自定义 IMAP'
             };
-            return labels[key] || provider || '未知';
+            return translateAppTextLocal(labels[key] || provider || '未知');
         }
 
         // 渲染邮箱列表
@@ -213,7 +213,7 @@
                 container.innerHTML = `
                     <div class="empty-state">
                         <span class="empty-icon">📭</span>
-                        <p>该分组暂无邮箱</p>
+                        <p>${translateAppTextLocal('该分组暂无邮箱')}</p>
                     </div>
                 `;
                 const selectAllCheckbox = document.getElementById('selectAllCheckbox');
@@ -245,13 +245,13 @@
                 const providerLabel = getProviderLabel(acc.provider || acc.account_type || 'outlook');
                 const providerTagHtml = `<span class="account-provider-tag">${escapeHtml(providerLabel)}</span>`;
 
-                let tokenBadge = '<span class="badge badge-gray">– 未知</span>';
+                let tokenBadge = `<span class="badge badge-gray">– ${translateAppTextLocal('未知')}</span>`;
                 if (acc.token_status === 'valid') {
-                    tokenBadge = '<span class="badge badge-green">✓ 有效</span>';
+                    tokenBadge = `<span class="badge badge-green">✓ ${translateAppTextLocal('有效')}</span>`;
                 } else if (acc.token_status === 'invalid' || acc.token_status === 'expired') {
-                    tokenBadge = '<span class="badge badge-red">✗ 过期</span>';
+                    tokenBadge = `<span class="badge badge-red">✗ ${translateAppTextLocal('过期')}</span>`;
                 } else if (acc.token_status === 'expiring') {
-                    tokenBadge = '<span class="badge badge-gold">⚠ 即将过期</span>';
+                    tokenBadge = `<span class="badge badge-gold">⚠ ${translateAppTextLocal('即将过期')}</span>`;
                 }
 
                 return `
@@ -266,7 +266,7 @@
                         <div class="account-info">
                             <div class="account-email"
                                  onclick="event.stopPropagation(); copyEmail('${escapeJs(acc.email)}')"
-                                 title="点击复制 ${escapeHtml(acc.email)}"
+                                 title="${escapeHtml(translateAppTextLocal('点击复制邮箱地址'))}"
                                  style="${isFailed ? 'color:var(--clr-danger);' : ''}cursor:pointer;">
                                 ${escapeHtml(acc.email)}
                             </div>
@@ -274,7 +274,7 @@
                             <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px;">
                                 ${providerTagHtml}
                                 ${(acc.tags || []).map(tag => `<span class="tag" style="background-color:${tag.color};color:white;">${escapeHtml(tag.name)}</span>`).join('')}
-                                ${acc.telegram_push_enabled ? `<span class="tag tg-push-tag" onclick="event.stopPropagation(); toggleTelegramPush(${acc.id}, false)" title="点击关闭推送">🔔 推送</span>` : ''}
+                                ${acc.telegram_push_enabled ? `<span class="tag tg-push-tag" onclick="event.stopPropagation(); toggleTelegramPush(${acc.id}, false)" title="${escapeHtml(translateAppTextLocal('点击关闭推送'))}">🔔 ${escapeHtml(translateAppTextLocal('推送'))}</span>` : ''}
                             </div>
                         </div>
                     </div>
@@ -282,14 +282,14 @@
                         <div class="account-meta">
                             <span class="account-api-tag">${acc.method || 'Graph'}</span>
                             <span>🕐 ${formatRelativeTime(acc.last_refresh_at)}</span>
-                            ${isFailed ? `<button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); showRefreshError(${acc.id}, '${escapeJs(acc.last_refresh_error || '未知错误')}', '${escapeJs(acc.email)}')" style="padding:1px 6px;font-size:0.65rem;">查看错误</button>` : ''}
+                            ${isFailed ? `<button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); showRefreshError(${acc.id}, '${escapeJs(acc.last_refresh_error || '未知错误')}', '${escapeJs(acc.email)}')" style="padding:1px 6px;font-size:0.65rem;">${escapeHtml(translateAppTextLocal('查看错误'))}</button>` : ''}
                         </div>
                         <div class="account-actions">
-                            <button class="btn-icon ${acc.telegram_push_enabled ? 'tg-push-active' : ''}" onclick="event.stopPropagation(); toggleTelegramPush(${acc.id}, ${!acc.telegram_push_enabled})" title="Telegram推送${acc.telegram_push_enabled ? '(已开启)' : ''}">🔔</button>
-                            <button class="btn btn-sm btn-accent" onclick="event.stopPropagation(); copyVerificationInfo('${escapeJs(acc.email)}', this)" title="提取验证码" style="font-size:0.72rem;padding:2px 8px;">🔑 验证码</button>
-                            <button class="btn-icon" onclick="event.stopPropagation(); copyEmail('${escapeJs(acc.email)}')" title="复制">📋</button>
-                            <button class="btn-icon" onclick="event.stopPropagation(); showEditAccountModal(${acc.id})" title="编辑">✏️</button>
-                            <button class="btn-icon" onclick="event.stopPropagation(); deleteAccount(${acc.id}, '${escapeJs(acc.email)}')" title="删除" style="color:var(--clr-danger);">🗑️</button>
+                            <button class="btn-icon ${acc.telegram_push_enabled ? 'tg-push-active' : ''}" onclick="event.stopPropagation(); toggleTelegramPush(${acc.id}, ${!acc.telegram_push_enabled})" title="${escapeHtml(translateAppTextLocal(acc.telegram_push_enabled ? 'Telegram 推送（已开启）' : 'Telegram 推送'))}">🔔</button>
+                            <button class="btn btn-sm btn-accent" onclick="event.stopPropagation(); copyVerificationInfo('${escapeJs(acc.email)}', this)" title="${escapeHtml(translateAppTextLocal('验证码'))}" style="font-size:0.72rem;padding:2px 8px;">🔑 ${escapeHtml(translateAppTextLocal('验证码'))}</button>
+                            <button class="btn-icon" onclick="event.stopPropagation(); copyEmail('${escapeJs(acc.email)}')" title="${escapeHtml(translateAppTextLocal('复制'))}">📋</button>
+                            <button class="btn-icon" onclick="event.stopPropagation(); showEditAccountModal(${acc.id})" title="${escapeHtml(translateAppTextLocal('编辑'))}">✏️</button>
+                            <button class="btn-icon" onclick="event.stopPropagation(); deleteAccount(${acc.id}, '${escapeJs(acc.email)}')" title="${escapeHtml(translateAppTextLocal('删除'))}" style="color:var(--clr-danger);">🗑️</button>
                         </div>
                     </div>
                 </div>
@@ -437,7 +437,7 @@
         // 显示添加分组模态框
         function showAddGroupModal() {
             editingGroupId = null;
-            document.getElementById('groupModalTitle').textContent = '添加分组';
+            document.getElementById('groupModalTitle').textContent = translateAppTextLocal('添加分组');
             document.getElementById('groupName').value = '';
             document.getElementById('groupDescription').value = '';
             selectedColor = '#B85C38';
@@ -463,7 +463,7 @@
 
                 if (data.success) {
                     editingGroupId = groupId;
-                    document.getElementById('groupModalTitle').textContent = '编辑分组';
+                    document.getElementById('groupModalTitle').textContent = translateAppTextLocal('编辑分组');
                     document.getElementById('groupName').value = data.group.name;
                     document.getElementById('groupDescription').value = data.group.description || '';
                     selectedColor = data.group.color || '#B85C38';
@@ -489,7 +489,7 @@
                     document.getElementById('addGroupModal').classList.add('show');
                 }
             } catch (error) {
-                showToast('加载分组信息失败', 'error');
+                showToast(translateAppTextLocal('加载分组信息失败'), 'error');
             }
         }
 
@@ -499,7 +499,7 @@
             const description = document.getElementById('groupDescription').value.trim();
 
             if (!name) {
-                showToast('请输入分组名称', 'error');
+                showToast(translateAppTextLocal('请输入分组名称'), 'error');
                 return;
             }
 
@@ -521,14 +521,14 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    showToast(data.message, 'success');
+                    showToast(pickApiMessage(data, data.message, 'Group saved successfully'), 'success');
                     hideAddGroupModal();
                     loadGroups();
                 } else {
                     handleApiError(data, '保存分组失败');
                 }
             } catch (error) {
-                showToast('保存失败', 'error');
+                showToast(translateAppTextLocal('保存失败'), 'error');
             }
         }
 
@@ -543,7 +543,7 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    showToast(data.message, 'success');
+                    showToast(pickApiMessage(data, data.message, 'Group deleted successfully'), 'success');
                     // 清除缓存
                     delete accountsCache[groupId];
                     // 如果删除的是当前选中的分组，切换到默认分组
@@ -555,7 +555,7 @@
                     handleApiError(data, '删除分组失败');
                 }
             } catch (error) {
-                showToast('删除失败', 'error');
+                showToast(translateAppTextLocal('删除失败'), 'error');
             }
         }
 
@@ -641,12 +641,19 @@
 
                 if (data.success && data.data && data.data.formatted) {
                     await copyToClipboard(data.data.formatted);
-                    showToast(`已复制: ${data.data.formatted}`, 'success');
+                    showToast(
+                        getUiLanguage() === 'en'
+                            ? `Copied: ${data.data.formatted}`
+                            : `已复制: ${data.data.formatted}`,
+                        'success'
+                    );
                     // 成功状态
                     buttonElement.innerHTML = '✅';
                     buttonElement.style.opacity = '1';
                 } else {
-                    const errorMsg = data.error?.message || data.error || '未找到验证码或链接';
+                    const errorMsg = window.resolveApiErrorMessage
+                        ? window.resolveApiErrorMessage(data.error || data, '未找到验证码或链接', 'No verification code or link was found')
+                        : (data.error?.message || data.error || '未找到验证码或链接');
                     showToast(errorMsg, 'error');
                     // 失败状态
                     buttonElement.innerHTML = '❌';
@@ -654,7 +661,7 @@
                 }
             } catch (error) {
                 console.error('提取验证码失败:', error);
-                showToast('网络错误，请重试', 'error');
+                showToast(translateAppTextLocal('网络错误，请重试'), 'error');
                 // 失败状态
                 buttonElement.innerHTML = '❌';
                 buttonElement.style.opacity = '1';

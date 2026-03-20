@@ -26,7 +26,8 @@ from outlook_web.security.crypto import (
 # v10：PRD-00008 P2 — 调用方日级使用统计表
 # v11：PRD-00009 MT-1 — 邮箱池字段（pool_status/claimed_by/...）+ account_claim_logs 表 + pool settings
 # v12：PRD-00009 P2 — external_api_keys 新增 pool_access 布尔权限
-DB_SCHEMA_VERSION = 12
+# v13：PRD-00010 V1.90 — 邮件通知设置 + 统一通知游标/投递日志表
+DB_SCHEMA_VERSION = 13
 DB_SCHEMA_VERSION_KEY = "db_schema_version"
 DB_SCHEMA_LAST_UPGRADE_TRACE_ID_KEY = "db_schema_last_upgrade_trace_id"
 DB_SCHEMA_LAST_UPGRADE_ERROR_KEY = "db_schema_last_upgrade_error"
@@ -469,7 +470,15 @@ def init_db(database_path: Optional[str] = None):
         cursor.execute("""
             INSERT OR IGNORE INTO settings (key, value)
             VALUES ('polling_count', '5')
-            """)
+        """)
+        cursor.execute("""
+            INSERT OR IGNORE INTO settings (key, value)
+            VALUES ('email_notification_enabled', 'false')
+        """)
+        cursor.execute("""
+            INSERT OR IGNORE INTO settings (key, value)
+            VALUES ('email_notification_recipient', '')
+        """)
 
         # 索引（性能基线）
         cursor.execute("""
@@ -514,6 +523,45 @@ def init_db(database_path: Optional[str] = None):
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_telegram_push_log_pushed_at
             ON telegram_push_log(pushed_at)
+            """)
+
+        # v13: 统一通知游标表（V1.90 邮件通知增强）
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS notification_cursor_states (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                channel TEXT NOT NULL,
+                source_type TEXT NOT NULL,
+                source_key TEXT NOT NULL,
+                last_cursor_value TEXT NOT NULL DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(channel, source_type, source_key)
+            )
+            """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_notification_cursor_states_lookup
+            ON notification_cursor_states(channel, source_type, source_key)
+            """)
+
+        # v13: 统一通知投递日志（用于跨通道去重）
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS notification_delivery_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                channel TEXT NOT NULL,
+                source_type TEXT NOT NULL,
+                source_key TEXT NOT NULL,
+                message_id TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'sent',
+                error_code TEXT DEFAULT '',
+                error_message TEXT DEFAULT '',
+                delivered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(channel, source_type, source_key, message_id)
+            )
+            """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_notification_delivery_logs_lookup
+            ON notification_delivery_logs(channel, source_type, source_key, delivered_at)
             """)
 
         # v6: 对外 API 限流表 + 公网模式默认配置（PRD-00008 P1）

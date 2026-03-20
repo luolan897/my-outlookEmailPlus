@@ -70,12 +70,56 @@ def _get_telegram_interval(app) -> int:
         return 600
 
 
+def _get_email_notification_interval(app) -> int:
+    """读取邮件通知轮询间隔，默认 60 秒，最小 15 秒。"""
+    try:
+        with app.app_context():
+            value = settings_repo.get_setting("telegram_poll_interval", "600")
+        fallback = max(15, min(int(value or "600"), 600))
+    except Exception:
+        fallback = 60
+    try:
+        override = int(str(os.getenv("EMAIL_NOTIFICATION_POLL_INTERVAL", "")).strip() or "0")
+        if override > 0:
+            return max(15, override)
+    except Exception:
+        pass
+    return min(fallback, 60) if fallback else 60
+
+
+def _get_notification_dispatch_interval(app) -> int:
+    """统一通知调度间隔。
+
+    邮件通知启用时优先采用更快的邮件轮询；否则退回 Telegram 轮询间隔。
+    """
+    try:
+        with app.app_context():
+            email_enabled = settings_repo.get_setting("email_notification_enabled", "false").lower() == "true"
+            recipient = settings_repo.get_setting("email_notification_recipient", "").strip()
+    except Exception:
+        email_enabled = False
+        recipient = ""
+
+    if email_enabled and recipient:
+        return min(_get_email_notification_interval(app), _get_telegram_interval(app))
+    return _get_telegram_interval(app)
+
+
 def _configure_telegram_push_job(scheduler, app) -> None:
-    """注册/更新 Telegram 推送 Job。"""
+    """注册/更新 Telegram 推送 Job。
+
+    新邮件自动通知默认复用按账号开关的 Telegram 推送链路：
+    - 只有开启了账号级通知的邮箱才会被轮询
+    - 不再通过全局“邮件通知”配置扫描全部邮箱
+    """
     from outlook_web.services.telegram_push import run_telegram_push_job
 
     try:
         scheduler.remove_job("telegram_push_job")
+    except Exception:
+        pass
+    try:
+        scheduler.remove_job("email_notification_job")
     except Exception:
         pass
 
@@ -93,6 +137,35 @@ def _configure_telegram_push_job(scheduler, app) -> None:
         misfire_grace_time=interval,
     )
     print(f"✓ Telegram 推送 Job 已配置（轮询间隔：{interval} 秒）")
+
+
+def _configure_email_notification_job(scheduler, app) -> None:
+    """注册/更新统一通知分发 Job。"""
+    from outlook_web.services.notification_dispatch import run_notification_dispatch_job
+
+    try:
+        scheduler.remove_job("email_notification_job")
+    except Exception:
+        pass
+    try:
+        scheduler.remove_job("telegram_push_job")
+    except Exception:
+        pass
+
+    interval = _get_notification_dispatch_interval(app)
+    scheduler.add_job(
+        func=run_notification_dispatch_job,
+        args=[app],
+        trigger="interval",
+        seconds=interval,
+        id="email_notification_job",
+        name="统一通知分发",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=interval,
+    )
+    print(f"✓ 统一通知分发 Job 已配置（轮询间隔：{interval} 秒）")
 
 
 def _configure_probe_poll_job(scheduler, app) -> None:

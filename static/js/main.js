@@ -33,6 +33,26 @@
         // 导航状态
         let currentPage = 'dashboard';
 
+        function getUiLanguage() {
+            return window.getCurrentUiLanguage ? window.getCurrentUiLanguage() : 'zh';
+        }
+
+        function translateAppTextLocal(text) {
+            return window.translateAppText ? window.translateAppText(text) : text;
+        }
+
+        const pickApiMessage = (payload, fallbackZh, fallbackEn) => (
+            window.pickApiMessage ? window.pickApiMessage(payload, fallbackZh, fallbackEn) : (fallbackZh || fallbackEn || '')
+        );
+
+        const formatUiDateTime = (dateStr, options = {}) => (
+            window.formatUiDateTime ? window.formatUiDateTime(dateStr, options) : (dateStr || '')
+        );
+
+        const formatUiRelativeTime = (dateStr, fallbackZh = '从未刷新', fallbackEn = 'Never refreshed') => (
+            window.formatUiRelativeTime ? window.formatUiRelativeTime(dateStr, fallbackZh, fallbackEn) : (dateStr || fallbackZh)
+        );
+
         // ==================== 主题 & 导航 ====================
 
         function applyTheme(theme) {
@@ -92,8 +112,8 @@
                 'audit': ['审计日志', '系统操作记录']
             };
             const t = titles[page] || [page, ''];
-            if (titleEl) titleEl.textContent = t[0];
-            if (subtitleEl) subtitleEl.textContent = t[1];
+            if (titleEl) titleEl.textContent = translateAppTextLocal(t[0]);
+            if (subtitleEl) subtitleEl.textContent = translateAppTextLocal(t[1]);
             // Context actions
             if (actionsEl) {
                 if (page === 'mailbox') {
@@ -138,7 +158,7 @@
         }
 
         function logout() {
-            if (!confirm('确认退出登录？')) return;
+            if (!confirm(translateAppTextLocal('确认退出登录？'))) return;
             window.location.href = '/logout';
         }
 
@@ -180,14 +200,14 @@
                 // Update topbar subtitle with summary
                 const sub = document.getElementById('topbarSubtitle');
                 if (sub && currentPage === 'dashboard') {
-                    sub.textContent = `共 ${totalAccounts} 个账号 · ${validTokens} 个 Token 有效`;
+                    sub.textContent = translateAppTextLocal(`共 ${totalAccounts} 个账号 · ${validTokens} 个 Token 有效`);
                 }
 
                 // Group summary list
                 const groupListEl = document.getElementById('dashboardGroupList');
                 if (groupListEl) {
                     if (groupSummary.length === 0) {
-                        groupListEl.innerHTML = '<li style="color:var(--text-muted);padding:1rem;">暂无分组</li>';
+                        groupListEl.innerHTML = `<li style="color:var(--text-muted);padding:1rem;">${translateAppTextLocal('暂无分组')}</li>`;
                     } else {
                         groupListEl.innerHTML = groupSummary.map(g => {
                             const clickAction = g.isTempGroup
@@ -207,15 +227,15 @@
                         if (refreshData.success && refreshData.stats) {
                             const rs = refreshData.stats;
                             refreshListEl.innerHTML = `
-                                <li><span>上次刷新时间</span><span class="badge badge-gray">${rs.last_refresh_time || '暂无'}</span></li>
-                                <li><span>成功账号数</span><span class="badge" style="background:var(--clr-jade);color:white;">${rs.success_count}</span></li>
-                                <li><span>失败账号数</span><span class="badge" style="background:${rs.failed_count > 0 ? 'var(--clr-danger)' : 'var(--clr-jade)'};color:white;">${rs.failed_count}</span></li>
+                                <li><span>${translateAppTextLocal('上次刷新时间')}</span><span class="badge badge-gray">${escapeHtml(rs.last_refresh_time || translateAppTextLocal('暂无'))}</span></li>
+                                <li><span>${translateAppTextLocal('成功账号数')}</span><span class="badge" style="background:var(--clr-jade);color:white;">${rs.success_count}</span></li>
+                                <li><span>${translateAppTextLocal('失败账号数')}</span><span class="badge" style="background:${rs.failed_count > 0 ? 'var(--clr-danger)' : 'var(--clr-jade)'};color:white;">${rs.failed_count}</span></li>
                             `;
                         } else {
-                            refreshListEl.innerHTML = '<li style="color:var(--text-muted);padding:1rem;">暂无刷新记录</li>';
+                            refreshListEl.innerHTML = `<li style="color:var(--text-muted);padding:1rem;">${translateAppTextLocal('暂无刷新记录')}</li>`;
                         }
                     } catch (e) {
-                        refreshListEl.innerHTML = '<li style="color:var(--text-muted);padding:1rem;">前往刷新日志查看详情</li>';
+                        refreshListEl.innerHTML = `<li style="color:var(--text-muted);padding:1rem;">${translateAppTextLocal('前往刷新日志查看详情')}</li>`;
                     }
                 }
             } catch (e) {
@@ -320,7 +340,7 @@
 
         function stopRefresh() {
             // Placeholder for stopping a bulk refresh operation
-            showToast('刷新已停止', 'warn');
+            showToast(translateAppTextLocal('刷新已停止'), 'warn');
             const bar = document.getElementById('refreshProgressBar');
             if (bar) bar.style.display = 'none';
         }
@@ -440,7 +460,7 @@
             const loadingDiv = document.createElement('div');
             loadingDiv.className = 'loading-overlay';
             loadingDiv.id = 'loadingMore';
-            loadingDiv.innerHTML = '<span class="spinner"></span> 加载更多…';
+            loadingDiv.innerHTML = `<span class="spinner"></span> ${translateAppTextLocal('加载更多…')}`;
             emailList.appendChild(loadingDiv);
 
             // 禁用按钮
@@ -486,13 +506,13 @@
                     // 显示"没有更多邮件"
                     const loadingEl = document.getElementById('loadingMore');
                     if (loadingEl) {
-                        loadingEl.innerHTML = '<div style="text-align:center;padding:20px;color:#999;font-size:13px;">没有更多邮件了</div>';
+                        loadingEl.innerHTML = `<div style="text-align:center;padding:20px;color:#999;font-size:13px;">${translateAppTextLocal('没有更多邮件了')}</div>`;
                     }
                 }
             } catch (error) {
                 const loadingEl = document.getElementById('loadingMore');
                 if (loadingEl) loadingEl.remove();
-                showToast('加载失败', 'error');
+                showToast(translateAppTextLocal('加载失败'), 'error');
             } finally {
                 isLoadingMore = false;
                 // 启用按钮
@@ -536,7 +556,7 @@
                 document.getElementById('emailList').innerHTML = `
                     <div class="empty-state">
                         <span class="empty-icon">📬</span>
-                        <p>点击"获取邮件"按钮获取${folder === 'inbox' ? '收件箱' : '垃圾邮件'}</p>
+                        <p>${translateAppTextLocal(folder === 'inbox' ? '点击"获取邮件"按钮获取收件箱' : '点击"获取邮件"按钮获取垃圾邮件')}</p>
                     </div>
                 `;
                 document.getElementById('emailCount').textContent = '';
@@ -567,7 +587,7 @@
                 // 取消预设颜色的选中状态
                 document.querySelectorAll('.color-option').forEach(o => o.classList.remove('selected'));
             } else {
-                showToast('请输入有效的十六进制颜色（如 #FF5500）', 'error');
+                showToast(translateAppTextLocal('请输入有效的十六进制颜色（如 #FF5500）'), 'error');
             }
         }
 
@@ -585,13 +605,13 @@
             toast.className = 'toast ' + type;
 
             const messageSpan = document.createElement('span');
-            messageSpan.textContent = message;
+            messageSpan.textContent = translateAppTextLocal(message);
             toast.appendChild(messageSpan);
 
             if (errorDetail && type === 'error') {
                 const detailLink = document.createElement('a');
                 detailLink.href = 'javascript:void(0)';
-                detailLink.textContent = ' [详情]';
+                detailLink.textContent = ' ' + translateAppTextLocal('[详情]');
                 detailLink.style.cssText = 'color:var(--clr-danger);text-decoration:underline;margin-left:8px;';
                 detailLink.onclick = function (e) {
                     e.stopPropagation();
@@ -613,8 +633,8 @@
         // 显示刷新错误信息
         function showRefreshError(accountId, errorMessage, accountEmail) {
             document.getElementById('refreshErrorModal').classList.add('show');
-            document.getElementById('refreshErrorEmail').textContent = `账号：${accountEmail || '未知'}`;
-            document.getElementById('refreshErrorMessage').textContent = errorMessage;
+            document.getElementById('refreshErrorEmail').textContent = translateAppTextLocal(`账号：${accountEmail || '未知'}`);
+            document.getElementById('refreshErrorMessage').textContent = translateAppTextLocal(errorMessage);
             document.getElementById('editAccountFromErrorBtn').onclick = function () {
                 hideRefreshErrorModal();
                 showEditAccountModal(accountId);
@@ -631,7 +651,9 @@
         // 显示统一错误详情模态框
         function showErrorDetailModal(error) {
             document.getElementById('errorDetailModal').classList.add('show');
-            document.getElementById('errorModalUserMessage').textContent = error.message || '发生未知错误';
+            document.getElementById('errorModalUserMessage').textContent = window.resolveApiErrorMessage
+                ? window.resolveApiErrorMessage(error, '发生未知错误', 'Unknown error')
+                : (error.message || '发生未知错误');
             document.getElementById('errorModalCode').textContent = error.code || '-';
             document.getElementById('errorModalType').textContent = error.type || '-';
             document.getElementById('errorModalStatus').textContent = error.status || '-';
@@ -641,11 +663,11 @@
             const detailsContainer = document.getElementById('errorModalDetailsContainer');
             const toggleBtn = document.getElementById('toggleTraceBtn');
 
-            detailsEl.textContent = error.details || '暂无详细技术堆栈信息';
+            detailsEl.textContent = error.details || translateAppTextLocal('暂无详细技术堆栈信息');
 
             // 重置堆栈显示状态
             detailsContainer.style.display = 'none';
-            toggleBtn.textContent = '显示堆栈/细节';
+            toggleBtn.textContent = translateAppTextLocal('显示堆栈/细节');
         }
 
         // 隐藏统一错误详情模态框
@@ -731,10 +753,10 @@
 
             if (container.style.display === 'none') {
                 container.style.display = 'block';
-                btn.textContent = '隐藏堆栈/细节';
+                btn.textContent = translateAppTextLocal('隐藏堆栈/细节');
             } else {
                 container.style.display = 'none';
-                btn.textContent = '显示堆栈/细节';
+                btn.textContent = translateAppTextLocal('显示堆栈/细节');
             }
         }
 
@@ -746,23 +768,26 @@
             const type = document.getElementById('errorModalType').textContent;
             const status = document.getElementById('errorModalStatus').textContent;
             const traceId = document.getElementById('errorModalTraceId').textContent;
+            const userMessageHeader = translateAppTextLocal('【用户错误信息】');
+            const detailHeader = translateAppTextLocal('【错误详情】');
+            const technicalHeader = translateAppTextLocal('【技术堆栈/细节】');
 
             const fullErrorText = `
-【用户错误信息】
+${userMessageHeader}
 ${userMessage}
 
-【错误详情】
+${detailHeader}
 Code: ${code}
 Type: ${type}
 Status: ${status}
 Trace ID: ${traceId}
 
-【技术堆栈/细节】
+${technicalHeader}
 ${details}
             `.trim();
 
             navigator.clipboard.writeText(fullErrorText).then(() => {
-                showToast('错误详情已复制', 'success');
+                showToast(translateAppTextLocal('错误详情已复制'), 'success');
             }).catch(() => {
                 // 降级方案
                 const textarea = document.createElement('textarea');
@@ -771,26 +796,18 @@ ${details}
                 textarea.select();
                 document.execCommand('copy');
                 document.body.removeChild(textarea);
-                showToast('错误详情已复制', 'success');
+                showToast(translateAppTextLocal('错误详情已复制'), 'success');
             });
         }
 
         // 统一处理 API 响应错误
         function handleApiError(data, defaultMessage = '请求失败') {
             if (!data.success) {
-                // 检查是否是统一错误格式
-                if (data.error && data.error.message) {
-                    const error = data.error;
-                    // 使用后端提供的 message 作为用户友好信息
-                    const userMessage = error.message;
-
-                    // 调用 showToast 携带完整的错误对象
-                    showToast(userMessage, 'error', error);
-                } else {
-                    // 兼容旧的或非标准错误格式
-                    const errorMessage = data.error || defaultMessage;
-                    showToast(errorMessage, 'error');
-                }
+                const error = data.error || data;
+                const userMessage = window.resolveApiErrorMessage
+                    ? window.resolveApiErrorMessage(error, defaultMessage, 'Request failed')
+                    : (typeof error === 'string' ? translateAppTextLocal(error) : translateAppTextLocal(defaultMessage));
+                showToast(userMessage, 'error', error && typeof error === 'object' ? error : null);
                 return true;
             }
             return false;
@@ -813,35 +830,7 @@ ${details}
 
         // 格式化日期
         function formatDate(dateStr) {
-            if (!dateStr) return '';
-            try {
-                const date = new Date(dateStr);
-                if (isNaN(date.getTime())) return dateStr;
-
-                const now = new Date();
-                const isToday = date.toDateString() === now.toDateString();
-
-                if (isToday) {
-                    return '今天 ' + date.toLocaleTimeString('zh-CN', {
-                        timeZone: 'Asia/Shanghai',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                    });
-                } else {
-                    return date.toLocaleDateString('zh-CN', {
-                        timeZone: 'Asia/Shanghai',
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                    }) + ' ' + date.toLocaleTimeString('zh-CN', {
-                        timeZone: 'Asia/Shanghai',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                    });
-                }
-            } catch (e) {
-                return dateStr;
-            }
+            return formatUiDateTime(dateStr, { fallback: dateStr || '' });
         }
 
         // ==================== OAuth Refresh Token 相关 ====================
@@ -869,10 +858,10 @@ ${details}
                 if (data.success) {
                     document.getElementById('authUrlInput').value = data.auth_url;
                 } else {
-                    showToast('获取授权链接失败', 'error');
+                    showToast(translateAppTextLocal('获取授权链接失败'), 'error');
                 }
             } catch (error) {
-                showToast('获取授权链接失败', 'error');
+                showToast(translateAppTextLocal('获取授权链接失败'), 'error');
             }
         }
 
@@ -886,7 +875,7 @@ ${details}
             const input = document.getElementById('authUrlInput');
             input.select();
             document.execCommand('copy');
-            showToast('授权链接已复制到剪贴板', 'success');
+            showToast(translateAppTextLocal('授权链接已复制到剪贴板'), 'success');
         }
 
         // 打开授权 URL
@@ -894,7 +883,7 @@ ${details}
             const url = document.getElementById('authUrlInput').value;
             if (url) {
                 window.open(url, '_blank');
-                showToast('已在新窗口打开授权页面', 'info');
+                showToast(translateAppTextLocal('已在新窗口打开授权页面'), 'info');
             }
         }
 
@@ -903,7 +892,7 @@ ${details}
             const redirectUrl = document.getElementById('redirectUrlInput').value.trim();
 
             if (!redirectUrl) {
-                showToast('请先粘贴授权后的完整 URL', 'error');
+                showToast(translateAppTextLocal('请先粘贴授权后的完整 URL'), 'error');
                 return;
             }
 
@@ -938,14 +927,14 @@ ${details}
                         inputEl.select();
                     }
 
-                    showToast('✅ Token 获取成功！请将邮箱和密码替换后点导入', 'success');
+                    showToast(translateAppTextLocal('✅ Token 获取成功！请将邮箱和密码替换后点导入'), 'success');
                 } else {
                     handleApiError(data, '换取 Token 失败');
                     btn.disabled = false;
                     btn.textContent = '换取 Token';
                 }
             } catch (error) {
-                showToast('换取 Token 失败: ' + error.message, 'error');
+                showToast(`${translateAppTextLocal('换取 Token 失败')}: ${error.message}`, 'error');
                 btn.disabled = false;
                 btn.textContent = '换取 Token';
             }
@@ -1039,7 +1028,7 @@ ${details}
                     const externalHintEl = document.getElementById('externalApiKeyHint');
                     if (externalHintEl) {
                         if (data.settings.external_api_key_set) {
-                            externalHintEl.textContent = `已设置：${data.settings.external_api_key_masked || ''}（请求头：X-API-Key；清空后保存可禁用对外接口）`;
+                            externalHintEl.textContent = translateAppTextLocal(`已设置：${data.settings.external_api_key_masked || ''}`);
                         } else {
                             externalHintEl.textContent = '未设置（设置后可通过 /api/external/* 对外开放接口读取邮件与验证码）';
                         }
@@ -1090,13 +1079,17 @@ ${details}
                     const tgToken = document.getElementById('telegramBotToken');
                     const tgChat = document.getElementById('telegramChatId');
                     const tgPoll = document.getElementById('telegramPollInterval');
+                    const emailEnabled = document.getElementById('emailNotificationEnabled');
+                    const emailRecipient = document.getElementById('emailNotificationRecipient');
                     if (tgToken) tgToken.value = data.telegram_bot_token || '';
                     if (tgChat) tgChat.value = data.telegram_chat_id || '';
                     if (tgPoll) tgPoll.value = data.telegram_poll_interval || '600';
+                    if (emailEnabled) emailEnabled.checked = !!data.settings.email_notification_enabled;
+                    if (emailRecipient) emailRecipient.value = data.settings.email_notification_recipient || '';
                 }
             } catch (error) {
                 console.error('loadSettings error:', error);
-                showToast('加载设置失败', 'error');
+                showToast(translateAppTextLocal('加载设置失败'), 'error');
             }
         }
 
@@ -1133,24 +1126,24 @@ ${details}
                 const data = await response.json();
 
                 if (data.success && data.valid) {
-                    const nextRun = new Date(data.next_run).toLocaleString('zh-CN');
+                    const nextRun = formatUiDateTime(data.next_run, { fallback: data.next_run, includeSeconds: false });
                     resultEl.innerHTML = `
                         <div style="color: #28a745;">
-                            ✓ 表达式有效<br>
-                            下次执行: ${nextRun}
+                            ✓ ${translateAppTextLocal('表达式有效')}<br>
+                            ${translateAppTextLocal('下次执行:')} ${nextRun}
                         </div>
                     `;
                 } else {
                     resultEl.innerHTML = `
                         <div style="color: #dc3545;">
-                            ✗ ${data.error && data.error.message ? data.error.message : (data.error || '表达式无效')}
+                            ✗ ${window.resolveApiErrorMessage ? window.resolveApiErrorMessage(data.error || data, '表达式无效', 'Invalid expression') : (data.error && data.error.message ? data.error.message : (data.error || '表达式无效'))}
                         </div>
                     `;
                 }
             } catch (error) {
                 resultEl.innerHTML = `
                     <div style="color: #dc3545;">
-                        ✗ 验证失败: ${error.message}
+                        ✗ ${translateAppTextLocal('验证失败:')} ${error.message}
                     </div>
                 `;
             }
@@ -1185,6 +1178,8 @@ ${details}
             const enablePolling = document.getElementById('enableAutoPolling').checked;
             const pollingInterval = document.getElementById('pollingInterval').value;
             const pollingCount = document.getElementById('pollingCount').value;
+            const emailNotificationEnabled = document.getElementById('emailNotificationEnabled').checked;
+            const emailNotificationRecipient = document.getElementById('emailNotificationRecipient').value.trim();
 
             const settings = {};
 
@@ -1209,12 +1204,12 @@ ${details}
                     try {
                         parsedExternalApiKeys = JSON.parse(externalApiKeysRaw);
                     } catch (error) {
-                        showToast('多 Key 配置必须是合法 JSON', 'error');
+                        showToast(translateAppTextLocal('多 Key 配置必须是合法 JSON'), 'error');
                         return;
                     }
 
                     if (!Array.isArray(parsedExternalApiKeys)) {
-                        showToast('多 Key 配置必须是 JSON 数组', 'error');
+                        showToast(translateAppTextLocal('多 Key 配置必须是 JSON 数组'), 'error');
                         return;
                     }
 
@@ -1262,12 +1257,12 @@ ${details}
             const delay = parseInt(refreshDelay);
 
             if (isNaN(days) || days < 1 || days > 90) {
-                showToast('刷新周期必须在 1-90 天之间', 'error');
+                showToast(translateAppTextLocal('刷新周期必须在 1-90 天之间'), 'error');
                 return;
             }
 
             if (isNaN(delay) || delay < 0 || delay > 60) {
-                showToast('刷新间隔必须在 0-60 秒之间', 'error');
+                showToast(translateAppTextLocal('刷新间隔必须在 0-60 秒之间'), 'error');
                 return;
             }
 
@@ -1278,7 +1273,7 @@ ${details}
 
             if (strategy === 'cron') {
                 if (!refreshCron) {
-                    showToast('请输入 Cron 表达式', 'error');
+                    showToast(translateAppTextLocal('请输入 Cron 表达式'), 'error');
                     return;
                 }
                 settings.refresh_cron = refreshCron;
@@ -1289,19 +1284,21 @@ ${details}
             const pCount = parseInt(pollingCount);
 
             if (isNaN(pInterval) || pInterval < 5 || pInterval > 300) {
-                showToast('轮询间隔必须在 5-300 秒之间', 'error');
+                showToast(translateAppTextLocal('轮询间隔必须在 5-300 秒之间'), 'error');
                 return;
             }
 
             // 0 表示持续轮询，1-100 表示有限次数
             if (isNaN(pCount) || pCount < 0 || pCount > 100) {
-                showToast('轮询次数必须在 0-100 次之间（0 表示持续轮询）', 'error');
+                showToast(translateAppTextLocal('轮询次数必须在 0-100 次之间（0 表示持续轮询）'), 'error');
                 return;
             }
 
             settings.enable_auto_polling = enablePolling;
             settings.polling_interval = pInterval;
             settings.polling_count = pCount;
+            settings.email_notification_enabled = emailNotificationEnabled;
+            settings.email_notification_recipient = emailNotificationRecipient;
 
             // Telegram 推送配置
             const tgBotTokenEl = document.getElementById('telegramBotToken');
@@ -1319,7 +1316,7 @@ ${details}
             }
             if (!isNaN(tgPollInterval)) {
                 if (tgPollInterval < 60 || tgPollInterval > 3600) {
-                    showToast('Telegram 轮询间隔必须在 60-3600 秒之间', 'error');
+                    showToast(translateAppTextLocal('Telegram 轮询间隔必须在 60-3600 秒之间'), 'error');
                     return;
                 }
                 settings.telegram_poll_interval = tgPollInterval;
@@ -1335,31 +1332,49 @@ ${details}
                 const data = await response.json();
 
                 if (data.success) {
-                    showToast('设置已保存，重启应用后生效', 'success');
+                    showToast(pickApiMessage(data, '设置已保存，重启应用后生效', 'Settings saved successfully'), 'success');
                     hideSettingsModal();
                 } else {
                     handleApiError(data, '保存设置失败');
                 }
             } catch (error) {
-                showToast('保存设置失败', 'error');
+                showToast(translateAppTextLocal('保存设置失败'), 'error');
             }
         }
 
         async function testTelegramPush() {
             const btn = document.getElementById('btnTestTelegram');
-            if (btn) { btn.disabled = true; btn.textContent = '⏳ 发送中…'; }
+            if (btn) { btn.disabled = true; btn.textContent = translateAppTextLocal('⏳ 发送中…'); }
             try {
                 const resp = await fetch('/api/settings/telegram-test', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
                 const data = await resp.json();
                 if (data.success) {
-                    showToast(data.message || '测试消息已发送', 'success');
+                    showToast(pickApiMessage(data, '测试消息已发送，请检查 Telegram', 'Test message sent successfully. Please check Telegram'), 'success');
                 } else {
-                    showToast(data.error || '发送失败', 'error');
+                    handleApiError(data, '发送失败');
                 }
             } catch (e) {
-                showToast('请求失败：' + e.message, 'error');
+                showToast(`${translateAppTextLocal('请求失败')}: ${e.message}`, 'error');
             } finally {
-                if (btn) { btn.disabled = false; btn.textContent = '📨 发送测试消息'; }
+                if (btn) { btn.disabled = false; btn.textContent = translateAppTextLocal('📨 发送测试消息'); }
+            }
+        }
+
+        async function testEmailNotification() {
+            const btn = document.getElementById('btnTestEmailNotification');
+            if (btn) { btn.disabled = true; btn.textContent = translateAppTextLocal('⏳ 发送中…'); }
+            try {
+                const resp = await fetch('/api/settings/email-test', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                const data = await resp.json();
+                if (data.success) {
+                    showToast(pickApiMessage(data, '测试邮件已提交，请检查收件箱', 'Test email accepted. Please check your inbox'), 'success');
+                } else {
+                    handleApiError(data, '测试邮件发送失败');
+                }
+            } catch (e) {
+                showToast(`${translateAppTextLocal('请求失败')}: ${e.message}`, 'error');
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = translateAppTextLocal('📨 发送测试邮件'); }
             }
         }
 
@@ -1435,7 +1450,7 @@ ${details}
                     gap: 8px;
                     cursor: pointer;
                 `;
-                indicator.innerHTML = `<span style="animation: pulse 1.5s infinite;">🔄</span> 轮询中`;
+                indicator.innerHTML = `<span style="animation: pulse 1.5s infinite;">🔄</span> ${translateAppTextLocal('轮询中')}`;
                 indicator.onclick = () => {
                     if (confirm('是否停止轮询？')) {
                         stopPolling(false);
@@ -1469,7 +1484,7 @@ ${details}
             hidePollingStatusIndicator();
             // 用户主动停止时显示提示
             if (!silent) {
-                showToast('已停止轮询', 'info');
+                showToast(translateAppTextLocal('已停止轮询'), 'info');
             }
         }
 
@@ -1519,7 +1534,7 @@ ${details}
             // 连续错误超过阈值，停止轮询并提示
             if (pollingErrorCount >= MAX_POLLING_ERRORS) {
                 stopPolling(true);
-                showToast('轮询连续失败，已自动停止', 'error');
+                showToast(translateAppTextLocal('轮询连续失败，已自动停止'), 'error');
                 return;
             }
 
@@ -1533,12 +1548,17 @@ ${details}
         function showNewEmailNotification(newEmails) {
             const count = newEmails.length;
             const firstEmail = newEmails[0];
-            const subject = firstEmail?.subject || '无主题';
+            const subject = firstEmail?.subject || translateAppTextLocal('无主题');
+            const language = getUiLanguage();
 
             // 请求浏览器通知权限
             if ('Notification' in window && Notification.permission === 'granted') {
-                const title = count === 1 ? `新邮件 - ${currentAccount}` : `新邮件 (${count}封) - ${currentAccount}`;
-                const body = count === 1 ? subject : `${subject} 等 ${count} 封新邮件`;
+                const title = language === 'en'
+                    ? (count === 1 ? `New email - ${currentAccount}` : `New emails (${count}) - ${currentAccount}`)
+                    : (count === 1 ? `新邮件 - ${currentAccount}` : `新邮件 (${count}封) - ${currentAccount}`);
+                const body = language === 'en'
+                    ? (count === 1 ? subject : `${subject} and ${count} new emails`)
+                    : (count === 1 ? subject : `${subject} 等 ${count} 封新邮件`);
                 new Notification(title, {
                     body: body,
                     icon: '/img/ico.png'
@@ -1548,9 +1568,9 @@ ${details}
             }
 
             // 显示页面内通知（包含邮箱和主题）
-            const message = count === 1
-                ? `📬 ${currentAccount}: ${subject}`
-                : `📬 ${currentAccount}: ${subject} 等 ${count} 封新邮件`;
+            const message = language === 'en'
+                ? (count === 1 ? `📬 ${currentAccount}: ${subject}` : `📬 ${currentAccount}: ${subject} and ${count} new emails`)
+                : (count === 1 ? `📬 ${currentAccount}: ${subject}` : `📬 ${currentAccount}: ${subject} 等 ${count} 封新邮件`);
             showToast(message, 'success');
         }
 
@@ -1676,25 +1696,7 @@ ${details}
 
         // 相对时间格式化
         function formatRelativeTime(timestamp) {
-            if (!timestamp) return '从未刷新';
-
-            const now = new Date();
-            // 如果时间戳不包含时区信息，假定为 UTC 时间并添加 Z
-            let dateStr = timestamp;
-            if (typeof dateStr === 'string' && !dateStr.includes('Z') && !dateStr.includes('+') && !dateStr.includes('-', 10)) {
-                dateStr = dateStr + 'Z';
-            }
-            const past = new Date(dateStr);
-            const diffMs = now - past;
-            const diffMins = Math.floor(diffMs / 60000);
-            const diffHours = Math.floor(diffMs / 3600000);
-            const diffDays = Math.floor(diffMs / 86400000);
-
-            if (diffMins < 1) return '刚刚';
-            if (diffMins < 60) return `${diffMins} 分钟前`;
-            if (diffHours < 24) return `${diffHours} 小时前`;
-            if (diffDays < 30) return `${diffDays} 天前`;
-            return `${Math.floor(diffDays / 30)} 月前`;
+            return formatUiRelativeTime(timestamp, '从未刷新', 'Never refreshed');
         }
 
         // ==================== Token 刷新管理 ====================
@@ -1804,9 +1806,9 @@ ${details}
             }
 
             btn.disabled = true;
-            btn.textContent = '刷新中...';
+            btn.textContent = translateAppTextLocal('刷新中...');
             progress.style.display = 'block';
-            progressText.innerHTML = '正在初始化...';
+            progressText.innerHTML = translateAppTextLocal('正在初始化...');
 
             try {
                 const eventSource = new EventSource('/api/accounts/trigger-scheduled-refresh?force=true');
@@ -1821,7 +1823,7 @@ ${details}
                         if (data.type === 'start') {
                             totalCount = data.total;
                             const delayInfo = data.delay_seconds > 0 ? `（间隔 ${data.delay_seconds} 秒）` : '';
-                            progressText.innerHTML = `总共 <strong>${totalCount}</strong> 个账号${delayInfo}，准备开始刷新...`;
+                            progressText.innerHTML = `${translateAppTextLocal('总共')} <strong>${totalCount}</strong> ${translateAppTextLocal('个账号')}${delayInfo}，${translateAppTextLocal('准备开始刷新...')}`;
                             // 初始化统计
                             document.getElementById('totalRefreshCount').textContent = totalCount;
                             document.getElementById('successRefreshCount').textContent = '0';
@@ -1833,28 +1835,32 @@ ${details}
                             document.getElementById('successRefreshCount').textContent = successCount;
                             document.getElementById('failedRefreshCount').textContent = failedCount;
                             progressText.innerHTML = `
-                                正在处理: <strong>${data.email}</strong><br>
-                                进度: <strong>${data.current}/${data.total}</strong> |
-                                成功: <strong style="color: #28a745;">${successCount}</strong> |
-                                失败: <strong style="color: #dc3545;">${failedCount}</strong>
+                                ${translateAppTextLocal('正在处理')}: <strong>${data.email}</strong><br>
+                                ${translateAppTextLocal('进度')}: <strong>${data.current}/${data.total}</strong> |
+                                ${translateAppTextLocal('成功')}: <strong style="color: #28a745;">${successCount}</strong> |
+                                ${translateAppTextLocal('失败')}: <strong style="color: #dc3545;">${failedCount}</strong>
                             `;
                         } else if (data.type === 'delay') {
-                            progressText.innerHTML += `<br><span style="color: #999;">等待 ${data.seconds} 秒后继续...</span>`;
+                            progressText.innerHTML += `<br><span style="color: #999;">${translateAppTextLocal('等待')} ${data.seconds} ${translateAppTextLocal('秒后继续...')}</span>`;
                         } else if (data.type === 'complete') {
                             eventSource.close();
                             progress.style.display = 'none';
                             btn.disabled = false;
-                            btn.textContent = '🔄 全量刷新';
+                            btn.textContent = translateAppTextLocal('🔄 全量刷新');
 
                             // 直接更新统计数据，使用本地时间
                             const now = new Date();
                             lastRefreshTime = now; // 保存刷新时间
-                            document.getElementById('lastRefreshTime').textContent = '刚刚';
+                            document.getElementById('lastRefreshTime').textContent = formatUiRelativeTime(new Date().toISOString(), '刚刚', 'Just now');
                             document.getElementById('totalRefreshCount').textContent = data.total;
                             document.getElementById('successRefreshCount').textContent = data.success_count;
                             document.getElementById('failedRefreshCount').textContent = data.failed_count;
 
-                            showToast(`刷新完成！成功: ${data.success_count}, 失败: ${data.failed_count}`,
+                            showToast(`${
+                                getUiLanguage() === 'en'
+                                    ? `Refresh completed. Success: ${data.success_count}, Failed: ${data.failed_count}`
+                                    : `刷新完成！成功: ${data.success_count}, 失败: ${data.failed_count}`
+                            }`,
                                 data.failed_count > 0 ? 'warning' : 'success');
 
                             // 如果有失败的，显示失败列表
@@ -1877,15 +1883,15 @@ ${details}
                     eventSource.close();
                     progress.style.display = 'none';
                     btn.disabled = false;
-                    btn.textContent = '🔄 全量刷新';
-                    showToast('刷新过程中出现错误', 'error');
+                    btn.textContent = translateAppTextLocal('🔄 全量刷新');
+                    showToast(translateAppTextLocal('刷新过程中出现错误'), 'error');
                 };
 
             } catch (error) {
                 progress.style.display = 'none';
                 btn.disabled = false;
-                btn.textContent = '🔄 全量刷新';
-                showToast('刷新请求失败', 'error');
+                btn.textContent = translateAppTextLocal('🔄 全量刷新');
+                showToast(translateAppTextLocal('刷新请求失败'), 'error');
             }
         }
 
@@ -1898,9 +1904,9 @@ ${details}
             if (btn.disabled) return;
 
             btn.disabled = true;
-            btn.textContent = '重试中...';
+            btn.textContent = translateAppTextLocal('重试中...');
             progress.style.display = 'block';
-            progressText.textContent = '正在重试失败的账号...';
+            progressText.textContent = translateAppTextLocal('正在重试失败的账号...');
 
             try {
                 const response = await fetch('/api/accounts/refresh-failed', {
@@ -1910,13 +1916,17 @@ ${details}
 
                 progress.style.display = 'none';
                 btn.disabled = false;
-                btn.textContent = '🔁 重试失败';
+                btn.textContent = translateAppTextLocal('🔁 重试失败');
 
                 if (data.success) {
                     if (data.total === 0) {
-                        showToast('没有需要重试的失败账号', 'info');
+                        showToast(translateAppTextLocal('没有需要重试的失败账号'), 'info');
                     } else {
-                        showToast(`重试完成！成功: ${data.success_count}, 失败: ${data.failed_count}`,
+                        showToast(`${
+                            getUiLanguage() === 'en'
+                                ? `Retry completed. Success: ${data.success_count}, Failed: ${data.failed_count}`
+                                : `重试完成！成功: ${data.success_count}, 失败: ${data.failed_count}`
+                        }`,
                             data.failed_count > 0 ? 'warning' : 'success');
 
                         // 刷新统计
@@ -1935,8 +1945,8 @@ ${details}
             } catch (error) {
                 progress.style.display = 'none';
                 btn.disabled = false;
-                btn.textContent = '🔁 重试失败';
-                showToast('重试请求失败', 'error');
+                btn.textContent = translateAppTextLocal('🔁 重试失败');
+                showToast(translateAppTextLocal('重试请求失败'), 'error');
             }
         }
 
@@ -1949,7 +1959,12 @@ ${details}
                 const data = await response.json();
 
                 if (data.success) {
-                    showToast(`${accountEmail} 刷新成功`, 'success');
+                    showToast(
+                        getUiLanguage() === 'en'
+                            ? `${accountEmail} refreshed successfully`
+                            : `${accountEmail} 刷新成功`,
+                        'success'
+                    );
                     loadRefreshStats();
 
                     // 刷新失败列表
@@ -1958,7 +1973,16 @@ ${details}
                     handleApiError(data, `${accountEmail} 刷新失败`);
                 }
             } catch (error) {
-                handleApiError({ success: false, error: { message: '刷新请求失败', details: error.message, code: 'NETWORK_ERROR', type: 'Frontend' } });
+                handleApiError({
+                    success: false,
+                    error: {
+                        message: '刷新请求失败',
+                        message_en: 'Refresh request failed',
+                        details: error.message,
+                        code: 'NETWORK_ERROR',
+                        type: 'Frontend'
+                    }
+                });
             }
         }
 
@@ -2034,7 +2058,7 @@ ${details}
                     container.style.display = 'block';
                 }
             } catch (error) {
-                showToast('加载失败邮箱列表失败', 'error');
+                showToast(translateAppTextLocal('加载失败邮箱列表失败'), 'error');
             }
         }
 
@@ -2056,7 +2080,7 @@ ${details}
                         data.logs.forEach(log => {
                             const statusColor = log.status === 'success' ? '#28a745' : '#dc3545';
                             const statusText = log.status === 'success' ? '成功' : '失败';
-                            const typeText = log.refresh_type === 'manual' ? '手动' : '自动';
+                            const typeText = translateAppTextLocal(log.refresh_type === 'manual' ? '手动' : '自动');
                             const typeColor = log.refresh_type === 'manual' ? '#007bff' : '#28a745';
                             const typeBgColor = log.refresh_type === 'manual' ? '#e7f3ff' : '#e8f5e9';
 
@@ -2081,7 +2105,7 @@ ${details}
                     container.style.display = 'block';
                 }
             } catch (error) {
-                showToast('加载刷新历史失败', 'error');
+                showToast(translateAppTextLocal('加载刷新历史失败'), 'error');
             }
         }
 
@@ -2095,7 +2119,7 @@ ${details}
         async function loadRefreshLogPage() {
             const container = document.getElementById('refreshLogContainer');
             if (!container) return;
-            container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> 加载中…</div>';
+            container.innerHTML = `<div class="loading-overlay"><span class="spinner"></span> ${translateAppTextLocal('加载中…')}</div>`;
 
             try {
                 const response = await fetch('/api/accounts/refresh-logs?limit=200');
@@ -2104,15 +2128,17 @@ ${details}
                 if (data.success && data.logs && data.logs.length > 0) {
                     container.innerHTML = `
                         <div style="padding:0.6rem 1rem;font-size:0.78rem;color:var(--text-muted);border-bottom:1px solid var(--border-light);">
-                            共 ${data.logs.length} 条记录
+                            ${translateAppTextLocal(`共 ${data.logs.length} 条记录`)}
                         </div>
                         <div class="dashboard-list-wrap">
                             ${data.logs.map(log => {
                                 const isSuccess = log.status === 'success';
                                 const statusBadge = isSuccess
-                                    ? '<span class="badge" style="background:var(--clr-jade);color:white;">成功</span>'
-                                    : '<span class="badge" style="background:var(--clr-danger);color:white;">失败</span>';
-                                const typeText = log.refresh_type === 'manual' ? '手动' : (log.refresh_type === 'scheduled' ? '定时' : log.refresh_type || '-');
+                                    ? `<span class="badge" style="background:var(--clr-jade);color:white;">${translateAppTextLocal('成功')}</span>`
+                                    : `<span class="badge" style="background:var(--clr-danger);color:white;">${translateAppTextLocal('失败')}</span>`;
+                                const typeText = translateAppTextLocal(
+                                    log.refresh_type === 'manual' ? '手动' : (log.refresh_type === 'scheduled' ? '定时' : (log.refresh_type || '-'))
+                                );
                                 return `
                                     <div style="padding:0.75rem 1rem;border-bottom:1px solid var(--border-light);display:flex;align-items:center;gap:0.8rem;">
                                         <div style="flex:1;min-width:0;">
@@ -2127,19 +2153,59 @@ ${details}
                         </div>
                     `;
                 } else {
-                    container.innerHTML = '<div class="empty-state"><span class="empty-icon">📭</span><p>暂无刷新记录</p></div>';
+                    container.innerHTML = `<div class="empty-state"><span class="empty-icon">📭</span><p>${translateAppTextLocal('暂无刷新记录')}</p></div>`;
                 }
             } catch (error) {
-                container.innerHTML = '<div class="empty-state"><span class="empty-icon">⚠️</span><p>加载刷新日志失败</p></div>';
+                container.innerHTML = `<div class="empty-state"><span class="empty-icon">⚠️</span><p>${translateAppTextLocal('加载刷新历史失败')}</p></div>`;
             }
         }
 
         // ==================== 页面级：审计日志 ====================
 
+        function translateAuditDetailValue(value) {
+            if (typeof value === 'string') {
+                return translateAppTextLocal(value);
+            }
+            if (Array.isArray(value)) {
+                return value.map(translateAuditDetailValue);
+            }
+            if (value && typeof value === 'object') {
+                return Object.fromEntries(
+                    Object.entries(value).map(([key, nestedValue]) => [key, translateAuditDetailValue(nestedValue)])
+                );
+            }
+            return value;
+        }
+
+        function formatAuditDetailText(details) {
+            if (details == null) {
+                return '';
+            }
+            if (typeof details === 'string') {
+                const trimmed = details.trim();
+                if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+                    try {
+                        return JSON.stringify(translateAuditDetailValue(JSON.parse(trimmed)));
+                    } catch (error) {
+                        return translateAppTextLocal(details);
+                    }
+                }
+                return translateAppTextLocal(details);
+            }
+            if (typeof details === 'object') {
+                try {
+                    return JSON.stringify(translateAuditDetailValue(details));
+                } catch (error) {
+                    return translateAppTextLocal(String(details));
+                }
+            }
+            return translateAppTextLocal(String(details));
+        }
+
         async function loadAuditLogPage() {
             const container = document.getElementById('auditLogContainer');
             if (!container) return;
-            container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> 加载中…</div>';
+            container.innerHTML = `<div class="loading-overlay"><span class="spinner"></span> ${translateAppTextLocal('加载中…')}</div>`;
 
             try {
                 const response = await fetch('/api/audit-logs?limit=200');
@@ -2148,20 +2214,23 @@ ${details}
                 if (data.success && data.logs && data.logs.length > 0) {
                     container.innerHTML = `
                         <div style="padding:0.6rem 1rem;font-size:0.78rem;color:var(--text-muted);border-bottom:1px solid var(--border-light);">
-                            共 ${data.total || data.logs.length} 条记录
+                            ${translateAppTextLocal(`共 ${data.total || data.logs.length} 条记录`)}
                         </div>
                         <div class="dashboard-list-wrap">
                             ${data.logs.map(log => {
                                 const actionColor = log.action === 'delete' ? 'var(--clr-danger)' : (log.action === 'create' ? 'var(--clr-jade)' : 'var(--clr-primary)');
+                                const actionLabel = translateAppTextLocal(log.action || '-');
+                                const resourceTypeLabel = translateAppTextLocal(log.resource_type || '-');
+                                const detailText = formatAuditDetailText(log.details);
                                 return `
                                     <div style="padding:0.75rem 1rem;border-bottom:1px solid var(--border-light);">
                                         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:4px;">
-                                            <span class="badge" style="background:${actionColor};color:white;font-size:0.68rem;">${escapeHtml(log.action || '-')}</span>
-                                            <span style="font-size:0.78rem;color:var(--text-muted);">${escapeHtml(log.resource_type || '-')}</span>
+                                            <span class="badge" style="background:${actionColor};color:white;font-size:0.68rem;">${escapeHtml(actionLabel)}</span>
+                                            <span style="font-size:0.78rem;color:var(--text-muted);">${escapeHtml(resourceTypeLabel)}</span>
                                             <span style="font-size:0.72rem;color:var(--text-muted);margin-left:auto;">${formatDateTime(log.created_at)}</span>
                                         </div>
                                         <div style="font-size:0.82rem;color:var(--text);">${escapeHtml(log.resource_id || '-')}</div>
-                                        ${log.details ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;word-break:break-all;">${escapeHtml(log.details).substring(0, 200)}</div>` : ''}
+                                        ${detailText ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;word-break:break-all;">${escapeHtml(detailText).substring(0, 200)}</div>` : ''}
                                         <div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;">IP: ${escapeHtml(log.user_ip || '-')} ${log.trace_id ? '· trace: ' + escapeHtml(log.trace_id) : ''}</div>
                                     </div>
                                 `;
@@ -2169,47 +2238,16 @@ ${details}
                         </div>
                     `;
                 } else {
-                    container.innerHTML = '<div class="empty-state"><span class="empty-icon">📭</span><p>暂无审计记录</p></div>';
+                    container.innerHTML = `<div class="empty-state"><span class="empty-icon">📭</span><p>${translateAppTextLocal('暂无审计记录')}</p></div>`;
                 }
             } catch (error) {
-                container.innerHTML = '<div class="empty-state"><span class="empty-icon">⚠️</span><p>加载审计日志失败</p></div>';
+                container.innerHTML = `<div class="empty-state"><span class="empty-icon">⚠️</span><p>${translateAppTextLocal('加载审计日志失败')}</p></div>`;
             }
         }
 
         // 格式化日期时间
         function formatDateTime(dateStr) {
-            if (!dateStr) return '-';
-
-            let date;
-            if (dateStr instanceof Date) {
-                date = dateStr;
-            } else {
-                // 如果字符串不包含时区信息，假定为 UTC 时间
-                if (!dateStr.includes('Z') && !dateStr.includes('+') && !dateStr.includes('-', 10)) {
-                    dateStr = dateStr + 'Z';
-                }
-                date = new Date(dateStr);
-            }
-
-            const now = new Date();
-            const diff = now - date;
-            const minutes = Math.floor(diff / 60000);
-            const hours = Math.floor(diff / 3600000);
-            const days = Math.floor(diff / 86400000);
-
-            if (minutes < 1) return '刚刚';
-            if (minutes < 60) return `${minutes}分钟前`;
-            if (hours < 24) return `${hours}小时前`;
-            if (days < 7) return `${days}天前`;
-
-            return date.toLocaleString('zh-CN', {
-                timeZone: 'Asia/Shanghai',
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
+            return formatUiDateTime(dateStr, { fallback: '-' });
         }
 
         // 统一关闭所有模态框的函数 (修复 bug：防止模态框意外残留)
@@ -2274,7 +2312,7 @@ ${details}
                     updateTagFilter();  // Update Filter Dropdown
                 }
             } catch (error) {
-                showToast('加载标签失败', 'error');
+                showToast(translateAppTextLocal('加载标签失败'), 'error');
             }
         }
 
@@ -2310,7 +2348,7 @@ ${details}
         function renderTagList() {
             const listEl = document.getElementById('tagList');
             if (!allTags.length) {
-                listEl.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">暂无标签</div>';
+                listEl.innerHTML = `<div style="text-align: center; color: #999; padding: 20px;">${translateAppTextLocal('暂无标签')}</div>`;
                 return;
             }
 
@@ -2321,7 +2359,7 @@ ${details}
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <span class="tag-badge" style="background-color: ${tag.color};">${escapeHtml(tag.name)}</span>
                         </div>
-                        <button class="btn btn-sm btn-danger" onclick="deleteTag(${tag.id})">删除</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteTag(${tag.id})">${translateAppTextLocal('删除')}</button>
                     </div>
                 `;
             });
@@ -2336,7 +2374,7 @@ ${details}
             const color = colorInput.value;
 
             if (!name) {
-                showToast('请输入标签名称', 'error');
+                showToast(translateAppTextLocal('请输入标签名称'), 'error');
                 return;
             }
 
@@ -2350,15 +2388,15 @@ ${details}
 
                 if (data.success) {
                     nameInput.value = '';
-                    showToast('标签创建成功', 'success');
+                    showToast(translateAppTextLocal('标签创建成功'), 'success');
                     await loadTags();
                     // 刷新账号列表以重新加载标签（如果是在查看列表时添加标签，可能不需要立即刷新列表，但为了保持一致性可以刷新）
                     // 但通常添加标签不影响当前列表显示，除非是给账号打标
                 } else {
-                    showToast(data.error || '创建失败', 'error');
+                    handleApiError(data, '创建失败');
                 }
             } catch (error) {
-                showToast('创建标签失败', 'error');
+                showToast(translateAppTextLocal('创建标签失败'), 'error');
             }
         }
 
@@ -2371,17 +2409,17 @@ ${details}
                 const data = await response.json();
 
                 if (data.success) {
-                    showToast('标签已删除', 'success');
+                    showToast(translateAppTextLocal('标签已删除'), 'success');
                     await loadTags();
                     // 刷新账号列表以更新标签显示
                     if (currentGroupId) {
                         loadAccountsByGroup(currentGroupId, true);
                     }
                 } else {
-                    showToast(data.error || '删除失败', 'error');
+                    handleApiError(data, '删除失败');
                 }
             } catch (error) {
-                showToast('删除标签失败', 'error');
+                showToast(translateAppTextLocal('删除标签失败'), 'error');
             }
         }
 
@@ -2417,7 +2455,7 @@ ${details}
         // 显示批量删除确认
         function showBatchDeleteConfirm() {
             if (selectedAccountIds.size === 0) {
-                showToast('请选择要删除的账号', 'error');
+                showToast(translateAppTextLocal('请选择要删除的账号'), 'error');
                 return;
             }
 
@@ -2444,7 +2482,7 @@ ${details}
 
                 const data = await response.json();
                 if (data.success) {
-                    showToast(data.message, 'success');
+                    showToast(pickApiMessage(data, data.message, 'Accounts deleted successfully'), 'success');
                     // 清空选中状态
                     selectedAccountIds.clear();
                     // 刷新分组和邮箱列表
@@ -2456,10 +2494,10 @@ ${details}
                     // 更新批量操作栏
                     updateBatchActionBar();
                 } else {
-                    showToast(data.error || '删除失败', 'error');
+                    handleApiError(data, '删除失败');
                 }
             } catch (error) {
-                showToast('删除失败', 'error');
+                showToast(translateAppTextLocal('删除失败'), 'error');
             }
         }
 
@@ -2468,7 +2506,7 @@ ${details}
         // 显示批量打标模态框
         async function showBatchTagModal(type) {
             batchActionType = type;
-            document.getElementById('batchTagTitle').textContent = type === 'add' ? '批量添加标签' : '批量移除标签';
+            document.getElementById('batchTagTitle').textContent = translateAppTextLocal(type === 'add' ? '批量添加标签' : '批量移除标签');
             document.getElementById('batchTagModal').classList.add('show');
 
             // 加载标签选项
@@ -2482,20 +2520,20 @@ ${details}
         // 加载标签到下拉框
         async function loadTagsForSelect() {
             const select = document.getElementById('batchTagSelect');
-            select.innerHTML = '<option value="">加载中...</option>';
+            select.innerHTML = `<option value="">${translateAppTextLocal('加载中...')}</option>`;
 
             try {
                 const response = await fetch('/api/tags');
                 const data = await response.json();
                 if (data.success) {
-                    let html = '<option value="">请选择标签...</option>';
+                    let html = `<option value="">${translateAppTextLocal('请选择标签...')}</option>`;
                     data.tags.forEach(tag => {
                         html += `<option value="${tag.id}">${escapeHtml(tag.name)}</option>`;
                     });
                     select.innerHTML = html;
                 }
             } catch (error) {
-                select.innerHTML = '<option value="">加载失败</option>';
+                select.innerHTML = `<option value="">${translateAppTextLocal('加载失败')}</option>`;
             }
         }
 
@@ -2503,7 +2541,7 @@ ${details}
         async function confirmBatchTag() {
             const tagId = document.getElementById('batchTagSelect').value;
             if (!tagId) {
-                showToast('请选择标签', 'error');
+                showToast(translateAppTextLocal('请选择标签'), 'error');
                 return;
             }
 
@@ -2524,7 +2562,7 @@ ${details}
 
                 const data = await response.json();
                 if (data.success) {
-                    showToast(data.message, 'success');
+                    showToast(pickApiMessage(data, data.message, 'Tag update completed'), 'success');
                     hideBatchTagModal();
                     // 清空选中状态
                     selectedAccountIds.clear();
@@ -2536,10 +2574,10 @@ ${details}
                     }
                     updateBatchActionBar();
                 } else {
-                    showToast(data.error || '操作失败', 'error');
+                    handleApiError(data, '操作失败');
                 }
             } catch (error) {
-                showToast('请求失败', 'error');
+                showToast(translateAppTextLocal('请求失败'), 'error');
             }
         }
 
@@ -2558,20 +2596,20 @@ ${details}
         // 加载分组到下拉框
         async function loadGroupsForBatchMove() {
             const select = document.getElementById('batchMoveGroupSelect');
-            select.innerHTML = '<option value="">加载中...</option>';
+            select.innerHTML = `<option value="">${translateAppTextLocal('加载中...')}</option>`;
 
             try {
                 const response = await fetch('/api/groups');
                 const data = await response.json();
                 if (data.success) {
-                    let html = '<option value="">请选择分组...</option>';
+                    let html = `<option value="">${translateAppTextLocal('请选择分组...')}</option>`;
                     data.groups.filter(g => !g.is_system).forEach(group => {
                         html += `<option value="${group.id}">${escapeHtml(group.name)}</option>`;
                     });
                     select.innerHTML = html;
                 }
             } catch (error) {
-                select.innerHTML = '<option value="">加载失败</option>';
+                select.innerHTML = `<option value="">${translateAppTextLocal('加载失败')}</option>`;
             }
         }
 
@@ -2579,7 +2617,7 @@ ${details}
         async function confirmBatchMoveGroup() {
             const groupId = document.getElementById('batchMoveGroupSelect').value;
             if (!groupId) {
-                showToast('请选择目标分组', 'error');
+                showToast(translateAppTextLocal('请选择目标分组'), 'error');
                 return;
             }
 
@@ -2599,7 +2637,7 @@ ${details}
 
                 const data = await response.json();
                 if (data.success) {
-                    showToast(data.message, 'success');
+                    showToast(pickApiMessage(data, data.message, 'Accounts moved successfully'), 'success');
                     hideBatchMoveGroupModal();
                     // 清空选中状态
                     selectedAccountIds.clear();
@@ -2612,9 +2650,9 @@ ${details}
                     }
                     updateBatchActionBar();
                 } else {
-                    showToast(data.error || '操作失败', 'error');
+                    handleApiError(data, '操作失败');
                 }
             } catch (error) {
-                showToast('请求失败', 'error');
+                showToast(translateAppTextLocal('请求失败'), 'error');
             }
         }

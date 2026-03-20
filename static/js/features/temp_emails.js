@@ -18,7 +18,7 @@
                 return;
             }
 
-            const loadingHTML = '<div class="loading-overlay"><span class="spinner"></span> 加载中…</div>';
+            const loadingHTML = `<div class="loading-overlay"><span class="spinner"></span> ${translateAppTextLocal('加载中…')}</div>`;
             if (container) container.innerHTML = loadingHTML;
             if (pageContainer) pageContainer.innerHTML = loadingHTML;
 
@@ -37,7 +37,7 @@
                     }
                 }
             } catch (error) {
-                const errHTML = '<div class="empty-state"><p>加载失败</p></div>';
+                const errHTML = `<div class="empty-state"><p>${translateAppTextLocal('加载失败')}</p></div>`;
                 if (container) container.innerHTML = errHTML;
                 if (pageContainer) pageContainer.innerHTML = errHTML;
             }
@@ -52,14 +52,14 @@
                 const emptyAccountHTML = `
                     <div class="empty-state">
                         <span class="empty-icon">⚡</span>
-                        <p>暂无临时邮箱<br>点击按钮生成</p>
+                        <p>${translateAppTextLocal('暂无临时邮箱')}<br>${translateAppTextLocal('点击按钮生成')}</p>
                     </div>
                 `;
                 const emptyPageHTML = `
                     <div class="empty-state">
                         <span class="empty-icon">📭</span>
-                        <p>暂无临时邮箱</p>
-                        <button class="btn btn-primary" onclick="generateTempEmail()">创建第一个临时邮箱</button>
+                        <p>${translateAppTextLocal('暂无临时邮箱')}</p>
+                        <button class="btn btn-primary" onclick="generateTempEmail()">${translateAppTextLocal('创建第一个临时邮箱')}</button>
                     </div>
                 `;
                 if (container) container.innerHTML = emptyAccountHTML;
@@ -79,7 +79,7 @@
                         <div class="account-avatar" style="background:${color};">${initial}</div>
                         <div class="account-info">
                             <div class="account-email" onclick="event.stopPropagation(); copyEmail('${escapeJs(email.email)}')" style="cursor:pointer;" title="点击复制">${escapeHtml(email.email)}</div>
-                            <div style="font-size:0.72rem;color:var(--text-muted);">⚡ 临时邮箱</div>
+                            <div style="font-size:0.72rem;color:var(--text-muted);">${translateAppTextLocal('⚡ 临时邮箱')}</div>
                         </div>
                     </div>
                     <div class="account-card-bottom">
@@ -115,16 +115,7 @@
                     loadTempEmails(true);
                     loadGroups();
                 } else {
-                    // 显示详细的错误信息
-                    const errorMsg = data.error || '生成临时邮箱失败';
-                    if (data.error && typeof data.error === 'object') {
-                        // 结构化错误对象
-                        const detailedError = data.error.message || data.error.error || errorMsg;
-                        showToast(detailedError, 'error', data.error);
-                    } else {
-                        // 字符串错误
-                        showToast(errorMsg, 'error');
-                    }
+                    handleApiError(data, '生成临时邮箱失败');
                 }
             } catch (error) {
                 showToast('生成临时邮箱失败', 'error');
@@ -164,7 +155,7 @@
             // Show loading in message area (prefer temp-emails page container)
             const tempMsgList = document.getElementById('tempEmailMessageList');
             const emailList = document.getElementById('emailList');
-            const loadingHTML = '<div class="empty-state"><span class="empty-icon">📬</span><p>点击 🔄 获取邮件 按钮加载邮件</p></div>';
+            const loadingHTML = `<div class="empty-state"><span class="empty-icon">📬</span><p>${translateAppTextLocal('点击"获取邮件"按钮获取邮件')}</p></div>`;
 
             if (tempMsgList) tempMsgList.innerHTML = loadingHTML;
             if (emailList) {
@@ -200,7 +191,7 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    showToast('邮件已清空', 'success');
+                    showToast(translateAppTextLocal('邮件已清空'), 'success');
 
                     // 如果当前选中的就是这个邮箱，清空邮件列表
                     if (currentAccount === email) {
@@ -208,12 +199,12 @@
                         document.getElementById('emailCount').textContent = '(0)';
                         document.getElementById('emailList').innerHTML = `
                             <div class="empty-state">
-                                <span class="empty-icon">📭</span><p>收件箱为空</p>
+                                <span class="empty-icon">📭</span><p>${translateAppTextLocal('收件箱为空')}</p>
                             </div>
                         `;
                         document.getElementById('emailDetail').innerHTML = `
                             <div class="empty-state">
-                                <span class="empty-icon">📄</span><p>选择一封邮件查看详情</p>
+                                <span class="empty-icon">📄</span><p>${translateAppTextLocal('选择一封邮件查看详情')}</p>
                             </div>
                         `;
                         document.getElementById('emailDetailToolbar').style.display = 'none';
@@ -222,7 +213,7 @@
                     handleApiError(data, '清空临时邮箱失败');
                 }
             } catch (error) {
-                showToast('清空失败', 'error');
+                showToast(translateAppTextLocal('清空失败'), 'error');
             }
         }
 
@@ -281,7 +272,7 @@
             const refreshBtn = document.getElementById('tempEmailRefreshBtn');
             if (refreshBtn) {
                 refreshBtn.disabled = true;
-                refreshBtn.textContent = '获取中...';
+                refreshBtn.textContent = translateAppTextLocal('获取中...');
             }
 
             try {
@@ -312,7 +303,7 @@
                     }
                 } else {
                     handleApiError(data, '加载临时邮件失败');
-                    const errHTML = `<div class="empty-state"><span class="empty-icon">⚠️</span><p>${data.error && data.error.message ? data.error.message : '加载失败'}</p></div>`;
+                    const errHTML = `<div class="empty-state"><span class="empty-icon">⚠️</span><p>${window.resolveApiErrorMessage ? window.resolveApiErrorMessage(data.error || data, '加载失败', 'Load failed') : (data.error && data.error.message ? data.error.message : '加载失败')}</p></div>`;
                     if (container) container.innerHTML = errHTML;
                     if (tempContainer) tempContainer.innerHTML = errHTML;
                 }
@@ -331,12 +322,12 @@
         // 渲染临时邮箱邮件列表到独立页面
         function renderTempEmailMessageList(container, emails) {
             if (!emails || emails.length === 0) {
-                container.innerHTML = '<div class="empty-state"><span class="empty-icon">📭</span><p>暂无邮件</p></div>';
+                container.innerHTML = `<div class="empty-state"><span class="empty-icon">📭</span><p>${translateAppTextLocal('暂无邮件')}</p></div>`;
                 return;
             }
             container.innerHTML = emails.map((email, index) => {
-                const subject = email.subject || '(无主题)';
-                const from = email.from || email.sender || '未知发件人';
+                const subject = email.subject || translateAppTextLocal('无主题');
+                const from = email.from || email.sender || translateAppTextLocal('未知发件人');
                 const date = email.receivedDateTime || email.date || '';
                 const preview = (email.bodyPreview || email.body_preview || '').substring(0, 80);
                 return `
@@ -371,7 +362,7 @@
                     handleApiError(data, '加载邮件详情失败');
                     container.innerHTML = `
                         <div class="empty-state">
-                            <span class="empty-icon">⚠️</span><p>${data.error && data.error.message ? data.error.message : '加载失败'}</p>
+                            <span class="empty-icon">⚠️</span><p>${window.resolveApiErrorMessage ? window.resolveApiErrorMessage(data.error || data, '加载失败', 'Load failed') : (data.error && data.error.message ? data.error.message : '加载失败')}</p>
                         </div>
                     `;
                 }

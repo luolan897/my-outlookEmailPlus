@@ -69,6 +69,7 @@ def login() -> Any:
                 error_payload = build_error_payload(
                     code="LOGIN_INVALID_PASSWORD",
                     message="密码错误",
+                    message_en="Invalid password",
                     err_type="AuthError",
                     status=401,
                     details=f"ip={client_ip}",

@@ -49,7 +49,7 @@
                 document.getElementById('emailList').innerHTML = `
                     <div class="empty-state">
                         <span class="empty-icon">📬</span>
-                        <p>点击"获取邮件"按钮获取邮件</p>
+                        <p>${translateAppTextLocal('点击"获取邮件"按钮获取邮件')}</p>
                     </div>
                 `;
                 document.getElementById('emailCount').textContent = '';
@@ -70,6 +70,37 @@
         let providersLoaded = false;
         let providerOptions = [];
 
+        function buildImportFailureToastMessage(data) {
+            const baseMessage = pickApiMessage(data, data.message || '导入失败', data.message_en || 'Import failed');
+            const summary = data && typeof data.summary === 'object' ? data.summary : null;
+            const errors = Array.isArray(data && data.errors) ? data.errors : [];
+            const lines = [baseMessage];
+
+            if (summary) {
+                const imported = Number(summary.imported || 0);
+                const failed = Number(summary.failed || 0);
+                const skipped = Number(summary.skipped || 0);
+                lines.push(
+                    getUiLanguage() === 'en'
+                        ? `Imported ${imported}, failed ${failed}, skipped ${skipped}`
+                        : `成功 ${imported}，失败 ${failed}，跳过 ${skipped}`
+                );
+            }
+
+            if (errors.length > 0) {
+                const firstError = errors[0] || {};
+                const row = firstError.line_number || firstError.line || firstError.index;
+                const detail = getUiLanguage() === 'en'
+                    ? (firstError.message_en || firstError.message || firstError.error || '')
+                    : (firstError.message || firstError.message_en || firstError.error || '');
+                if (detail) {
+                    lines.push(row ? (getUiLanguage() === 'en' ? `Line ${row}: ${detail}` : `第 ${row} 行：${detail}`) : detail);
+                }
+            }
+
+            return lines.filter(Boolean).join('\n');
+        }
+
         // 加载邮箱 providers（用于导入下拉）
         async function loadProviders() {
             if (providersLoaded) return;
@@ -84,7 +115,7 @@
 
                 providerOptions = data.providers;
                 select.innerHTML = data.providers.map(p => `
-                    <option value="${escapeHtml(p.key)}">${escapeHtml(p.label || p.key)}</option>
+                    <option value="${escapeHtml(p.key)}">${escapeHtml(translateAppTextLocal(p.label || p.key))}</option>
                 `).join('');
 
                 providersLoaded = true;
@@ -122,14 +153,14 @@
                 customFields.style.display = 'none';
                 if (duplicateGroup) duplicateGroup.style.display = '';
                 if (fallbackGroup) fallbackGroup.style.display = '';
-                input.placeholder = '支持混合格式，每行一个账号...\nOutlook: 邮箱----密码----client_id----refresh_token\nIMAP: 邮箱----授权码----provider\n或: 邮箱----密码（自动识别类型）\nGPTMail: 仅邮箱地址';
-                hint.textContent = '智能识别模式：自动按每行格式和邮箱域名判断类型，自动分组';
+                input.placeholder = translateAppTextLocal('支持混合格式，每行一个账号...\nOutlook: 邮箱----密码----client_id----refresh_token\nIMAP: 邮箱----授权码----provider\n或: 邮箱----密码（自动识别类型）\nGPTMail: 仅邮箱地址');
+                hint.textContent = translateAppTextLocal('智能识别模式：自动按每行格式和邮箱域名判断类型，自动分组');
                 if (getTokenBtn) getTokenBtn.style.display = 'none';
                 if (importGroupSelect) {
                     importGroupSelect.disabled = true;
                     const savedHTML = importGroupSelect.innerHTML;
                     importGroupSelect.dataset.savedOptions = savedHTML;
-                    importGroupSelect.innerHTML = '<option value="">自动按类型分组</option>';
+                    importGroupSelect.innerHTML = `<option value="">${translateAppTextLocal('自动按类型分组')}</option>`;
                 }
                 return;
             }
@@ -142,21 +173,21 @@
 
             if (p === 'outlook') {
                 customFields.style.display = 'none';
-                input.placeholder = '邮箱----密码----client_id----refresh_token';
-                hint.textContent = '格式：邮箱----密码----client_id----refresh_token，支持批量导入（每行一个）';
+                input.placeholder = translateAppTextLocal('邮箱----密码----client_id----refresh_token');
+                hint.textContent = translateAppTextLocal('格式：邮箱----密码----client_id----refresh_token，支持批量导入（每行一个）');
                 return;
             }
 
             if (p === 'custom') {
                 customFields.style.display = '';
-                input.placeholder = '邮箱----IMAP授权码/应用密码';
-                hint.textContent = '格式：邮箱----IMAP授权码/应用密码（每行一个）。自定义 IMAP 需填写上方服务器/端口；也支持：邮箱----授权码----imap_host----imap_port';
+                input.placeholder = translateAppTextLocal('邮箱----IMAP授权码/应用密码');
+                hint.textContent = translateAppTextLocal('格式：邮箱----IMAP授权码/应用密码（每行一个）。自定义 IMAP 需填写上方服务器/端口；也支持：邮箱----授权码----imap_host----imap_port');
                 return;
             }
 
             customFields.style.display = 'none';
-            input.placeholder = '邮箱----IMAP授权码/应用密码';
-            hint.textContent = '格式：邮箱----IMAP授权码/应用密码，支持批量导入（每行一个）';
+            input.placeholder = translateAppTextLocal('邮箱----IMAP授权码/应用密码');
+            hint.textContent = translateAppTextLocal('格式：邮箱----IMAP授权码/应用密码，支持批量导入（每行一个）');
         }
 
         // 显示添加账号模态框
@@ -210,7 +241,7 @@
             const addToPool = Boolean(document.getElementById('addToPoolCheckbox')?.checked);
 
             if (!input) {
-                showToast('请输入账号信息', 'error');
+                showToast(translateAppTextLocal('请输入账号信息'), 'error');
                 return;
             }
 
@@ -240,7 +271,7 @@
                             const lines = input.split('\n').map(l => (l || '').trim()).filter(l => l && !l.startsWith('#'));
                             const hasInlineHost = lines.some(l => (l.split('----').length >= 4));
                             if (!hasInlineHost) {
-                                showToast('请填写 IMAP 服务器地址（或在文本中每行包含 host/port）', 'error');
+                                showToast(translateAppTextLocal('请填写 IMAP 服务器地址（或在文本中每行包含 host/port）'), 'error');
                                 return;
                             }
                         } else {
@@ -261,24 +292,24 @@
                 if (data.success) {
                     // Auto 模式增强结果展示
                     if (data.summary && data.summary.mode === 'auto') {
-                        let msg = data.message;
+                        let msg = pickApiMessage(data, data.message, data.message_en || 'Import completed');
                         const s = data.summary;
                         if (s.by_provider && Object.keys(s.by_provider).length > 0) {
-                            msg += '\n\n--- 按类型统计 ---';
+                            msg += `\n\n--- ${translateAppTextLocal('按类型统计')} ---`;
                             const provNames = {outlook:'Outlook',gmail:'Gmail',qq:'QQ邮箱','163':'163邮箱','126':'126邮箱',yahoo:'Yahoo',aliyun:'阿里云邮箱',custom:'自定义IMAP',gptmail:'临时邮箱'};
                             for (const [prov, stats] of Object.entries(s.by_provider)) {
                                 const name = provNames[prov] || prov;
-                                msg += `\n${name}：成功 ${stats.imported || 0}`;
-                                if (stats.skipped) msg += `，跳过 ${stats.skipped}`;
-                                if (stats.failed) msg += `，失败 ${stats.failed}`;
+                                msg += `\n${translateAppTextLocal(name)}: ${translateAppTextLocal('成功')} ${stats.imported || 0}`;
+                                if (stats.skipped) msg += `, ${translateAppTextLocal('跳过')} ${stats.skipped}`;
+                                if (stats.failed) msg += `, ${translateAppTextLocal('失败')} ${stats.failed}`;
                             }
                         }
                         if (s.groups_created && s.groups_created.length > 0) {
-                            msg += `\n\n✨ 自动创建分组：${s.groups_created.join('、')}`;
+                            msg += `\n\n✨ ${translateAppTextLocal('自动创建分组')}：${s.groups_created.join('、')}`;
                         }
                         showToast(msg, 'success');
                     } else {
-                        showToast(data.message, 'success');
+                        showToast(pickApiMessage(data, data.message, 'Import completed'), 'success');
                     }
                     hideAddAccountModal();
 
@@ -299,11 +330,13 @@
                     if (currentGroupId && currentGroupId === groupId) {
                         loadAccountsByGroup(groupId, true);
                     }
+                } else if (data.summary || Array.isArray(data.errors)) {
+                    showToast(buildImportFailureToastMessage(data), 'error', data.error || data);
                 } else {
                     handleApiError(data, '导入邮箱失败');
                 }
             } catch (error) {
-                showToast('添加失败', 'error');
+                showToast(translateAppTextLocal('添加失败'), 'error');
             }
         }
 
@@ -335,19 +368,19 @@
                     if (isImap) {
                         clientIdGroup.style.display = 'none';
                         refreshTokenGroup.style.display = 'none';
-                        passwordLabel.textContent = '授权码 / 应用密码';
-                        document.getElementById('editPassword').placeholder = '留空则不修改';
+                        passwordLabel.textContent = translateAppTextLocal('授权码 / 应用密码');
+                        document.getElementById('editPassword').placeholder = translateAppTextLocal('留空则不修改');
                     } else {
                         clientIdGroup.style.display = '';
                         refreshTokenGroup.style.display = '';
-                        passwordLabel.textContent = '密码';
-                        document.getElementById('editPassword').placeholder = '可选，留空则不修改';
+                        passwordLabel.textContent = translateAppTextLocal('密码');
+                        document.getElementById('editPassword').placeholder = translateAppTextLocal('可选，留空则不修改');
                     }
 
                     document.getElementById('editAccountModal').classList.add('show');
                 }
             } catch (error) {
-                showToast('加载账号信息失败', 'error');
+                showToast(translateAppTextLocal('加载账号信息失败'), 'error');
             }
         }
 
@@ -375,13 +408,13 @@
             };
 
             if (!data.email) {
-                showToast('邮箱地址不能为空', 'error');
+                showToast(translateAppTextLocal('邮箱地址不能为空'), 'error');
                 return;
             }
 
             // Outlook 账号需要 Client ID 和 Refresh Token
             if (!isImap && (!data.client_id || !data.refresh_token)) {
-                showToast('邮箱、Client ID 和 Refresh Token 不能为空', 'error');
+                showToast(translateAppTextLocal('邮箱、Client ID 和 Refresh Token 不能为空'), 'error');
                 return;
             }
 
@@ -395,7 +428,7 @@
                 const result = await response.json();
 
                 if (result.success) {
-                    showToast(result.message, 'success');
+                    showToast(pickApiMessage(result, result.message, 'Account updated successfully'), 'success');
                     hideEditAccountModal();
 
                     // 清除相关分组的缓存
@@ -412,10 +445,10 @@
                         loadAccountsByGroup(currentGroupId, true);
                     }
                 } else {
-                    showToast(result.error, 'error');
+                    handleApiError(result, '更新失败');
                 }
             } catch (error) {
-                showToast('更新失败', 'error');
+                showToast(translateAppTextLocal('更新失败'), 'error');
             }
         }
 
@@ -434,7 +467,7 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    showToast('删除成功', 'success');
+                    showToast(pickApiMessage(data, '删除成功', 'Deleted successfully'), 'success');
                     hideEditAccountModal();
 
                     // 清除缓存
@@ -464,14 +497,16 @@
                     }
                 }
             } catch (error) {
-                showToast('删除失败', 'error');
+                showToast(translateAppTextLocal('删除失败'), 'error');
             }
         }
 
         // 切换账号状态（启用/停用）
         async function toggleAccountStatus(accountId, currentStatus) {
             const newStatus = currentStatus === 'inactive' ? 'active' : 'inactive';
-            const action = newStatus === 'inactive' ? '停用' : '启用';
+            const successFallbackZh = newStatus === 'inactive' ? '停用成功' : '启用成功';
+            const successFallbackEn = newStatus === 'inactive' ? 'Disabled successfully' : 'Enabled successfully';
+            const failureFallbackZh = newStatus === 'inactive' ? '停用账号失败' : '启用账号失败';
 
             try {
                 const response = await fetch(`/api/accounts/${accountId}`, {
@@ -483,7 +518,7 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    showToast(`${action}成功`, 'success');
+                    showToast(pickApiMessage(data, successFallbackZh, successFallbackEn), 'success');
 
                     // 清除当前分组的缓存
                     if (currentGroupId) {
@@ -491,10 +526,10 @@
                         loadAccountsByGroup(currentGroupId, true);
                     }
                 } else {
-                    handleApiError(data, `${action}账号失败`);
+                    handleApiError(data, failureFallbackZh);
                 }
             } catch (error) {
-                showToast(`${action}失败`, 'error');
+                showToast(translateAppTextLocal(failureFallbackZh), 'error');
             }
         }
 
@@ -509,7 +544,7 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    showToast('删除成功', 'success');
+                    showToast(pickApiMessage(data, '删除成功', 'Deleted successfully'), 'success');
 
                     // 清除当前分组的缓存
                     if (currentGroupId) {
@@ -542,7 +577,7 @@
                     handleApiError(data, '删除账号失败');
                 }
             } catch (error) {
-                showToast('删除失败', 'error');
+                showToast(translateAppTextLocal('删除失败'), 'error');
             }
         }
 
@@ -556,7 +591,14 @@
                 });
                 const data = await response.json();
                 if (data.success) {
-                    showToast(data.message || (enabled ? 'Telegram推送已开启' : 'Telegram推送已关闭'), 'success');
+                    showToast(
+                        pickApiMessage(
+                            data,
+                            data.message || (enabled ? 'Telegram推送已开启' : 'Telegram推送已关闭'),
+                            enabled ? 'Telegram notification enabled' : 'Telegram notification disabled'
+                        ),
+                        'success'
+                    );
                     if (currentGroupId) {
                         delete accountsCache[currentGroupId];
                         loadAccountsByGroup(currentGroupId, true);
@@ -565,7 +607,7 @@
                     handleApiError(data, 'Telegram推送切换失败');
                 }
             } catch (error) {
-                showToast('操作失败', 'error');
+                showToast(translateAppTextLocal('操作失败'), 'error');
             }
         }
 
@@ -603,7 +645,7 @@
                     `).join('');
                 }
             } catch (error) {
-                container.innerHTML = '<div class="empty-state"><p style="color:var(--clr-danger)">加载失败</p></div>';
+                container.innerHTML = `<div class="empty-state"><p style="color:var(--clr-danger)">${translateAppTextLocal('加载失败')}</p></div>`;
             }
 
             document.getElementById('selectAllGroups').checked = false;
@@ -626,7 +668,7 @@
             const groupIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
 
             if (groupIds.length === 0) {
-                showToast('请选择要导出的分组', 'error');
+                showToast(translateAppTextLocal('请选择要导出的分组'), 'error');
                 return;
             }
 
@@ -656,7 +698,7 @@
             const password = document.getElementById('exportVerifyPassword').value;
 
             if (!password) {
-                showToast('请输入密码', 'error');
+                showToast(translateAppTextLocal('请输入密码'), 'error');
                 return;
             }
 
@@ -671,7 +713,10 @@
                 const verifyData = await verifyResponse.json();
 
                 if (!verifyData.success) {
-                    showToast(verifyData.error || '密码错误', 'error');
+                    handleApiError(verifyData, '密码错误');
+                    if (verifyData.need_verify) {
+                        document.getElementById('exportVerifyPassword').focus();
+                    }
                     return;
                 }
 
@@ -711,14 +756,17 @@
                     window.URL.revokeObjectURL(url);
                     document.body.removeChild(a);
 
-                    showToast('导出成功', 'success');
+                    showToast(translateAppTextLocal('导出成功'), 'success');
                     hideExportVerifyModal();
                 } else {
                     const data = await response.json();
                     handleApiError(data, '导出失败');
+                    if (data.need_verify) {
+                        document.getElementById('exportVerifyPassword').focus();
+                    }
                 }
             } catch (error) {
-                showToast('导出失败', 'error');
+                showToast(translateAppTextLocal('导出失败'), 'error');
             }
         }
 

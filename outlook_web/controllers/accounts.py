@@ -12,7 +12,7 @@ from flask import Response, g, jsonify, request
 from outlook_web import config
 from outlook_web.audit import log_audit
 from outlook_web.db import get_db
-from outlook_web.errors import build_error_payload
+from outlook_web.errors import build_error_payload, build_error_response, build_export_verify_failure_response
 from outlook_web.repositories import accounts as accounts_repo
 from outlook_web.repositories import groups as groups_repo
 from outlook_web.repositories import refresh_logs as refresh_logs_repo
@@ -60,6 +60,21 @@ def _parse_bool_flag(value: Any, default: bool = False) -> bool:
     if isinstance(value, (int, float)):
         return bool(value)
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _build_account_import_failure_response(
+    message: str,
+    *,
+    summary: dict[str, Any],
+    errors: list[dict[str, Any]],
+):
+    return build_error_response(
+        "ACCOUNT_IMPORT_FAILED",
+        message,
+        message_en="Account import failed",
+        status=400,
+        extra={"summary": summary, "errors": errors},
+    )
 
 
 # ==================== 账号基础 CRUD API ====================
@@ -143,7 +158,7 @@ def api_get_account(account_id: int) -> Any:
     """获取单个账号详情"""
     account = accounts_repo.get_account_by_id(account_id)
     if not account:
-        return jsonify({"success": False, "error": "账号不存在"})
+        return build_error_response("ACCOUNT_NOT_FOUND", "账号不存在", message_en="Account not found", status=404)
 
     return jsonify(
         {
@@ -182,7 +197,7 @@ def api_add_account() -> Any:
     add_to_pool = _parse_bool_flag(data.get("add_to_pool"), default=False)
 
     if not account_str:
-        return jsonify({"success": False, "error": "请输入账号信息"})
+        return build_error_response("ACCOUNT_IMPORT_INPUT_REQUIRED", "请输入账号信息", message_en="Please enter account information")
 
     # FD-00006: auto 模式允许 group_id=null（自动分组），需在分组校验前分流
     if provider == "auto":
@@ -191,9 +206,14 @@ def api_add_account() -> Any:
     # 校验分组
     target_group = groups_repo.get_group_by_id(group_id)
     if not target_group:
-        return jsonify({"success": False, "error": "分组不存在"})
+        return build_error_response("GROUP_NOT_FOUND", "分组不存在", message_en="Group not found", status=404)
     if target_group.get("is_system"):
-        return jsonify({"success": False, "error": "不能导入到系统分组"})
+        return build_error_response(
+            "SYSTEM_GROUP_PROTECTED",
+            "不能导入到系统分组",
+            message_en="Cannot import accounts into a system group",
+            status=403,
+        )
 
     def sanitize_credential_field(value: Any, max_length: int) -> str:
         if value is None:
@@ -404,7 +424,12 @@ def api_add_account() -> Any:
                     db.rollback()
                 except Exception:
                     pass
-                return jsonify({"success": False, "error": "数据库写入失败，请重试"})
+                return build_error_response(
+                    "ACCOUNT_IMPORT_DB_WRITE_FAILED",
+                    "数据库写入失败，请重试",
+                    message_en="Database write failed. Please try again",
+                    status=500,
+                )
             log_audit(
                 "import",
                 "account",
@@ -413,7 +438,7 @@ def api_add_account() -> Any:
             )
             return jsonify({"success": True, "message": message, "summary": summary, "errors": errors})
 
-        return jsonify({"success": False, "error": message, "summary": summary, "errors": errors})
+        return _build_account_import_failure_response(message, summary=summary, errors=errors)
 
     # -------------------- Outlook（旧格式）导入分支：保持现有逻辑完全不动 --------------------
     for line_no, raw in enumerate(raw_lines, start=1):
@@ -508,11 +533,16 @@ def api_add_account() -> Any:
                 db.rollback()
             except Exception:
                 pass
-            return jsonify({"success": False, "error": "数据库写入失败，请重试"})
+            return build_error_response(
+                "ACCOUNT_IMPORT_DB_WRITE_FAILED",
+                "数据库写入失败，请重试",
+                message_en="Database write failed. Please try again",
+                status=500,
+            )
         log_audit("import", "account", None, f"{message}，目标分组ID={group_id}")
         return jsonify({"success": True, "message": message, "summary": summary, "errors": errors})
 
-    return jsonify({"success": False, "error": message, "summary": summary, "errors": errors})
+    return _build_account_import_failure_response(message, summary=summary, errors=errors)
 
 
 @login_required
@@ -781,9 +811,14 @@ def _handle_auto_import(data: Dict[str, Any], *, add_to_pool: bool = False) -> A
         if explicit_group_id is not None:
             target_group = groups_repo.get_group_by_id(explicit_group_id)
             if not target_group:
-                return jsonify({"success": False, "error": "指定的分组不存在"})
+                return build_error_response("GROUP_NOT_FOUND", "指定的分组不存在", message_en="Target group not found", status=404)
             if target_group.get("is_system"):
-                return jsonify({"success": False, "error": "不能导入到系统分组"})
+                return build_error_response(
+                    "SYSTEM_GROUP_PROTECTED",
+                    "不能导入到系统分组",
+                    message_en="Cannot import accounts into a system group",
+                    status=403,
+                )
 
     raw_lines = account_str.splitlines()
     imported = 0
@@ -983,7 +1018,7 @@ def api_update_account(account_id: int) -> Any:
     status = data.get("status", "active")
 
     if not email_addr:
-        return jsonify({"success": False, "error": "邮箱不能为空"})
+        return build_error_response("ACCOUNT_EMAIL_REQUIRED", "邮箱不能为空", message_en="Email address is required")
 
     target_group = groups_repo.get_group_by_id(group_id)
     if not target_group:
@@ -1033,9 +1068,8 @@ def api_update_account(account_id: int) -> Any:
             ensure_ascii=False,
         )
         log_audit("update", "account", str(account_id), details)
-        return jsonify({"success": True, "message": "账号更新成功"})
-    else:
-        return jsonify({"success": False, "error": "更新失败"})
+        return jsonify({"success": True, "message": "账号更新成功", "message_en": "Account updated successfully"})
+    return build_error_response("ACCOUNT_UPDATE_FAILED", "更新失败", message_en="Failed to update account", status=500)
 
 
 def _api_update_account_status(account_id: int, status: str) -> Any:
@@ -1053,7 +1087,7 @@ def _api_update_account_status(account_id: int, status: str) -> Any:
         db.commit()
         return jsonify({"success": True, "message": "状态更新成功"})
     except Exception:
-        return jsonify({"success": False, "error": "更新失败"})
+        return build_error_response("ACCOUNT_STATUS_UPDATE_FAILED", "更新失败", message_en="Failed to update account status", status=500)
 
 
 @login_required
@@ -1074,8 +1108,7 @@ def api_delete_account(account_id: int) -> Any:
             f"删除账号：{email_addr}" if email_addr else "删除账号",
         )
         return jsonify({"success": True})
-    else:
-        return jsonify({"success": False, "error": "删除失败"})
+    return build_error_response("ACCOUNT_DELETE_FAILED", "删除失败", message_en="Failed to delete account", status=500)
 
 
 @login_required
@@ -1084,8 +1117,7 @@ def api_delete_account_by_email(email_addr: str) -> Any:
     if accounts_repo.delete_account_by_email(email_addr):
         log_audit("delete", "account", email_addr, f"删除账号：{email_addr}")
         return jsonify({"success": True})
-    else:
-        return jsonify({"success": False, "error": "删除失败"})
+    return build_error_response("ACCOUNT_DELETE_FAILED", "删除失败", message_en="Failed to delete account", status=500)
 
 
 @login_required
@@ -1099,10 +1131,14 @@ def api_batch_delete_accounts() -> Any:
     account_ids = data.get("account_ids", [])
 
     if not account_ids:
-        return jsonify({"success": False, "error": "请选择要删除的账号"})
+        return build_error_response(
+            "ACCOUNT_IDS_REQUIRED",
+            "请选择要删除的账号",
+            message_en="Please select the accounts to delete",
+        )
 
     if not isinstance(account_ids, list):
-        return jsonify({"success": False, "error": "参数格式错误"})
+        return build_error_response("INVALID_PARAM", "参数格式错误", message_en="Invalid request parameters")
 
     deleted_count = 0
     failed_count = 0
@@ -1149,7 +1185,7 @@ def api_batch_manage_tags() -> Any:
     action = data.get("action")  # add, remove
 
     if not account_ids or not tag_id or not action:
-        return jsonify({"success": False, "error": "参数不完整"})
+        return build_error_response("INVALID_PARAM", "参数不完整", message_en="Missing required parameters")
 
     count = 0
     for acc_id in account_ids:
@@ -1184,19 +1220,24 @@ def api_batch_update_account_group() -> Any:
     group_id = data.get("group_id")
 
     if not account_ids:
-        return jsonify({"success": False, "error": "请选择要修改的账号"})
+        return build_error_response("ACCOUNT_IDS_REQUIRED", "请选择要修改的账号", message_en="Please select the accounts to update")
 
     if not group_id:
-        return jsonify({"success": False, "error": "请选择目标分组"})
+        return build_error_response("GROUP_ID_REQUIRED", "请选择目标分组", message_en="Please select a target group")
 
     # 验证分组存在
     group = groups_repo.get_group_by_id(group_id)
     if not group:
-        return jsonify({"success": False, "error": "目标分组不存在"})
+        return build_error_response("GROUP_NOT_FOUND", "目标分组不存在", message_en="Target group not found", status=404)
 
     # 检查是否是临时邮箱分组（系统保留分组）
     if group.get("is_system"):
-        return jsonify({"success": False, "error": "不能移动到系统分组"})
+        return build_error_response(
+            "SYSTEM_GROUP_PROTECTED",
+            "不能移动到系统分组",
+            message_en="Cannot move accounts into a system group",
+            status=403,
+        )
 
     # 批量更新
     db = get_db()
@@ -1223,7 +1264,7 @@ def api_batch_update_account_group() -> Any:
             }
         )
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)})
+        return build_error_response("ACCOUNT_GROUP_BATCH_UPDATE_FAILED", "批量移动分组失败", message_en="Failed to move accounts to the target group", status=500, details=str(e))
 
 
 @login_required
@@ -1454,10 +1495,7 @@ def api_export_all_accounts() -> Any:
 
     ok, error_message = consume_export_verify_token(verify_token, client_ip, user_agent)
     if not ok:
-        return (
-            jsonify({"success": False, "error": error_message, "need_verify": True}),
-            401,
-        )
+        return build_export_verify_failure_response(error_message)
 
     # 使用 load_accounts 获取所有账号（自动解密）
     accounts = accounts_repo.load_accounts()
@@ -1468,7 +1506,7 @@ def api_export_all_accounts() -> Any:
     temp_emails = temp_emails_repo.load_temp_emails()
 
     if not accounts and not temp_emails:
-        return jsonify({"success": False, "error": "没有邮箱账号"})
+        return build_error_response("ACCOUNT_EXPORT_EMPTY", "没有邮箱账号", message_en="No mail accounts are available for export", status=404)
 
     # 记录审计日志
     log_audit("export", "all_accounts", None, f"导出所有账号，共 {len(accounts)} 个账号 + {len(temp_emails)} 个临时邮箱")
@@ -1504,13 +1542,10 @@ def api_export_selected_accounts() -> Any:
 
     ok, error_message = consume_export_verify_token(verify_token, client_ip, user_agent)
     if not ok:
-        return (
-            jsonify({"success": False, "error": error_message, "need_verify": True}),
-            401,
-        )
+        return build_export_verify_failure_response(error_message)
 
     if not group_ids:
-        return jsonify({"success": False, "error": "请选择要导出的分组"})
+        return build_error_response("GROUP_IDS_REQUIRED", "请选择要导出的分组", message_en="Please select at least one group to export")
 
     # 获取选中分组下的所有账号（使用 load_accounts 自动解密）
     all_accounts = []
@@ -1527,7 +1562,12 @@ def api_export_selected_accounts() -> Any:
         temp_emails = temp_emails_repo.load_temp_emails()
 
     if not all_accounts and not temp_emails:
-        return jsonify({"success": False, "error": "选中的分组下没有邮箱账号"})
+        return build_error_response(
+            "ACCOUNT_EXPORT_EMPTY",
+            "选中的分组下没有邮箱账号",
+            message_en="No mail accounts were found in the selected groups",
+            status=404,
+        )
 
     # 记录审计日志
     log_audit(
@@ -1568,7 +1608,7 @@ def api_generate_export_verify_token() -> Any:
     # 验证密码
     stored_password = settings_repo.get_login_password()
     if not verify_password(password, stored_password):
-        return jsonify({"success": False, "error": "密码错误"})
+        return build_error_response("LOGIN_INVALID_PASSWORD", "密码错误", message_en="Invalid password", status=401)
 
     # 生成一次性 token
     client_ip = get_client_ip()
@@ -1906,7 +1946,22 @@ def api_telegram_toggle(account_id: int) -> Any:
     enabled = bool(data.get("enabled", False))
     success = accounts_repo.toggle_telegram_push(account_id, enabled)
     if not success:
-        return jsonify({"success": False, "message": "账号不存在"}), 404
+        error_payload = build_error_payload(
+            "ACCOUNT_NOT_FOUND",
+            "账号不存在",
+            "NotFoundError",
+            404,
+            f"account_id={account_id}",
+            message_en="Account not found",
+        )
+        return jsonify({"success": False, "error": error_payload}), 404
     action = "开启" if enabled else "关闭"
     log_audit(f"telegram_push_{action}", "account", str(account_id))
-    return jsonify({"success": True, "enabled": enabled, "message": f"Telegram推送已{action}"})
+    return jsonify(
+        {
+            "success": True,
+            "enabled": enabled,
+            "message": f"Telegram推送已{action}",
+            "message_en": f"Telegram notification {'enabled' if enabled else 'disabled'}",
+        }
+    )

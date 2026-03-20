@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime
 from typing import Any
 
@@ -8,6 +9,7 @@ from flask import jsonify, request
 
 from outlook_web.audit import log_audit
 from outlook_web.db import get_db
+from outlook_web.errors import build_error_payload
 from outlook_web.repositories import external_api_keys as external_api_keys_repo
 from outlook_web.repositories import settings as settings_repo
 from outlook_web.security.auth import login_required
@@ -71,6 +73,48 @@ def _parse_bool_input(raw: Any, *, default: bool = False) -> bool:
     return default
 
 
+def _coerce_int_range(raw: Any, default: int, *, minimum: int, maximum: int) -> int:
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return default
+    return max(minimum, min(maximum, value))
+
+
+def _is_valid_notification_email(value: str) -> bool:
+    return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", value or ""))
+
+
+def _json_error(
+    code: str,
+    message: str,
+    *,
+    status: int = 400,
+    message_en: str | None = None,
+    details: Any = None,
+    http_status: int | None = None,
+    extra: dict[str, Any] | None = None,
+):
+    payload = build_error_payload(
+        code=code,
+        message=message,
+        message_en=message_en,
+        err_type="ValidationError" if status < 500 else "ServiceError",
+        status=status,
+        details=details,
+    )
+    body: dict[str, Any] = {"success": False, "error": payload}
+    if extra:
+        body.update(extra)
+    return jsonify(body), (http_status if http_status is not None else status)
+
+
+def _ensure_email_service_available() -> None:
+    from outlook_web.services import email_push
+
+    email_push.get_email_push_service_config()
+
+
 @login_required
 def api_get_settings() -> Any:
     """获取所有设置"""
@@ -87,6 +131,8 @@ def api_get_settings() -> Any:
         "enable_auto_polling": all_settings.get("enable_auto_polling", "false") == "true",
         "polling_interval": int(all_settings.get("polling_interval", "10")),
         "polling_count": int(all_settings.get("polling_count", "5")),
+        "email_notification_enabled": all_settings.get("email_notification_enabled", "false").lower() == "true",
+        "email_notification_recipient": all_settings.get("email_notification_recipient", ""),
     }
 
     # 敏感字段：不返回明文/哈希，仅提供"是否已设置/脱敏展示"
@@ -141,7 +187,12 @@ def api_get_settings() -> Any:
     else:
         safe_settings["telegram_bot_token"] = ""
     safe_settings["telegram_chat_id"] = all_settings.get("telegram_chat_id", "")
-    safe_settings["telegram_poll_interval"] = int(all_settings.get("telegram_poll_interval", "600") or "600")
+    safe_settings["telegram_poll_interval"] = _coerce_int_range(
+        all_settings.get("telegram_poll_interval", "600") or "600",
+        600,
+        minimum=60,
+        maximum=3600,
+    )
 
     response = {"success": True, "settings": safe_settings}
     # 同时在顶层暴露 telegram 字段（兼容前端直接访问）
@@ -158,12 +209,17 @@ def api_update_settings() -> Any:
     # 延迟导入避免循环依赖
     from flask import current_app
 
+    from outlook_web.services import email_push
     from outlook_web.services import graph as graph_service
     from outlook_web.services import scheduler as scheduler_service
 
     data = request.get_json(silent=True)
     if data is None or not isinstance(data, dict):
-        return jsonify({"success": False, "error": "请求体必须是 JSON 对象"})
+        return _json_error(
+            "LEGACY_ERROR",
+            "请求体必须是 JSON 对象",
+            message_en="Request body must be a JSON object",
+        )
 
     updated = []
     errors = []
@@ -175,6 +231,50 @@ def api_update_settings() -> Any:
 
     def queue_operation(op: Any) -> None:
         pending_operations.append(op)
+
+    current_email_notification_enabled = settings_repo.get_setting("email_notification_enabled", "false").lower() == "true"
+    current_email_notification_recipient = settings_repo.get_setting("email_notification_recipient", "").strip()
+    target_email_notification_enabled = current_email_notification_enabled
+    target_email_notification_recipient = current_email_notification_recipient
+
+    if "email_notification_enabled" in data:
+        target_email_notification_enabled = _parse_bool_input(
+            data.get("email_notification_enabled"),
+            default=current_email_notification_enabled,
+        )
+    if "email_notification_recipient" in data:
+        target_email_notification_recipient = str(data.get("email_notification_recipient") or "").strip()
+
+    if "email_notification_enabled" in data or "email_notification_recipient" in data:
+        if target_email_notification_enabled and not target_email_notification_recipient:
+            return _json_error(
+                "EMAIL_NOTIFICATION_RECIPIENT_REQUIRED",
+                "请填写接收通知邮箱",
+                message_en="Please provide a notification recipient email address",
+            )
+        if target_email_notification_recipient and not _is_valid_notification_email(target_email_notification_recipient):
+            return _json_error(
+                "EMAIL_NOTIFICATION_RECIPIENT_INVALID",
+                "接收通知邮箱格式无效",
+                message_en="Invalid notification recipient email address",
+            )
+        if target_email_notification_enabled:
+            try:
+                _ensure_email_service_available()
+            except email_push.EmailPushError as exc:
+                return _json_error(
+                    exc.code,
+                    exc.message,
+                    status=exc.status,
+                    message_en=exc.message_en,
+                    details=exc.details,
+                )
+        if "email_notification_enabled" in data:
+            queue_setting_update("email_notification_enabled", "true" if target_email_notification_enabled else "false")
+            updated.append("邮件通知开关")
+        if "email_notification_recipient" in data:
+            queue_setting_update("email_notification_recipient", target_email_notification_recipient)
+            updated.append("邮件通知接收邮箱")
 
     # 更新登录密码
     if "login_password" in data:
@@ -510,7 +610,11 @@ def api_update_settings() -> Any:
         updated.append("Telegram Chat ID")
 
     if errors:
-        return jsonify({"success": False, "error": "；".join(errors)})
+        return _json_error(
+            "LEGACY_ERROR",
+            "；".join(errors),
+            message_en="Invalid settings payload",
+        )
 
     if updated:
         db = get_db()
@@ -526,9 +630,23 @@ def api_update_settings() -> Any:
                 db.rollback()
             except Exception:
                 pass
-            return jsonify({"success": False, "error": "设置保存失败，请重试"})
+            return _json_error(
+                "INTERNAL_ERROR",
+                "设置保存失败，请重试",
+                status=500,
+                message_en="Failed to save settings. Please try again",
+            )
 
         scheduler_reloaded = None
+        email_notification_just_enabled = (not current_email_notification_enabled) and target_email_notification_enabled
+        if email_notification_just_enabled:
+            try:
+                from outlook_web.services import notification_dispatch
+
+                notification_dispatch.bootstrap_channel_cursors(notification_dispatch.CHANNEL_EMAIL)
+            except Exception:
+                pass
+
         if scheduler_reload_needed:
             try:
                 scheduler = scheduler_service.get_scheduler_instance()
@@ -563,11 +681,16 @@ def api_update_settings() -> Any:
             {
                 "success": True,
                 "message": f"已更新：{', '.join(updated)}",
+                "message_en": "Settings updated successfully",
                 "scheduler_reloaded": scheduler_reloaded,
             }
         )
     else:
-        return jsonify({"success": False, "error": "没有需要更新的设置"})
+        return _json_error(
+            "LEGACY_ERROR",
+            "没有需要更新的设置",
+            message_en="No settings changes were provided",
+        )
 
 
 @login_required
@@ -576,18 +699,24 @@ def api_validate_cron() -> Any:
     try:
         from croniter import croniter
     except ImportError:
-        return jsonify(
-            {
-                "success": False,
-                "error": "croniter 库未安装，请运行: pip install croniter",
-            }
+        return _json_error(
+            "CRONITER_NOT_INSTALLED",
+            "croniter 库未安装，请运行: pip install croniter",
+            status=500,
+            message_en="croniter is not installed. Please run: pip install croniter",
         )
 
     data = request.json
     cron_expr = data.get("cron_expression", "").strip()
 
     if not cron_expr:
-        return jsonify({"success": False, "error": "Cron 表达式不能为空"})
+        return _json_error(
+            "CRON_EXPRESSION_REQUIRED",
+            "Cron 表达式不能为空",
+            status=400,
+            message_en="Cron expression is required",
+            extra={"valid": False},
+        )
 
     try:
         base_time = datetime.now()
@@ -609,7 +738,41 @@ def api_validate_cron() -> Any:
             }
         )
     except Exception as e:
-        return jsonify({"success": False, "valid": False, "error": f"Cron 表达式无效: {str(e)}"})
+        return _json_error(
+            "CRON_EXPRESSION_INVALID",
+            "Cron 表达式无效",
+            status=400,
+            message_en="Invalid cron expression",
+            details=str(e),
+            extra={"valid": False},
+        )
+
+
+@login_required
+def api_test_email() -> Any:
+    """发送邮件通知测试消息。按“先保存，再测试”规则，仅使用已保存的接收邮箱。"""
+    from outlook_web.services import email_push
+
+    try:
+        recipient = email_push.send_test_email()
+    except email_push.EmailPushError as exc:
+        return _json_error(
+            exc.code,
+            exc.message,
+            status=exc.status,
+            message_en=exc.message_en,
+            details=exc.details,
+        )
+
+    log_audit("email_notification_test", "settings", None, f"recipient={recipient}")
+    return jsonify(
+        {
+            "success": True,
+            "message": "测试邮件已提交，请检查收件箱",
+            "message_en": "Test email accepted. Please check your inbox",
+            "recipient": recipient,
+        }
+    )
 
 
 @login_required
@@ -621,18 +784,26 @@ def api_test_telegram() -> Any:
     chat_id = settings_repo.get_setting("telegram_chat_id", "")
 
     if not bot_token_raw or not chat_id:
-        return jsonify({"success": False, "error": "请先配置 Telegram Bot Token 和 Chat ID"})
+        return _json_error(
+            "TELEGRAM_NOT_CONFIGURED",
+            "请先配置 Telegram Bot Token 和 Chat ID",
+            message_en="Please configure Telegram Bot Token and Chat ID first",
+        )
 
     bot_token = decrypt_data(bot_token_raw) if is_encrypted(bot_token_raw) else bot_token_raw
 
     ok = _send_telegram_message(bot_token, chat_id, "✅ Outlook Email Plus 测试消息：配置正确！")
     if ok:
         log_audit("telegram_test", "settings", None, "测试消息发送成功")
-        return jsonify({"success": True, "message": "测试消息已发送，请检查 Telegram"})
-    else:
         return jsonify(
             {
-                "success": False,
-                "error": "发送失败，请检查 Bot Token 和 Chat ID 是否正确",
+                "success": True,
+                "message": "测试消息已发送，请检查 Telegram",
+                "message_en": "Test message sent successfully. Please check Telegram",
             }
         )
+    return _json_error(
+        "TELEGRAM_TEST_SEND_FAILED",
+        "发送失败，请检查 Bot Token 和 Chat ID 是否正确",
+        message_en="Failed to send test message. Please check whether the Bot Token and Chat ID are correct",
+    )

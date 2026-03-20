@@ -35,21 +35,24 @@
         </div>
     </div>
 
+    <script src="/static/js/i18n.js"></script>
     <script>
         async function handleLogin(event) {
             event.preventDefault();
             const password = document.getElementById('password').value;
             const loginBtn = document.getElementById('loginBtn');
             const errorMessage = document.getElementById('errorMessage');
+            const pickApiMessage = window.pickApiMessage || ((payload, zh) => zh);
+            const translateText = window.translateAppText || ((text) => text);
 
             if (!password) {
-                errorMessage.textContent = '请输入密码';
+                errorMessage.textContent = translateText('请输入密码');
                 errorMessage.style.display = 'block';
                 return;
             }
 
             loginBtn.disabled = true;
-            loginBtn.textContent = '登录中...';
+            loginBtn.textContent = translateText('登录中...');
             errorMessage.style.display = 'none';
 
             try {
@@ -63,17 +66,19 @@
                 if (data.success) {
                     window.location.href = '/';
                 } else {
-                    const msg = (data.error && data.error.message) ? data.error.message : (data.error || '登录失败');
+                    const msg = (data.error && typeof data.error === 'object')
+                        ? pickApiMessage(data.error, '登录失败', 'Login failed')
+                        : translateText(data.error || '登录失败');
                     errorMessage.textContent = msg;
                     errorMessage.style.display = 'block';
                     loginBtn.disabled = false;
-                    loginBtn.textContent = '登 录';
+                    loginBtn.textContent = translateText('登 录');
                 }
             } catch (error) {
-                errorMessage.textContent = '网络错误，请重试';
+                errorMessage.textContent = translateText('网络错误，请重试');
                 errorMessage.style.display = 'block';
                 loginBtn.disabled = false;
-                loginBtn.textContent = '登 录';
+                loginBtn.textContent = translateText('登 录');
             }
         }
 

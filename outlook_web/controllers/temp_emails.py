@@ -7,6 +7,7 @@ from flask import jsonify, request
 
 from outlook_web.audit import log_audit
 from outlook_web.db import get_db
+from outlook_web.errors import build_error_response
 from outlook_web.repositories import temp_emails as temp_emails_repo
 from outlook_web.security.auth import login_required
 from outlook_web.services import gptmail
@@ -39,14 +40,42 @@ def api_generate_temp_email() -> Any:
         if temp_emails_repo.add_temp_email(email_addr):
             log_audit("create", "temp_email", email_addr, "生成临时邮箱")
             logger.info(f"临时邮箱生成成功: {email_addr}")
-            return jsonify({"success": True, "email": email_addr, "message": "临时邮箱创建成功"})
+            try:
+                from outlook_web.repositories import settings as settings_repo
+                from outlook_web.services import notification_dispatch
+
+                if settings_repo.get_setting("email_notification_enabled", "false").lower() == "true":
+                    notification_state_cursor = notification_dispatch.utc_now_iso()
+                    from outlook_web.repositories import notification_state as notification_state_repo
+
+                    notification_state_repo.upsert_cursor(
+                        notification_dispatch.CHANNEL_EMAIL,
+                        notification_dispatch.SOURCE_TEMP_EMAIL,
+                        notification_dispatch.build_source_key(notification_dispatch.SOURCE_TEMP_EMAIL, email_addr),
+                        notification_state_cursor,
+                    )
+            except Exception:
+                pass
+            return jsonify(
+                {
+                    "success": True,
+                    "email": email_addr,
+                    "message": "临时邮箱创建成功",
+                    "message_en": "Temp mailbox created successfully",
+                }
+            )
         else:
             logger.warning(f"临时邮箱已存在: {email_addr}")
-            return jsonify({"success": False, "error": "邮箱已存在"})
+            return build_error_response("TEMP_EMAIL_EXISTS", "邮箱已存在", message_en="Mailbox already exists")
     else:
         # 生成失败，返回详细错误信息
         logger.error(f"临时邮箱生成失败: {error_msg}, prefix={prefix}, domain={domain}")
-        return jsonify({"success": False, "error": error_msg or "生成临时邮箱失败，请稍后重试"})
+        return build_error_response(
+            "TEMP_EMAIL_CREATE_FAILED",
+            error_msg or "生成临时邮箱失败，请稍后重试",
+            status=502,
+            message_en="Failed to create temp mailbox. Please try again later",
+        )
 
 
 @login_required
@@ -54,9 +83,8 @@ def api_delete_temp_email(email_addr: str) -> Any:
     """删除临时邮箱"""
     if temp_emails_repo.delete_temp_email(email_addr):
         log_audit("delete", "temp_email", email_addr, "删除临时邮箱")
-        return jsonify({"success": True, "message": "临时邮箱已删除"})
-    else:
-        return jsonify({"success": False, "error": "删除失败"})
+        return jsonify({"success": True, "message": "临时邮箱已删除", "message_en": "Temp mailbox deleted"})
+    return build_error_response("TEMP_EMAIL_DELETE_FAILED", "删除失败", status=500, message_en="Failed to delete temp mailbox")
 
 
 @login_required
@@ -120,8 +148,7 @@ def api_get_temp_email_message_detail(email_addr: str, message_id: str) -> Any:
                 },
             }
         )
-    else:
-        return jsonify({"success": False, "error": "邮件不存在"})
+    return build_error_response("TEMP_EMAIL_MESSAGE_NOT_FOUND", "邮件不存在", status=404, message_en="Message not found")
 
 
 @login_required
@@ -135,9 +162,8 @@ def api_delete_temp_email_message(email_addr: str, message_id: str) -> Any:
             message_id,
             f"删除临时邮件（email={email_addr}）",
         )
-        return jsonify({"success": True, "message": "邮件已删除"})
-    else:
-        return jsonify({"success": False, "error": "删除失败"})
+        return jsonify({"success": True, "message": "邮件已删除", "message_en": "Message deleted"})
+    return build_error_response("TEMP_EMAIL_MESSAGE_DELETE_FAILED", "删除失败", status=500, message_en="Failed to delete message")
 
 
 @login_required
@@ -159,9 +185,9 @@ def api_clear_temp_email_messages(email_addr: str) -> Any:
             email_addr,
             f"清空临时邮箱邮件（count={deleted_count}）",
         )
-        return jsonify({"success": True, "message": "邮件已清空"})
+        return jsonify({"success": True, "message": "邮件已清空", "message_en": "Messages cleared"})
     except Exception:
-        return jsonify({"success": False, "error": "清空失败"})
+        return build_error_response("TEMP_EMAIL_MESSAGES_CLEAR_FAILED", "清空失败", status=500, message_en="Failed to clear messages")
 
 
 @login_required
@@ -196,5 +222,4 @@ def api_refresh_temp_email_messages(email_addr: str) -> Any:
                 "method": "GPTMail",
             }
         )
-    else:
-        return jsonify({"success": False, "error": "获取邮件失败"})
+    return build_error_response("TEMP_EMAIL_MESSAGES_FETCH_FAILED", "获取邮件失败", status=502, message_en="Failed to fetch messages")

@@ -89,12 +89,13 @@ class CoreFeatureTests(unittest.TestCase):
         self.assertEqual(delete.status_code, 200)
         self.assertEqual(delete.get_json().get("success"), True)
 
-        # 删除后再次获取：应返回错误（legacy 会被归一化为结构化错误，HTTP 状态码为 400）
+        # 删除后再次获取：应返回结构化 404，不再沿用 legacy 400
         get_after = client.get(f"/api/groups/{group_id}")
-        self.assertEqual(get_after.status_code, 400)
+        self.assertEqual(get_after.status_code, 404)
         data = get_after.get_json()
         self.assertEqual(data.get("success"), False)
         self.assertIsInstance(data.get("error"), dict)
+        self.assertEqual(data["error"].get("code"), "GROUP_NOT_FOUND")
         self.assertEqual(data["error"].get("message"), "分组不存在")
 
     def test_tag_crud_and_duplicate_name(self):

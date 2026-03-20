@@ -7,6 +7,7 @@ from typing import Any
 from flask import jsonify, request
 
 from outlook_web.audit import log_audit
+from outlook_web.errors import build_error_response
 from outlook_web.repositories import tags as tags_repo
 from outlook_web.security.auth import login_required
 
@@ -50,7 +51,7 @@ def api_add_tag() -> Any:
     color = data.get("color", "#1a1a1a")
 
     if not name:
-        return jsonify({"success": False, "error": "标签名称不能为空"})
+        return build_error_response("TAG_NAME_REQUIRED", status=400, message_en="Tag name is required")
 
     tag_id = tags_repo.add_tag(name, color)
     if tag_id:
@@ -60,9 +61,15 @@ def api_add_tag() -> Any:
             str(tag_id),
             json.dumps({"name": name, "color": color}, ensure_ascii=False),
         )
-        return jsonify({"success": True, "tag": {"id": tag_id, "name": name, "color": color}})
-    else:
-        return jsonify({"success": False, "error": "标签名称已存在"})
+        return jsonify(
+            {
+                "success": True,
+                "tag": {"id": tag_id, "name": name, "color": color},
+                "message": "标签创建成功",
+                "message_en": "Tag created successfully",
+            }
+        )
+    return build_error_response("TAG_NAME_DUPLICATED", status=400, message_en="Tag name already exists")
 
 
 @login_required
@@ -70,9 +77,8 @@ def api_delete_tag(tag_id: int) -> Any:
     """删除标签"""
     if tags_repo.delete_tag(tag_id):
         log_audit("delete", "tag", str(tag_id), "删除标签")
-        return jsonify({"success": True, "message": "标签已删除"})
-    else:
-        return jsonify({"success": False, "error": "删除失败"})
+        return jsonify({"success": True, "message": "标签已删除", "message_en": "Tag deleted"})
+    return build_error_response("TAG_DELETE_FAILED", "删除失败", status=500, message_en="Failed to delete tag")
 
 
 # 注意: api_batch_manage_tags 将在 accounts 模块迁移时处理

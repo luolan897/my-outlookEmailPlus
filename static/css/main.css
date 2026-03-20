@@ -886,6 +886,12 @@ tr:hover td { background: rgba(184,92,56,0.04); }
 .sidebar-collapsed .sidebar .nav-item .nav-icon { font-size: 1.15rem; }
 .sidebar-collapsed .sidebar-bottom { padding: 0.5rem; }
 .sidebar-collapsed .sidebar .user-chip { justify-content: center; }
+.sidebar-collapsed .btn-github {
+  padding: 0.45rem 0;
+  gap: 0;
+  overflow: hidden;
+}
+.sidebar-collapsed .btn-github span { display: none; }
 
 .sidebar-backdrop {
   display: none; position: fixed; inset: 0;
@@ -904,6 +910,8 @@ tr:hover td { background: rgba(184,92,56,0.04); }
   .sidebar-bottom { padding: 0.5rem; }
   .user-chip { justify-content: center; }
   .btn-logout, .btn-github, .btn-theme { font-size: 0; padding: 0.45rem 0; }
+  .btn-github { gap: 0; overflow: hidden; }
+  .btn-github span { display: none; }
   .page { padding: 1rem; }
   .groups-column { width: 180px; }
   .accounts-column { width: 240px; }

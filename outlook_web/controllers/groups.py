@@ -9,7 +9,7 @@ from urllib.parse import quote
 from flask import Response, jsonify, request
 
 from outlook_web.audit import log_audit
-from outlook_web.errors import build_error_payload
+from outlook_web.errors import build_error_response, build_export_verify_failure_response
 from outlook_web.repositories import accounts as accounts_repo
 from outlook_web.repositories import groups as groups_repo
 from outlook_web.repositories import temp_emails as temp_emails_repo
@@ -65,7 +65,7 @@ def api_get_group(group_id: int) -> Any:
     """获取单个分组"""
     group = groups_repo.get_group_by_id(group_id)
     if not group:
-        return jsonify({"success": False, "error": "分组不存在"})
+        return build_error_response("GROUP_NOT_FOUND", err_type="NotFoundError", status=404, details=f"group_id={group_id}")
     group["account_count"] = groups_repo.get_group_account_count(group_id)
     return jsonify({"success": True, "group": group})
 
@@ -80,14 +80,13 @@ def api_add_group() -> Any:
     proxy_url = data.get("proxy_url", "").strip()
 
     if not name:
-        return jsonify({"success": False, "error": "分组名称不能为空"})
+        return build_error_response("GROUP_NAME_REQUIRED", "分组名称不能为空", message_en="Group name is required")
 
     group_id = groups_repo.add_group(name, description, color, proxy_url)
     if group_id:
         log_audit("create", "group", str(group_id), f"创建分组：{name}")
-        return jsonify({"success": True, "message": "分组创建成功", "group_id": group_id})
-    else:
-        return jsonify({"success": False, "error": "分组名称已存在"})
+        return jsonify({"success": True, "message": "分组创建成功", "message_en": "Group created successfully", "group_id": group_id})
+    return build_error_response("GROUP_NAME_DUPLICATED", "分组名称已存在", message_en="Group name already exists")
 
 
 @login_required
@@ -100,29 +99,22 @@ def api_update_group(group_id: int) -> Any:
     proxy_url = data.get("proxy_url", "").strip()
 
     if not name:
-        return jsonify({"success": False, "error": "分组名称不能为空"})
+        return build_error_response("GROUP_NAME_REQUIRED", "分组名称不能为空", message_en="Group name is required")
 
     existing = groups_repo.get_group_by_id(group_id)
     if not existing:
-        error_payload = build_error_payload(
-            code="GROUP_NOT_FOUND",
-            message="分组不存在",
-            err_type="NotFoundError",
-            status=404,
-            details=f"group_id={group_id}",
-        )
-        return jsonify({"success": False, "error": error_payload}), 404
+        return build_error_response("GROUP_NOT_FOUND", err_type="NotFoundError", status=404, details=f"group_id={group_id}")
 
     # 系统分组保护：不允许重命名（避免破坏系统逻辑）
     if existing.get("is_system") and name != existing.get("name"):
-        error_payload = build_error_payload(
-            code="SYSTEM_GROUP_PROTECTED",
-            message="系统分组不允许重命名",
+        return build_error_response(
+            "SYSTEM_GROUP_PROTECTED",
+            "系统分组不允许重命名",
+            message_en="System groups cannot be renamed",
             err_type="ForbiddenError",
             status=403,
             details=f"group_id={group_id}",
         )
-        return jsonify({"success": False, "error": error_payload}), 403
 
     if groups_repo.update_group(group_id, name, description, color, proxy_url):
         # 不记录 proxy_url 明文（可能包含代理账号/密码）
@@ -136,9 +128,8 @@ def api_update_group(group_id: int) -> Any:
             ensure_ascii=False,
         )
         log_audit("update", "group", str(group_id), details)
-        return jsonify({"success": True, "message": "分组更新成功"})
-    else:
-        return jsonify({"success": False, "error": "更新失败"})
+        return jsonify({"success": True, "message": "分组更新成功", "message_en": "Group updated successfully"})
+    return build_error_response("GROUP_UPDATE_FAILED", "更新失败", message_en="Failed to update group", status=500)
 
 
 @login_required
@@ -146,41 +137,39 @@ def api_delete_group(group_id: int) -> Any:
     """删除分组"""
     group = groups_repo.get_group_by_id(group_id)
     if not group:
-        error_payload = build_error_payload(
-            code="GROUP_NOT_FOUND",
-            message="分组不存在",
-            err_type="NotFoundError",
-            status=404,
-            details=f"group_id={group_id}",
-        )
-        return jsonify({"success": False, "error": error_payload}), 404
+        return build_error_response("GROUP_NOT_FOUND", err_type="NotFoundError", status=404, details=f"group_id={group_id}")
 
     if group.get("is_system"):
-        error_payload = build_error_payload(
-            code="SYSTEM_GROUP_PROTECTED",
-            message="系统分组不能删除",
+        return build_error_response(
+            "SYSTEM_GROUP_PROTECTED",
+            "系统分组不能删除",
+            message_en="System groups cannot be deleted",
             err_type="ForbiddenError",
             status=403,
             details=f"group_id={group_id}",
         )
-        return jsonify({"success": False, "error": error_payload}), 403
 
     default_group_id = groups_repo.get_default_group_id()
     if group_id == default_group_id or group.get("name") == "默认分组":
-        error_payload = build_error_payload(
-            code="DEFAULT_GROUP_PROTECTED",
-            message="默认分组不能删除",
+        return build_error_response(
+            "DEFAULT_GROUP_PROTECTED",
+            "默认分组不能删除",
+            message_en="The default group cannot be deleted",
             err_type="ForbiddenError",
             status=403,
             details=f"group_id={group_id}",
         )
-        return jsonify({"success": False, "error": error_payload}), 403
 
     if groups_repo.delete_group(group_id):
         log_audit("delete", "group", str(group_id), "删除分组并迁移账号到默认分组")
-        return jsonify({"success": True, "message": "分组已删除，邮箱已移至默认分组"})
-    else:
-        return jsonify({"success": False, "error": "删除失败"})
+        return jsonify(
+            {
+                "success": True,
+                "message": "分组已删除，邮箱已移至默认分组",
+                "message_en": "Group deleted and accounts moved to the default group",
+            }
+        )
+    return build_error_response("GROUP_DELETE_FAILED", "删除失败", message_en="Failed to delete group", status=500)
 
 
 @login_required
@@ -193,20 +182,22 @@ def api_export_group(group_id: int) -> Any:
 
     ok, error_message = consume_export_verify_token(verify_token, client_ip, user_agent)
     if not ok:
-        return (
-            jsonify({"success": False, "error": error_message, "need_verify": True}),
-            401,
-        )
+        return build_export_verify_failure_response(error_message)
 
     group = groups_repo.get_group_by_id(group_id)
     if not group:
-        return jsonify({"success": False, "error": "分组不存在"})
+        return build_error_response("GROUP_NOT_FOUND", err_type="NotFoundError", status=404, details=f"group_id={group_id}")
 
     # 使用 load_accounts 获取该分组下的所有账号（自动解密）
     accounts = accounts_repo.load_accounts(group_id)
 
     if not accounts:
-        return jsonify({"success": False, "error": "该分组下没有邮箱账号"})
+        return build_error_response(
+            "GROUP_HAS_NO_ACCOUNTS",
+            "该分组下没有邮箱账号",
+            message_en="No accounts were found in this group",
+            status=404,
+        )
 
     # 记录审计日志
     log_audit(
