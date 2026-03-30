@@ -324,6 +324,10 @@
 
             updateSelectAllCheckbox();
             updateBatchActionBar();
+            // 如果当前正在轮询，重新显示轮询指示器（账号列表重渲染后会丢失小绿点）
+            if (typeof isPolling !== 'undefined' && isPolling && typeof showPollingStatusIndicator === 'function') {
+                showPollingStatusIndicator();
+            }
         }
 
         // 排序相关变量

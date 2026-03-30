@@ -2254,6 +2254,14 @@ ${details}
 
                 if (data.success) {
                     applyPollingSettings(data.settings);
+
+                    // 初始化简洁模式轮询设置（页面加载时从后端读取）
+                    compactPollEnabled  = isAutoPollingEnabledSetting(data.settings.enable_compact_auto_poll);
+                    compactPollInterval = parseIntegerSetting(data.settings.compact_poll_interval, 10);
+                    compactPollMaxCount = parseIntegerSetting(data.settings.compact_poll_max_count, 5);
+                    if (typeof applyCompactPollSettings === 'function') {
+                        applyCompactPollSettings({ enabled: compactPollEnabled, interval: compactPollInterval, maxCount: compactPollMaxCount });
+                    }
                 }
             } catch (error) {
                 console.error('初始化轮询设置失败:', error);
@@ -2286,46 +2294,43 @@ ${details}
             pollingTimer = setInterval(pollForNewEmails, pollingInterval * 1000);
         }
 
-        // 显示轮询状态指示器
+        // 显示轮询状态指示器（在当前账号卡片的邮箱地址旁显示小绿点）
         function showPollingStatusIndicator() {
-            let indicator = document.getElementById('pollingStatusIndicator');
-            if (!indicator) {
-                indicator = document.createElement('div');
-                indicator.id = 'pollingStatusIndicator';
-                indicator.style.cssText = `
-                    position: fixed;
-                    bottom: 24px;
-                    left: 24px;
-                    background-color: #28a745;
-                    color: white;
-                    padding: 6px 14px;
-                    border-radius: 20px;
-                    font-size: 12px;
-                    font-weight: 500;
-                    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
-                    z-index: 1000;
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    cursor: pointer;
-                    user-select: none;
-                `;
-                indicator.innerHTML = `<span style="animation: pulse 1.5s infinite;">🔄</span> ${translateAppTextLocal('轮询中')}`;
-                indicator.onclick = () => {
+            // 先清除旧指示器
+            hidePollingStatusIndicator();
+            if (!currentAccount) return;
+
+            // 在账号列表中找到当前账号卡片的 .account-email 元素
+            const allCards = document.querySelectorAll('#accountList .account-card');
+            let targetEmailEl = null;
+            allCards.forEach(function(card) {
+                const emailEl = card.querySelector('.account-email');
+                if (emailEl && emailEl.textContent.trim() === currentAccount) {
+                    targetEmailEl = emailEl;
+                }
+            });
+
+            if (targetEmailEl) {
+                // 在邮箱地址文字旁添加小绿点
+                const dot = document.createElement('span');
+                dot.id = 'pollingStatusIndicator';
+                dot.className = 'standard-poll-dot';
+                dot.title = translateAppTextLocal('轮询中，点击停止');
+                dot.onclick = function(e) {
+                    e.stopPropagation();
                     if (confirm('是否停止轮询？')) {
                         stopPolling(false);
                     }
                 };
-                document.body.appendChild(indicator);
+                targetEmailEl.appendChild(dot);
             }
-            indicator.style.display = 'flex';
         }
 
-        // 隐藏轮询状态指示器
+        // 隐藏轮询状态指示器（移除账号卡片中的小绿点）
         function hidePollingStatusIndicator() {
             const indicator = document.getElementById('pollingStatusIndicator');
             if (indicator) {
-                indicator.style.display = 'none';
+                indicator.remove();
             }
         }
 

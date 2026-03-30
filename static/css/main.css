@@ -1415,6 +1415,20 @@ tr:hover td { background: rgba(184,92,56,0.04); }
   animation: pulse-dot 1.2s ease-in-out infinite;
 }
 
+/* 标准模式轮询小绿点（嵌入邮箱地址旁） */
+.standard-poll-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--clr-success, #52c41a);
+  margin-left: 6px;
+  vertical-align: middle;
+  cursor: pointer;
+  animation: pulse-dot 1.2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.5; transform: scale(0.75); }
