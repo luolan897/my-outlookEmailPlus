@@ -654,34 +654,7 @@
                             </div>
                         </div>
 
-                        <!-- 简洁模式自动轮询设置 -->
-                        <div style="border-top: 1px solid var(--border-light); margin: 1.5rem 0; padding-top: 1.5rem;">
-                            <h4 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 1rem; color: var(--text);">📋 <span data-i18n="简洁模式自动轮询">简洁模式自动轮询</span></h4>
-                            <div class="form-group">
-                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                    <input type="checkbox" id="enableCompactAutoPoll">
-                                    <span class="form-label" style="margin: 0;" data-i18n="复制邮箱后自动监听">复制邮箱后自动监听</span>
-                                </label>
-                                <div class="form-hint" data-i18n="简洁模式轮询内存提示">复制邮箱地址后自动开始监听该账号的新邮件，检测到验证码后自动复制并停止</div>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label" data-i18n="轮询间隔">轮询间隔 <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 400;">（监听期间检查新邮件的时间间隔）</span></label>
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <input type="number" class="form-input" id="compactPollInterval" min="3" max="60" value="10" placeholder="10" style="max-width: 120px;">
-                                    <span style="font-size: 0.88rem; color: var(--text-muted); font-weight: 500;">秒</span>
-                                </div>
-                                <div class="form-hint" data-i18n="范围：3-60 秒">范围：3-60 秒</div>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label" data-i18n="最大监听时长">最大监听时长 <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 400;">（监听多久后自动停止）</span></label>
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <input type="number" class="form-input" id="compactPollMaxDuration" min="10" max="600" value="60" placeholder="60" style="max-width: 120px;">
-                                    <span style="font-size: 0.88rem; color: var(--text-muted); font-weight: 500;">秒</span>
-                                </div>
-                                <div class="form-hint" data-i18n="范围：10-600 秒">范围：10-600 秒</div>
-                            </div>
-                        </div>
-
+                        <!-- 简洁模式自动轮询已与标准自动轮询合并，开启上方"自动轮询"即可同时启用 -->
                         <!-- 邮件通知设置 -->
                         <div style="border-top: 1px solid var(--border-light); margin: 1.5rem 0; padding-top: 1.5rem;">
                             <h4 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 1rem; color: var(--text);">✉️ Email 通知</h4>

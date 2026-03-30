@@ -1,11 +1,12 @@
 """tests/test_compact_poll_frontend_contract.py — B 类：前端契约测试
 
 目标：验证简洁模式自动轮询功能所需的前端代码已正确存在：
-  - HTML 设置面板元素
-  - i18n 属性
+  - main.js 变量声明与函数调用
+  - i18n 属性（运行时 UI 文本）
   - JS 变量声明与函数定义
   - CSS 样式类
   - 事件监听
+  注：简洁模式轮询已与标准自动轮询合并，不再有独立的设置面板。
 """
 
 from __future__ import annotations
@@ -36,34 +37,35 @@ class CompactPollFrontendContractTests(unittest.TestCase):
             resp.close()
 
     # ──────────────────────────────────────────────────────
-    # TC-B01：index.html 包含简洁模式自动轮询设置面板
+    # TC-B01：index.html 不再包含独立的简洁模式轮询设置面板（已合并到标准轮询）
     # ──────────────────────────────────────────────────────
 
     def test_index_html_contains_compact_poll_settings_panel(self):
-        """index.html 应包含简洁模式自动轮询设置面板的三个输入元素"""
+        """简洁模式轮询设置已合并到标准轮询，index.html 不应再有独立的 compact poll 输入框"""
         client = self.app.test_client()
         self._login(client)
         html = self._get_text(client, "/")
 
-        self.assertIn('id="enableCompactAutoPoll"', html)
-        self.assertIn('id="compactPollInterval"', html)
-        self.assertIn('id="compactPollMaxDuration"', html)
+        # 独立的 compact poll 面板已移除
+        self.assertNotIn('id="enableCompactAutoPoll"', html)
+        self.assertNotIn('id="compactPollInterval"', html)
+        self.assertNotIn('id="compactPollMaxDuration"', html)
+        # 保留了合并说明注释
+        self.assertIn("简洁模式自动轮询已与标准自动轮询合并", html)
 
     # ──────────────────────────────────────────────────────
-    # TC-B02：设置面板包含 i18n 属性
+    # TC-B02：i18n.js 包含简洁模式运行时 UI 文本（按钮文本、Toast 等）
     # ──────────────────────────────────────────────────────
 
     def test_settings_panel_contains_i18n_attributes(self):
-        """设置面板的文本元素应带有 data-i18n 属性"""
+        """i18n.js 应包含简洁模式运行时所需的翻译词条（按钮/Toast 文本）"""
         client = self.app.test_client()
-        self._login(client)
-        html = self._get_text(client, "/")
+        js = self._get_text(client, "/static/js/i18n.js")
 
-        self.assertIn('data-i18n="简洁模式自动轮询"', html)
-        self.assertIn('data-i18n="复制邮箱后自动监听"', html)
-        self.assertIn('data-i18n="轮询间隔"', html)
-        self.assertIn('data-i18n="最大监听时长"', html)
-        self.assertIn('data-i18n="简洁模式轮询内存提示"', html)
+        self.assertIn("停止监听", js)
+        self.assertIn("监听超时", js)
+        self.assertIn("发现新邮件", js)
+        self.assertIn("检测到验证码", js)
 
     # ──────────────────────────────────────────────────────
     # TC-B03：main.js 包含 3 个设置变量声明
