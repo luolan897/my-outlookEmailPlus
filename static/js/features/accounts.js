@@ -253,7 +253,7 @@
                 if (!currentGroupId) {
                     const firstNormalGroup = groups.find(group => !isTempMailboxGroup(group));
                     if (firstNormalGroup) {
-                        await selectGroup(firstNormalGroup.id);
+                        await selectGroup(firstNormalGroup.id, false);
                     }
                 }
                 return;

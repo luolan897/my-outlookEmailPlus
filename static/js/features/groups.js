@@ -39,7 +39,7 @@
                         // 首次进入：自动选中第一个非临时邮箱分组
                         const firstNormalGroup = groups.find(g => !isTempMailboxGroup(g));
                         if (firstNormalGroup) {
-                            selectGroup(firstNormalGroup.id);
+                            selectGroup(firstNormalGroup.id, false);
                         }
                     }
                 }
@@ -87,7 +87,8 @@
         }
 
         // 选择分组
-        async function selectGroup(groupId) {
+        // autoStartPolling: 是否在加载后启动轮询（默认 true，首次自动选中时传 false）
+        async function selectGroup(groupId, autoStartPolling = true) {
             currentGroupId = groupId;
             currentAccountPage = 1;  // 切换分组时重置到第 1 页
 
@@ -150,8 +151,8 @@
                 navigate('temp-emails');
                 return;
             } else {
-                // 手动切换分组：加载账号列表并启动轮询
-                await loadAccountsByGroup(groupId, false, true);
+                // 切换分组：加载账号列表（仅 autoStartPolling=true 时才启动轮询）
+                await loadAccountsByGroup(groupId, false, autoStartPolling);
             }
         }
 
