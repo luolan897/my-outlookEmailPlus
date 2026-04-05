@@ -65,6 +65,16 @@ Thumbs.db
 .ace-tool/
 .claude/
 
+# Cloudflare 部署（含 node_modules 和敏感配置，不入库）
+cf-deploy/
+.wrangler/
+
+# Windows 特殊文件
+NUL
+
+# 测试截图（调试产物，不入库）
+tests/screenshots/
+
 # 其他不需要的文件
 PixPin_*.png
 compact-*.png
