@@ -7,7 +7,11 @@ PRD-00011 代理支持补全 — 集成测试（基于 Flask TestClient，无需
   2. PUT /api/settings 可以保存并读回 telegram_proxy_url
   3. POST /api/settings/test-telegram-proxy 路由已注册
   4. 未配置 Bot Token 时接口返回合理错误（非 5xx/404）
-  5. 直接用 requests 测试代理可达性（可选，不强制）
+  5. 直接用 requests 测试代理可达性（可选，仅当环境变量 ENABLE_PROXY_LIVE_TEST=1 时运行）
+
+注意：代理直连测试（TestPRD00011DirectProxyConnectivity）默认跳过，需通过环境变量启用：
+  ENABLE_PROXY_LIVE_TEST=1 python -m unittest tests.test_prd00011_proxy_live
+  代理地址通过环境变量 TEST_PROXY_URLS 传入（逗号分隔，格式 socks5://user:pass@host:port）
 """
 
 from __future__ import annotations
@@ -42,20 +46,17 @@ _app.config.update(
     WTF_CSRF_CHECK_DEFAULT=False,
 )
 
-# 代理列表（格式 socks5://user:pass@ip:port）
-_RAW_PROXIES = [
-    "31.59.20.176:6754:xbsjzxsq:7ij6dm7plcd3",
-    "23.95.150.145:6114:xbsjzxsq:7ij6dm7plcd3",
-    "198.23.239.134:6540:xbsjzxsq:7ij6dm7plcd3",
-    "45.38.107.97:6014:xbsjzxsq:7ij6dm7plcd3",
-    "107.172.163.27:6543:xbsjzxsq:7ij6dm7plcd3",
-]
+# 代理列表：通过环境变量 TEST_PROXY_URLS 传入（逗号分隔），格式：socks5://user:pass@host:port
+# 默认为空列表；不要在代码中硬编码真实代理凭据
+_ENV_PROXY_URLS = os.environ.get("TEST_PROXY_URLS", "")
+PROXY_URLS = [u.strip() for u in _ENV_PROXY_URLS.split(",") if u.strip()]
 
-PROXY_URLS = [
-    f"socks5://{u}:{p}@{h}:{port}"
-    for raw in _RAW_PROXIES
-    for h, port, u, p in [raw.split(":")]
-]
+# 是否启用外网直连代理测试（默认关闭，CI 中不运行）
+_ENABLE_LIVE_TEST = os.environ.get("ENABLE_PROXY_LIVE_TEST", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 
 def _login(client):
@@ -176,7 +177,18 @@ class TestPRD00011ProxyEndpoint(unittest.TestCase):
 
 
 class TestPRD00011DirectProxyConnectivity(unittest.TestCase):
-    """额外：直接用 requests 测试代理能否访问 api.telegram.org（不经过本地应用）"""
+    """额外：直接用 requests 测试代理能否访问 api.telegram.org（不经过本地应用）
+
+    默认跳过。需设置以下环境变量启用：
+      ENABLE_PROXY_LIVE_TEST=1
+      TEST_PROXY_URLS=socks5://user:pass@host:port,socks5://user:pass@host2:port2
+    """
+
+    def setUp(self):
+        if not _ENABLE_LIVE_TEST:
+            self.skipTest("外网代理测试未启用，设置 ENABLE_PROXY_LIVE_TEST=1 以运行")
+        if not PROXY_URLS:
+            self.skipTest("未配置代理，设置 TEST_PROXY_URLS=socks5://... 以运行")
 
     def test_proxy_direct_access(self):
         """直接用代理访问 https://api.telegram.org（无需 Bot Token），只验证连通性"""
