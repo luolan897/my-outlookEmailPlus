@@ -4206,9 +4206,10 @@ ${details}
                     await waitForRestart();
                 } else {
                     const msg = data.message || '未知错误';
+                    const detail = data.detail ? `\n详情: ${data.detail}` : '';
                     if (resultDiv) {
                         resultDiv.style.display = 'block';
-                        resultDiv.innerHTML = `<span style="color: var(--clr-danger, #dc3545);">❌ ${escapeHtml(msg)}</span>`;
+                        resultDiv.innerHTML = `<span style="color: var(--clr-danger, #dc3545);">❌ ${escapeHtml(msg)}</span>${detail ? '<br><small style="color: var(--text-muted);">' + escapeHtml(detail.trim()) + '</small>' : ''}`;
                     }
                     showToast('更新失败：' + msg, 'error', 8000);
                     btn.disabled = false;

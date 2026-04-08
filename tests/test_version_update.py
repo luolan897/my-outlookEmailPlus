@@ -378,6 +378,7 @@ class TriggerUpdateAPITests(unittest.TestCase):
             with patch(URLOPEN_PATH) as mock_urlopen:
                 mock_resp = MagicMock()
                 mock_resp.status = 200
+                mock_resp.read.return_value = b""
                 mock_resp.__enter__ = lambda s: mock_resp
                 mock_resp.__exit__ = MagicMock(return_value=False)
                 mock_urlopen.return_value = mock_resp
@@ -397,6 +398,7 @@ class TriggerUpdateAPITests(unittest.TestCase):
             with patch(URLOPEN_PATH) as mock_urlopen:
                 mock_resp = MagicMock()
                 mock_resp.status = 403
+                mock_resp.read.return_value = b"Forbidden"
                 mock_resp.__enter__ = lambda s: mock_resp
                 mock_resp.__exit__ = MagicMock(return_value=False)
                 mock_urlopen.return_value = mock_resp
@@ -454,6 +456,7 @@ class TriggerUpdateAPITests(unittest.TestCase):
             with patch(URLOPEN_PATH) as mock_urlopen:
                 mock_resp = MagicMock()
                 mock_resp.status = 200
+                mock_resp.read.return_value = b""
                 mock_resp.__enter__ = lambda s: mock_resp
                 mock_resp.__exit__ = MagicMock(return_value=False)
                 mock_urlopen.return_value = mock_resp
@@ -478,6 +481,7 @@ class TriggerUpdateAPITests(unittest.TestCase):
             with patch(URLOPEN_PATH) as mock_urlopen:
                 mock_resp = MagicMock()
                 mock_resp.status = 200
+                mock_resp.read.return_value = b""
                 mock_resp.__enter__ = lambda s: mock_resp
                 mock_resp.__exit__ = MagicMock(return_value=False)
                 mock_urlopen.return_value = mock_resp

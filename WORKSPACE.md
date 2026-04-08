@@ -79,14 +79,234 @@
 |------|------|
 | `ddbc91e` | fix: add GHCR image to whitelist and update hotupdate test compose files |
 | `a89295f` | chore: bump version to 1.12.1-hotupdate-test and fix version comparison |
+| `d390411` | feat: add manual trigger update button in settings panel |
+| `1926022` | chore: bump version to 1.12.2-hotupdate-test for UI button testing |
 
 **修改文件**：
 - `outlook_web/services/docker_update.py`：GHCR 白名单 + 前缀匹配修复
 - `outlook_web/controllers/system.py`：`_version_gt()` 支持 pre-release 后缀
-- `outlook_web/__init__.py`：版本号 1.12.0 → 1.12.1-hotupdate-test
+- `outlook_web/__init__.py`：版本号 1.12.0 → 1.12.1-hotupdate-test → 1.12.2-hotupdate-test
 - `tests/test_version_update.py`：测试断言同步更新
 - `docker-compose.hotupdate-test.yml`：GHCR 镜像 + hotupdate-test 标签
 - `docker-compose.docker-api-test.yml`：GHCR 镜像 + 移除本地构建配置
+- `templates/index.html`：设置面板新增"🚀 触发容器更新"卡片（含"立即更新"按钮）
+- `static/js/main.js`：新增 `manualTriggerUpdate()` 函数
+
+#### 2. 手动触发更新按钮开发及 UI 测试
+
+**时间**：2026-04-08 中午
+
+**背景**：E2E API 测试已通过两种更新方式。但设置面板缺少手动触发按钮，用户只能通过顶部版本横幅或 API 触发更新。需要在设置面板"一键更新配置"卡片中增加手动按钮。
+
+**实现内容**：
+
+1. **HTML 部分**（`templates/index.html`）：
+   - 在 `#deploymentWarnings` 和 Watchtower 配置区域之间插入"触发容器更新"卡片
+   - 包含按钮 `#btnManualTriggerUpdate` 和结果显示区 `#manualUpdateResult`
+
+2. **JS 部分**（`static/js/main.js`）：
+   - `manualTriggerUpdate()` 读取当前选择的更新方式（`input[name="updateMethod"]:checked`）
+   - POST 到 `/api/system/trigger-update?method=xxx`
+   - 成功后调用 `waitForRestart()` 等待容器重启并自动刷新页面
+   - 内联显示结果反馈（✅/❌）
+
+**本地镜像测试失败及原因**：
+
+首次尝试用 `docker build` 构建旧版本本地镜像（v1.12.0）启动测试环境：
+- 镜像 tag 为 `ghcr.io/zeropointsix/outlook-email-plus:hotupdate-test`（本地构建后打的 tag）
+- **Docker API 更新被拒绝**：`检测到本地构建镜像（RepoDigests 为空），已按安全策略禁止 Docker API 一键更新`
+- **原因**：本地 `docker build` 的镜像没有 `RepoDigests`，安全策略（策略A）正确拦截了本地镜像
+- **结论**：这证明了 2026-04-07 实施的策略A安全检查工作正常 ✅
+
+**正确测试方案**：
+1. 从 GHCR 拉取 CI #113 构建的真实镜像（v1.12.1-hotupdate-test，含手动按钮）
+2. 启动容器（有 RepoDigests → 安全检查通过）
+3. Bump 版本到 v1.12.2-hotupdate-test，推送触发 CI #114
+4. CI 完成后在 UI 上点击"立即更新"按钮测试
+
+**当前状态**：
+- 容器 `outlook-dockerapi-test` 运行中，端口 5003，版本 v1.12.1-hotupdate-test
+- CI #114 已完成（v1.12.2-hotupdate-test 镜像已发布到 GHCR）
+
+#### 3. UI 手动测试与问题修复
+
+**时间**：2026-04-08 下午
+
+**背景**：CI #114 完成后在 UI 上进行手动触发更新按钮测试，发现两个问题。
+
+**发现的问题**：
+
+1. **默认更新方式不匹配**（UX 问题）：
+   - Docker API 测试环境默认选中"Watchtower"更新方式，但环境中无 Watchtower 容器
+   - 用户点击"立即更新"→ 503 "无法连接 Watchtower"
+
+2. **同 digest 更新导致前端卡死**（Bug，严重）：
+   - **场景**：容器版本 = GHCR 最新版时点击"立即更新"
+   - **表现**：API 返回 success → 前端进入 `waitForRestart()` 轮询 → updater 检测到 digest 相同直接退出 → 容器未重启 → 前端等待 180 秒超时
+   - **根因**：digest 比较逻辑在 updater 容器内部执行（`self_update()` line 902-918），API 层无感知；前端收到 `success` 就认为会发生重启
+
+**修复方案及实施**：
+
+**Commit `02e4e4f`** — `fix: Docker API 更新同 digest 时前端超时卡死`
+
+1. **后端**（`outlook_web/controllers/system.py`）：
+   - 在 `_trigger_docker_api_update()` spawn updater 前增加 **digest 预检查**
+   - 调用 `docker_update.pull_latest_image(image_ref)` 拉取最新镜像
+   - 调用 `docker_update.compare_image_digest(image_id, new_digest)` 比较
+   - digest 相同 → 直接返回 `{"success": true, "message": "当前已是最新版本，无需更新", "already_latest": true}`
+   - 不启动 updater 容器，避免空跑
+
+2. **前端**（`static/js/main.js`）：
+   - `triggerUpdate()`：检查 `data.already_latest`，为 true 时显示 toast 提示，不进入 `waitForRestart()`
+   - `manualTriggerUpdate()`：同样检查 `already_latest`，显示 ✅ 结果后恢复按钮状态
+
+**CI #115 状态**：构建中（commit `02e4e4f`），等待完成后进行完整测试
+
+**计划测试流程**：
+
+1. **第一次更新**：容器 v1.12.2（旧 CI 构建） → 触发更新 → 应拉取新 digest（含 fix 代码）→ 容器重启
+2. **第二次更新**：已是最新 → 应返回"当前已是最新版本"→ 前端不卡死
+
+**提交记录更新**：
+
+| 提交 | 说明 |
+|------|------|
+| `ddbc91e` | fix: add GHCR image to whitelist and update hotupdate test compose files |
+| `a89295f` | chore: bump version to 1.12.1-hotupdate-test and fix version comparison |
+| `d390411` | feat: add manual trigger update button in settings panel |
+| `1926022` | chore: bump version to 1.12.2-hotupdate-test for UI button testing |
+| `02e4e4f` | fix: Docker API 更新同 digest 时前端超时卡死 |
+
+#### 4. Digest 预检查修复验证
+
+**时间**：2026-04-08 下午
+
+**CI #115 完成后执行完整测试**：
+
+**测试 1：Docker API 实际更新（不同 digest）** ✅
+- 容器 v1.12.2-hotupdate-test（CI #114 旧构建） → 触发 Docker API 更新
+- 返回 `{"success": true, "message": "更新任务已启动: oep-updater-xxx"}`
+- 容器重启成功，boot_id 变化：`1775623297621-7` → `1775625947851-7`
+- 代码已更新（含 digest 预检查 fix）
+
+**测试 2：Docker API 同 digest 更新（fix 验证）** ✅
+- 再次触发 Docker API 更新（同 digest）
+- 返回 `{"success": true, "already_latest": true, "message": "当前已是最新版本，无需更新"}`
+- **没有启动 updater 容器，前端不会进入 waitForRestart()，不会卡死** ✅
+
+**测试 3：Watchtower 更新** ✅
+- 启动 Watchtower 测试环境（port 5002）
+- 触发 Watchtower 更新：返回 `{"success": true, "message": "更新触发成功,容器即将重启"}`
+- Watchtower 检测到 digest 相同，不执行重启（Watchtower 自身机制处理）
+
+**最终两个环境状态**：
+| 环境 | 端口 | 版本 | 状态 |
+|------|------|------|------|
+| Watchtower | 5002 | v1.12.2-hotupdate-test | healthy ✅ |
+| Docker API | 5003 | v1.12.2-hotupdate-test | healthy ✅ |
+
+#### 5. Watchtower 触发超时修复
+
+**时间**：2026-04-08 下午
+
+**问题**：用户在 UI 上点击"立即更新"（Watchtower 方式）时提示"连接超时"。
+
+**排查过程**：
+1. Watchtower 容器状态正常（healthy），DNS 解析正确，端口 8080 可达
+2. Watchtower 日志显示 API 请求被正确处理（pull → digest 比较 → 无更新）
+3. **根因**：`/v1/update` POST 是同步操作——Watchtower 会完整执行 pull+digest 比较后才返回
+4. 代码中 `urllib.request.urlopen(req, timeout=10)` 超时仅 10 秒，但 GHCR manifest 检查可能耗时 15-30 秒
+5. 手动测试 60 秒超时成功返回 200
+
+**修复** — Commit `ff5fb5b`：
+- 后端 `_trigger_watchtower_update()` 超时 10s → 30s
+- 前端 `triggerUpdate()` 和 `manualTriggerUpdate()` Watchtower 超时 10s → 60s
+
+**注意**：deployment-info 中的 Watchtower 探测用 GET + 3s 超时（不触发实际更新），无需修改。
+
+**提交记录更新**：
+
+| 提交 | 说明 |
+|------|------|
+| `ddbc91e` | fix: add GHCR image to whitelist and update hotupdate test compose files |
+| `a89295f` | chore: bump version to 1.12.1-hotupdate-test and fix version comparison |
+| `d390411` | feat: add manual trigger update button in settings panel |
+| `1926022` | chore: bump version to 1.12.2-hotupdate-test for UI button testing |
+| `02e4e4f` | fix: Docker API 更新同 digest 时前端超时卡死 |
+| `28e6568` | chore: bump to v1.12.3-hotupdate-test + add i18n for manual trigger |
+| `ff5fb5b` | fix: Watchtower 触发超时 - 增大 API 和前端超时时间 |
+
+#### 6. 智能更新方式推荐 + i18n 补全 + Watchtower 错误日志增强
+
+**时间**：2026-04-08 下午
+
+**用户反馈的问题**：
+
+1. **Docker API 环境显示 Watchtower 警告**：Port 5003（Docker API 模式）默认 `update_method=watchtower`，导致显示 "无法连接 Watchtower 服务" 错误警告。用户选择 Docker API radio 但未保存设置，实际操作时使用了 Watchtower 方式导致失败。
+
+2. **固定标签误判**：`hotupdate-test` 标签被判为 "固定版本标签"，显示 "当前使用固定版本标签，一键更新需手动修改 docker-compose.yml 中的版本号" 警告。但 `hotupdate-test` 是滚动分支标签。
+
+3. **i18n 覆盖不全**：设置面板"一键更新配置"区域 27 个中文文本中仅 3 个有英文翻译。
+
+4. **Watchtower 错误信息过于简略**：错误返回 "发生未知错误" 等通用信息，缺少具体原因。
+
+**修复方案及实施**：
+
+**Commit `5415c56`** — `fix: 智能推荐更新方式，修复固定标签误判和多余警告`
+
+1. **固定标签判断重构**（`system.py`）：
+   - 旧逻辑：`tag not in ("latest", "main", "master", "dev")` → fixed（黑名单）
+   - 新逻辑：仅 semver 格式 (`v1.2.3`, `1.2.3`) 视为固定版本（正则白名单）
+   - `hotupdate-test` 等分支标签不再被误判为固定版本
+
+2. **智能推荐更新方式**（`system.py`）：
+   - 新增 `recommended_method` 字段到 `deployment-info` 响应
+   - 当 `update_method=watchtower` 但 Watchtower 不可达且 Docker API 可用 → 推荐 `docker_api`
+   - 当 `update_method=docker_api` 但 Docker API 不可用且 Watchtower 可达 → 推荐 `watchtower`
+   - 否则使用用户保存的偏好
+
+3. **警告信息优化**（`system.py`）：
+   - Docker API 可用时不再显示 "Watchtower 不可达" 警告（避免噪音）
+   - `can_auto_update` 判断不再受 `uses_fixed_tag` 阻塞
+
+4. **前端自动选择**（`main.js`）：
+   - `loadDeploymentInfo()` 获取 `recommended_method` 后自动切换 radio 按钮
+   - 确保用户进入设置面板时看到正确的更新方式
+
+**Commit `e1b503b`** — `chore: bump version to v1.12.6-hotupdate-test`
+
+**后续修复**（未提交）：
+
+5. **Watchtower 错误日志增强**（`system.py`）：
+   - 读取 Watchtower 响应 body 并记录日志 + 返回前端
+   - 区分 `HTTPError`（401/403 等）、`URLError`（连接失败）、`TimeoutError`（超时）
+   - 前端 `manualTriggerUpdate()` 显示 `detail` 字段内容
+
+6. **i18n 翻译补全**（`i18n.js`）：
+   - 新增 24 个 exactMap 条目覆盖一键更新配置区域
+   - 包括：更新方式选项、Docker API 安全警告、Watchtower 配置、部署信息等
+
+**验证结果**（Commit `5415c56` 推送后）：
+
+| 环境 | uses_fixed_tag | recommended_method | warnings |
+|------|:-:|:-:|:-:|
+| Watchtower (:5002) | false ✅ | watchtower ✅ | 无 ✅ |
+| Docker API (:5003) | false ✅ | docker_api ✅ | 无 ✅ |
+
+**提交记录更新**：
+
+| 提交 | 说明 |
+|------|------|
+| `ddbc91e` | fix: add GHCR image to whitelist and update hotupdate test compose files |
+| `a89295f` | chore: bump version to 1.12.1-hotupdate-test and fix version comparison |
+| `d390411` | feat: add manual trigger update button in settings panel |
+| `1926022` | chore: bump version to 1.12.2-hotupdate-test for UI button testing |
+| `02e4e4f` | fix: Docker API 更新同 digest 时前端超时卡死 |
+| `28e6568` | chore: bump to v1.12.3-hotupdate-test + add i18n for manual trigger |
+| `ff5fb5b` | fix: Watchtower 触发超时 - 增大 API 和前端超时时间 |
+| `52fa491` | chore: bump version to v1.12.4-hotupdate-test |
+| `5415c56` | fix: 智能推荐更新方式，修复固定标签误判和多余警告 |
+| `e1b503b` | chore: bump version to v1.12.6-hotupdate-test |
 
 ---
 

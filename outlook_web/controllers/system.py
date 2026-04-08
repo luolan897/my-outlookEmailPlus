@@ -438,7 +438,7 @@ def api_trigger_update() -> Any:
         )
 
 
-def _trigger_watchtower_update() -> Any:
+def _trigger_watchtower_update() -> Any:  # noqa: C901
     """通过 Watchtower HTTP API 触发更新"""
     import os
     import urllib.error
@@ -480,22 +480,72 @@ def _trigger_watchtower_update() -> Any:
         )
         with urllib.request.urlopen(req, timeout=30) as resp:
             status = resp.status
+            resp_body = resp.read().decode("utf-8", errors="replace").strip()
+
         if status == 200:
-            return jsonify({"success": True, "message": "更新触发成功,容器即将重启"})
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.info("Watchtower 响应: status=%s body=%r", status, resp_body[:500])
+            return jsonify(
+                {
+                    "success": True,
+                    "message": "更新触发成功,容器即将重启",
+                    "watchtower_response": resp_body[:500] if resp_body else None,
+                }
+            )
         else:
-            return jsonify({"success": False, "message": f"Watchtower 返回状态码 {status}"}), 502
-    except urllib.error.URLError as e:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": f"Watchtower 返回状态码 {status}",
+                        "detail": resp_body[:500] if resp_body else None,
+                    }
+                ),
+                502,
+            )
+    except urllib.error.HTTPError as e:
+        body = ""
+        try:
+            body = e.read().decode("utf-8", errors="replace").strip()[:500]
+        except Exception:
+            pass
         return (
             jsonify(
                 {
                     "success": False,
-                    "message": f"无法连接 Watchtower ({watchtower_url}): {e.reason}",
+                    "message": f"Watchtower 返回错误 (HTTP {e.code})",
+                    "detail": body or str(e.reason),
+                }
+            ),
+            502,
+        )
+    except urllib.error.URLError as e:
+        reason_str = str(e.reason) if e.reason else "未知原因"
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": f"无法连接 Watchtower ({watchtower_url})",
+                    "detail": reason_str,
                 }
             ),
             503,
         )
+    except TimeoutError:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": f"连接 Watchtower 超时 ({watchtower_url})",
+                    "detail": "请求在 30 秒内未收到响应，可能是网络问题或 Watchtower 拉取镜像耗时过长",
+                }
+            ),
+            504,
+        )
     except Exception as e:
-        return jsonify({"success": False, "message": f"触发更新失败: {str(e)}"}), 500
+        return jsonify({"success": False, "message": f"触发更新失败: {type(e).__name__}: {str(e)}"}), 500
 
 
 def _trigger_docker_api_update() -> Any:  # noqa: C901

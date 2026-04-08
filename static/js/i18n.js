@@ -664,7 +664,38 @@
         '当前已是最新版本': 'Already up to date',
         '请求超时': 'Request timed out',
         '网络错误': 'Network error',
-        '更新请求失败：': 'Update request failed: '
+        '更新请求失败：': 'Update request failed: ',
+
+        // 一键更新配置区域
+        '一键更新配置': 'Auto Update Settings',
+        '更新方式': 'Update Method',
+        'Watchtower（推荐）': 'Watchtower (Recommended)',
+        'Docker API（高级）': 'Docker API (Advanced)',
+        '使用外部 Watchtower 容器管理更新（推荐，更安全）': 'Use external Watchtower container for updates (recommended, more secure)',
+        '容器直接通过 Docker API 自更新（需挂载 docker.sock，存在安全风险）': 'Container self-updates via Docker API (requires docker.sock mount, security risk)',
+
+        // Docker API 安全警告
+        'Docker API 模式安全警告：': 'Docker API Mode Security Warning:',
+        '此操作授予容器完全的 Docker API 访问权限，请谨慎使用': 'This grants full Docker API access to the container, use with caution',
+        '建议仅在测试环境或可信网络中启用': 'Recommended only for test environments or trusted networks',
+
+        // 首次配置指南
+        '首次配置指南：': 'First-time Setup Guide:',
+
+        // Watchtower 配置
+        'Watchtower API 地址': 'Watchtower API URL',
+        'Docker 内网地址': 'Docker internal address',
+        'Watchtower API Token': 'Watchtower API Token',
+        '🔗 测试连通性': '🔗 Test Connection',
+        '验证 Watchtower 服务是否可达且 Token 正确': 'Verify Watchtower service is reachable and token is correct',
+
+        // 部署信息警告
+        '处理建议': 'Suggestion',
+        '默认 http://watchtower:8080，仅 Docker 部署模式下可用': 'Default http://watchtower:8080, only available in Docker deployment mode',
+        '输入 Watchtower HTTP API Token': 'Enter Watchtower HTTP API Token',
+        '正在触发更新...': 'Triggering update...',
+        '等待容器重启...': 'Waiting for container restart...',
+        '更新已触发': 'Update triggered'
     };
 
     const reverseMap = Object.fromEntries(
