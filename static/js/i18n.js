@@ -655,7 +655,16 @@
         '更新完成，正在刷新页面...': 'Update complete, reloading...',
         '更新超时，请手动检查容器状态': 'Update timed out, please check container status',
         '更新失败：': 'Update failed: ',
-        '更新请求失败，请检查网络': 'Update request failed, check network'
+        '更新请求失败，请检查网络': 'Update request failed, check network',
+
+        // 手动触发容器更新
+        '触发容器更新': 'Trigger Container Update',
+        '拉取最新镜像并重启容器，使用上方选择的更新方式': 'Pull the latest image and restart container using the selected method above',
+        '当前已是最新版本，无需更新': 'Already up to date, no update needed',
+        '当前已是最新版本': 'Already up to date',
+        '请求超时': 'Request timed out',
+        '网络错误': 'Network error',
+        '更新请求失败：': 'Update request failed: '
     };
 
     const reverseMap = Object.fromEntries(
