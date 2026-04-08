@@ -2366,9 +2366,9 @@ ${details}
                 });
                 const data = await resp.json();
                 if (data.success) {
-                    if (resultEl) { resultEl.textContent = '✅ 连通正常'; resultEl.style.color = 'var(--success, green)'; }
+                    if (resultEl) { resultEl.textContent = translateAppTextLocal('✅ 连通正常'); resultEl.style.color = 'var(--success, green)'; }
                 } else {
-                    if (resultEl) { resultEl.textContent = `❌ ${data.message || '失败'}`; resultEl.style.color = 'var(--danger, red)'; }
+                    if (resultEl) { resultEl.textContent = `❌ ${data.message || translateAppTextLocal('失败')}`; resultEl.style.color = 'var(--danger, red)'; }
                 }
             } catch (e) {
                 if (resultEl) { resultEl.textContent = `❌ ${e.message}`; resultEl.style.color = 'var(--danger, red)'; }
@@ -4192,11 +4192,12 @@ ${details}
                 if (data.success) {
                     if (resultDiv) {
                         resultDiv.style.display = 'block';
-                        resultDiv.innerHTML = `<span style="color: var(--clr-success, #28a745);">✅ ${escapeHtml(data.message || '更新已触发')}</span>`;
+                        const msg = pickApiMessage(data, '更新已触发', 'Update triggered');
+                        resultDiv.innerHTML = `<span style="color: var(--clr-success, #28a745);">✅ ${escapeHtml(msg)}</span>`;
                     }
                     // 镜像已是最新，无需等待重启
                     if (data.already_latest) {
-                        showToast(data.message || '当前已是最新版本', 'info', 5000);
+                        showToast(pickApiMessage(data, '当前已是最新版本', 'Already up to date'), 'info', 5000);
                         btn.disabled = false;
                         btn.textContent = translateAppTextLocal('立即更新');
                         return;

@@ -487,10 +487,16 @@ def _trigger_watchtower_update() -> Any:  # noqa: C901
 
             logger = logging.getLogger(__name__)
             logger.info("Watchtower 响应: status=%s body=%r", status, resp_body[:500])
+            # Watchtower POST /v1/update 是同步的：完成整个检查+更新周期后才返回。
+            # 如果我们的容器需要更新，Watchtower 会先停止旧容器再启动新容器，
+            # 此时我们的进程已被 kill，HTTP 请求会失败而不会收到 200。
+            # 因此：能收到 200 响应 → 本容器未被更新 → 镜像已是最新。
             return jsonify(
                 {
                     "success": True,
-                    "message": "更新触发成功,容器即将重启",
+                    "already_latest": True,
+                    "message": "Watchtower 检查完毕，当前已是最新版本",
+                    "message_en": "Watchtower check complete, already up to date",
                     "watchtower_response": resp_body[:500] if resp_body else None,
                 }
             )

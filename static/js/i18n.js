@@ -719,7 +719,16 @@
         '等待超时：容器未发生重启，可能已是最新版本或更新仍在后台进行': 'Timeout: container did not restart, may already be latest or update still in progress',
         '等待超时：容器尚未恢复，请检查容器状态/日志': 'Timeout: container not recovered, check container status/logs',
         '等待超时：容器未发生重启，请检查 Watchtower 配置/日志': 'Timeout: container did not restart, check Watchtower config/logs',
-        '保存设置失败': 'Failed to save settings'
+        '保存设置失败': 'Failed to save settings',
+
+        // Watchtower / Docker API 后端响应
+        'Watchtower 检查完毕，当前已是最新版本': 'Watchtower check complete, already up to date',
+        '✅ 连通正常': '✅ Connection OK',
+        '连通正常': 'Connection OK',
+        '⏳ 测试中…': '⏳ Testing...',
+        '⏳ 发送中…': '⏳ Sending...',
+        '更新失败：': 'Update failed: ',
+        'Docker API 更新失败：': 'Docker API update failed: '
     };
 
     // 含内联 HTML（<code>、<strong> 等）的整段翻译块
