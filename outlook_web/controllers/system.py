@@ -345,9 +345,15 @@ def api_external_health() -> Any:
 
 
 def _version_gt(a: str, b: str) -> bool:
-    """判断版本 a 是否严格大于版本 b（仅支持语义化版本 x.y.z）"""
+    """判断版本 a 是否严格大于版本 b（支持语义化版本 x.y.z，忽略 pre-release 后缀如 -hotupdate-test）"""
     try:
-        return tuple(int(x) for x in a.split(".")) > tuple(int(x) for x in b.split("."))
+
+        def _parse(v: str) -> tuple:
+            # 取 '-' 之前的纯数字部分，如 "1.12.1-hotupdate-test" → "1.12.1"
+            core = v.split("-", 1)[0]
+            return tuple(int(x) for x in core.split("."))
+
+        return _parse(a) > _parse(b)
     except Exception:
         return False
 
