@@ -8,6 +8,30 @@
 
 ### 操作记录
 
+#### 3. 分支同步与联系方式添加
+
+**时间**：2026-04-09
+
+**分支同步**：
+- `Buggithubissue`、`dev`、`feature` 三个分支均已落后 main，无独立提交
+- 使用 `git branch -f` + `git push --force` 将所有分支 fast-forward 到 main（`7952820`）
+- 注意：三个分支被 worktree 占用（`E:/hushaokang/Data-code/EnsoAi/outlookEmail/` 下），无法 checkout，改用 `git branch -f` 直接重置
+- `feature` 无远程分支，仅本地同步
+
+**联系方式**：
+- `README.md`：新增"联系方式"章节 → `outlookmailplus@163.com`
+- `README.en.md`：新增"Contact"章节 → `outlookmailplus@163.com`
+
+**修改文件**：
+- `README.md`：末尾新增联系方式
+- `README.en.md`：末尾新增 Contact 章节
+
+**Commits**：
+- `301b122`：fix: 移除 sonar-project.properties 中已删除的 fix_format.py 引用
+- `7952820`：docs: 添加联系邮箱，同步所有分支到 main
+
+---
+
 #### 2. v1.13.0 发布与 SonarCloud 修复
 
 **时间**：2026-04-09
