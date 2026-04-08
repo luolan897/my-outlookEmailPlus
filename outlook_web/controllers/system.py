@@ -750,18 +750,22 @@ def api_deployment_info() -> Any:  # noqa: C901
         watchtower_token = os.getenv("WATCHTOWER_HTTP_API_TOKEN", "")
 
     watchtower_reachable = False
-    # 只有在 Watchtower 相关信息存在时才探测，避免无意义的等待
-    if watchtower_token and watchtower_url:
+    # 探测策略：发不带 token 的请求，401 = 服务可达（watchtower 在运行，只是未认证）。
+    # 带 token 的请求会触发实际更新（拉镜像），耗时较长，不适合用作探测。
+    if watchtower_url:
         try:
+            import urllib.error
             import urllib.request
 
-            test_req = urllib.request.Request(
+            probe_req = urllib.request.Request(
                 f"{watchtower_url}/v1/update",
                 method="GET",
-                headers={"Authorization": f"Bearer {watchtower_token}"},
             )
-            with urllib.request.urlopen(test_req, timeout=3) as resp:
+            with urllib.request.urlopen(probe_req, timeout=3) as resp:
                 watchtower_reachable = resp.status == 200
+        except urllib.error.HTTPError as e:
+            # 401 Unauthorized = 服务可达，只是未提供 token
+            watchtower_reachable = e.code == 401
         except Exception:
             watchtower_reachable = False
 
