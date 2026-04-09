@@ -8,6 +8,114 @@
 
 ### 操作记录
 
+#### 6. Issue #32 修复落地（全选跨分页 + 删除 500）
+
+**时间**：2026-04-09
+
+**问题背景**：
+- Issue #32 反馈两个 P0 问题：
+  1) 分组页“全选”仅选中当前分页；
+  2) 删除账号在存在 pool 历史（`account_claim_logs` / `account_project_usage`）时可能触发 500（`ACCOUNT_DELETE_FAILED`）。
+
+**实际改动**：
+
+1. 前端（`static/js/features/groups.js`）
+   - 新增分组作用域函数：`getCurrentAccountScopeIds()`、`getCurrentAccountScopeStats()`
+   - 新增 UI 同步函数：`syncActiveCheckboxesFromSelection()`
+   - `selectAllAccounts()` / `unselectAllAccounts()` 改为基于 `accountsCache[currentGroupId]`（跨分页）处理，不再用当前页 DOM 作为数据源
+   - `updateSelectAllCheckbox()` 改为按作用域统计计算 `checked/indeterminate`
+   - 新增 `isSearchMode` 守卫：搜索模式下拦截全选并提示，防止语义错位
+   - 空状态分支统一调用 `updateSelectAllCheckbox()`
+
+2. 后端（`outlook_web/repositories/accounts.py`）
+   - 引入 `logger = logging.getLogger(__name__)`
+   - `delete_account_by_id(account_id)` 改为事务化删除链路：
+     - `DELETE account_claim_logs`
+     - `DELETE account_project_usage`
+     - `DELETE accounts`
+     - 异常时 `rollback + logger.exception(...)`
+   - `delete_account_by_email(email_addr)` 改为先查 `id` 再复用 `delete_account_by_id(id)`
+
+3. 测试
+   - 新增 `tests/test_account_delete_with_pool_history.py`
+   - 覆盖：
+     - 单账号删除（含关联记录）
+     - 批量删除混合结果（存在 + 不存在）
+     - 按邮箱兼容路径删除
+
+4. 文档同步
+   - `docs/BUG/2026-04-09-Issue-32-批量删除全选与账号删除500-BUG分析.md`：状态更新为“已修复”，补充落地结论与测试结果
+   - `docs/BUG/2026-04-09-Issue-32-修复方案详版.md`：追加“实际落地记录”章节
+
+**测试结果**：
+- `pytest tests/test_account_delete_with_pool_history.py -q` → `3 passed`
+- `pytest tests/test_pool.py -q` → `42 passed`
+- `pytest tests/test_account_status_update.py -q` → `2 passed`
+
+**结论**：
+- Issue #32 修复已在代码中落地并通过针对性测试与相关回归测试。
+
+**补充**：
+- 已在 `docs/BUG/2026-04-09-Issue-32-修复方案详版.md` 追加“前端手测记录（待执行清单）”，用于后续人工验收。
+
+**人工回归更新（最新）**：
+- 用户实测反馈：前端全选仍然只作用于当前分页，未达到“当前分组全量（跨分页）”语义。
+- 已据此回写文档状态：
+  - `docs/BUG/2026-04-09-Issue-32-批量删除全选与账号删除500-BUG分析.md`：状态从“已修复”调整为“修复进行中（后端回归通过，前端人工回归未通过）”
+  - `docs/BUG/2026-04-09-Issue-32-修复方案详版.md`：新增“前端手测结果（用户反馈）”并将结论调整为“部分修复 / 待继续定位前端问题”
+- 本地排查动作：
+  - 启动本地服务并检查 `/healthz`；
+  - 验证线上实际返回的 `groups.js` 已包含作用域全选函数（`getCurrentAccountScopeIds`），说明存在“代码已更新但人工场景仍未生效”的运行态差异，需要继续定位。
+
+**全量测试执行记录**：
+- 已执行：`pytest -q`
+- 结果：未能完成（collection 阶段中断）
+- 阻塞点：`tests/test_import_and_fetch.py` 在导入阶段执行真实 Refresh Token 校验并 `sys.exit(1)`，触发 `INTERNALERROR`，导致全量测试提前中断（`no tests ran`）
+- 说明：该阻塞与 Issue #32 代码路径无直接耦合，属于测试集内 live/脚本型用例行为导致的全量执行门禁问题。
+
+**扩展全量测试（排除脚本型 live 用例）**：
+- 已执行：
+  - `pytest tests -q --ignore=tests/test_import_and_fetch.py --ignore=tests/test_live_credentials.py --ignore=tests/test_tc01_real.py --ignore=tests/test_banner_show.py --ignore=tests/test_acceptance.py --ignore=tests/manual_acceptance_settings_tab.py --ignore=tests/e2e_version_update.py`
+- 结果：`898 passed, 8 skipped, 1 failed`
+- 唯一失败：
+  - `tests/test_import_export_v2_auto.py::ImportExportV2AutoTests::test_auto_import_mixed_file_imports_accounts_and_temp_emails_and_auto_groups`
+  - 断言：`summary.imported` 期望 `5`，实际 `4`
+- 评估：失败点属于导入自动分流链路，与 Issue #32 修复路径（全选跨分页 / 删除事务化）无直接耦合。
+
+---
+
+#### 5. Graph API 401 回退修复的 mock 回归测试
+
+**时间**：2026-04-09
+
+**测试范围**：
+- `tests/test_graph_401_imap_fallback_regression.py`
+- Graph 401 `ErrorAccessDenied` / `InvalidAuthenticationToken` 判定
+- `/api/emails/<email>` 的 IMAP 回退
+- `/api/emails/<email>/extract-verification` 的 IMAP 回退
+
+**结果**：
+- 4 项 mock 回归测试通过
+
+---
+
+#### 4. Graph API 401 回退修复与文档同步
+
+**时间**：2026-04-09
+
+**修复内容**：
+- `outlook_web/services/graph.py`：区分 Graph API 401 的 token 过期与权限不足场景，避免把 `ErrorAccessDenied` 误判为授权失效
+- `outlook_web/controllers/emails.py`：移除 Graph 401 对 IMAP 回退的提前拦截，改为在所有方式失败后再统一提示授权状态
+
+**文档更新**：
+- `CHANGELOG.md`：补充本次 Graph API 401 / IMAP 回退修复记录
+- `WORKSPACE.md`：记录本次实际操作与改动范围
+
+**说明**：
+- 本次修复保留了代理错误的原有拦截逻辑，仅调整 Graph 401 的回退策略
+
+---
+
 #### 3. 分支同步与联系方式添加
 
 **时间**：2026-04-09
