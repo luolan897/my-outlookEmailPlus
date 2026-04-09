@@ -50,7 +50,7 @@ def resolve_mailbox(email_addr: str) -> dict[str, Any]:
                     meta = {}
             else:
                 meta = dict(meta_raw) if meta_raw else {}
-            # 确保 meta 中包含 provider_name
+            # 确保 meta 中包含 provider_name（供 TempMailService 路由到正确的 provider）
             if not meta.get("provider_name"):
                 meta["provider_name"] = "cloudflare_temp_mail"
             email_addr_parsed = str(account.get("email") or "").strip()
@@ -66,7 +66,7 @@ def resolve_mailbox(email_addr: str) -> dict[str, Any]:
                 "source": "cloudflare_temp_mail",
                 "provider_name": "cloudflare_temp_mail",
                 "mailbox_type": "user",
-                "visible_in_ui": False,
+                "visible_in_ui": False,  # CF pool 邮箱不展示在临时邮箱 UI 列表中
                 "status": "active",
                 "prefix": prefix,
                 "domain": domain,

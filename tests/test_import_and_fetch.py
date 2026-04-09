@@ -6,9 +6,9 @@
 """
 
 if __name__ != "__main__":
-    import pytest
+    import unittest
 
-    pytest.skip("manual live diagnostic script", allow_module_level=True)
+    raise unittest.SkipTest("manual live diagnostic script")
 
 import json
 import sys

@@ -152,7 +152,7 @@ class VersionCheckAPITests(unittest.TestCase):
         data = resp.get_json()
         self.assertTrue(data["has_update"])
         self.assertEqual(data["latest_version"], "99.0.0")
-        self.assertEqual(data["current_version"], "1.13.0")
+        self.assertEqual(data["current_version"], "1.14.0")
         self.assertTrue(data["success"])
 
     def test_has_update_false_when_same(self):
@@ -163,7 +163,7 @@ class VersionCheckAPITests(unittest.TestCase):
             mock_resp = MagicMock()
             mock_resp.read.return_value = json.dumps(
                 {
-                    "tag_name": "v1.13.0",
+                    "tag_name": "v1.14.0",
                     "html_url": "https://github.com/test",
                 }
             ).encode()
@@ -173,7 +173,7 @@ class VersionCheckAPITests(unittest.TestCase):
             resp = client.get("/api/system/version-check")
         data = resp.get_json()
         self.assertFalse(data["has_update"])
-        self.assertEqual(data["latest_version"], "1.13.0")
+        self.assertEqual(data["latest_version"], "1.14.0")
 
     def test_has_update_false_when_older(self):
         """GitHub 版本更低时 has_update=False"""
@@ -206,8 +206,8 @@ class VersionCheckAPITests(unittest.TestCase):
         data = resp.get_json()
         self.assertTrue(data["success"])
         self.assertFalse(data["has_update"])
-        self.assertEqual(data["current_version"], "1.13.0")
-        self.assertEqual(data["latest_version"], "1.13.0")
+        self.assertEqual(data["current_version"], "1.14.0")
+        self.assertEqual(data["latest_version"], "1.14.0")
         self.assertEqual(data["release_url"], "")
 
     def test_response_field_names(self):
@@ -235,8 +235,12 @@ class VersionCheckAPITests(unittest.TestCase):
         self.assertIn("release_url", data)
         # 禁止旧字段（精确匹配，不含 current_version/latest_version）
         for key in data:
-            self.assertNotEqual(key, "current", "不应有 current 字段（应为 current_version）")
-            self.assertNotEqual(key, "latest", "不应有 latest 字段（应为 latest_version）")
+            self.assertNotEqual(
+                key, "current", "不应有 current 字段（应为 current_version）"
+            )
+            self.assertNotEqual(
+                key, "latest", "不应有 latest 字段（应为 latest_version）"
+            )
 
     def test_cache_ttl(self):
         """缓存 TTL=600s：第二次请求不调 GitHub API"""
@@ -391,7 +395,9 @@ class TriggerUpdateAPITests(unittest.TestCase):
         self.assertTrue(data.get("already_latest"))
         self.assertIn("检查完毕", data["message"])
         # 验证 message_en 字段存在（供前端 pickApiMessage 使用）
-        self.assertEqual(data.get("message_en"), "Watchtower check complete, already up to date")
+        self.assertEqual(
+            data.get("message_en"), "Watchtower check complete, already up to date"
+        )
 
     def test_watchtower_non_200(self):
         """Watchtower 返回非 200 时返回 502"""
@@ -467,7 +473,9 @@ class TriggerUpdateAPITests(unittest.TestCase):
                 client.post("/api/system/trigger-update")
 
                 req_obj = mock_urlopen.call_args[0][0]
-                self.assertEqual(req_obj.get_header("Authorization"), "Bearer my-secret-token")
+                self.assertEqual(
+                    req_obj.get_header("Authorization"), "Bearer my-secret-token"
+                )
                 self.assertIn("wt:8080/v1/update", req_obj.full_url)
 
     def test_env_var_names(self):
@@ -583,7 +591,7 @@ class HTMLTemplateTests(unittest.TestCase):
         self._login(client)
         resp = client.get("/")
         html = resp.get_data(as_text=True)
-        self.assertIn("v1.13.0", html)
+        self.assertIn("v1.14.0", html)
 
 
 class CSSStyleTests(unittest.TestCase):

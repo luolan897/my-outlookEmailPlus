@@ -38,7 +38,7 @@ The repository already includes some screenshots, and more can be added later.
 
 Highlights include:
 
-- Current stable version: `v1.13.0`
+- Current stable version: `v1.14.0`
 
 **One-Click Update**
 - Two update methods: Watchtower (recommended) and Docker API self-update (advanced)

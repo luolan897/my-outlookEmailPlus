@@ -2,6 +2,35 @@
 
 All notable changes to OutlookMail Plus are documented in this file.
 
+## [v1.14.0] - 2026-04-09
+
+### 新功能 / New Features
+
+- **CF 临时邮箱接入邮箱池（Phase 0-6）**：`/api/external/pool/claim-random` 在 `provider=cloudflare_temp_mail` 且池空时支持动态创建并直接进入 `claimed` 状态，统一纳入池化生命周期
+- **CF 读信链路打通**：`mailbox_resolver` 新增 `provider=cloudflare_temp_mail` 识别与 `kind=temp` 描述返回，外部读信/验证码提取链路可透明处理 CF pool 账号
+- **临时邮箱 Options 按 Provider 返回**：`/api/temp-emails/options` 支持 `provider_name` 参数，前端会按当前 provider 请求域名与规则，减少跨 provider 配置串扰
+- **账号管理保护增强**：池化管理的 CF 账号在 UI 和后端都增加删除/编辑保护，避免手工误操作破坏池状态
+
+### 修复 / Bug Fixes
+
+- **Graph 401 回退策略修复**：区分 token 过期与权限不足（如 `ErrorAccessDenied`），权限不足场景允许继续 IMAP 回退，避免误判为必须重新授权
+- **Issue #32 后端 500 修复**：删除账号前事务化清理 `account_claim_logs` 与 `account_project_usage`，修复关联历史导致的删除失败
+- **全选交互修复**：账号全选改为基于分组数据源计算，并补充搜索模式下的显式拦截提示，减少“只选中当前页”误解
+- **批量导入换行问题修复**：修复复制凭据时 refresh_token 折行导致的导入失败，新增续行合并逻辑
+- **CF 配置兼容修复**：增强 CF Worker domains/options 读取与自动同步兜底，修复部分场景下域名下拉不生效
+
+### 测试 / Verification
+
+- 新增与补强测试覆盖：
+  - `tests/test_pool_cf_integration_tdd_skeleton.py`
+  - `tests/test_pool_cf_real_e2e.py`
+  - `tests/test_graph_401_imap_fallback_regression.py`
+  - `tests/test_account_delete_with_pool_history.py`
+  - `tests/test_temp_emails_api_regression.py`
+  - `tests/test_cf_pool_missing_coverage.py`
+
+---
+
 ## [v1.13.0] - 2026-04-09
 
 ### 新功能 / New Features

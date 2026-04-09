@@ -55,6 +55,7 @@ def insert_claimed_account(
 
     - Repository 层不允许依赖 services，因此这里仅做 DB 写入，不做任何上游网络调用。
     - 该函数内部包含 BEGIN IMMEDIATE / COMMIT。
+    - temp_mail_meta: CF 邮箱的远程元数据（JSON dict），用于后续删除远程邮箱时提供凭据。
     """
 
     normalized_email = str(email or "").strip()
