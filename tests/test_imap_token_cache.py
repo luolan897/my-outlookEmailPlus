@@ -51,6 +51,7 @@ class TestImapTokenCache(unittest.TestCase):
         """每个测试前清空缓存"""
         try:
             from outlook_web.services.imap import clear_imap_token_cache
+
             clear_imap_token_cache()
         except ImportError:
             pass
@@ -58,6 +59,7 @@ class TestImapTokenCache(unittest.TestCase):
     def tearDown(self):
         try:
             from outlook_web.services.imap import clear_imap_token_cache
+
             clear_imap_token_cache()
         except ImportError:
             pass

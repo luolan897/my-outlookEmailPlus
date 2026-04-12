@@ -65,9 +65,7 @@ class SettingsVerificationAiConfigTests(unittest.TestCase):
         )
         self.assertEqual(settings.get("verification_ai_model"), "gpt-4.1-mini")
         self.assertTrue(settings.get("verification_ai_api_key_set"))
-        self.assertNotEqual(
-            settings.get("verification_ai_api_key_masked"), "sk-test-123456"
-        )
+        self.assertNotEqual(settings.get("verification_ai_api_key_masked"), "sk-test-123456")
 
     def test_put_settings_requires_complete_ai_config_when_enabled(self):
         client = self.app.test_client()

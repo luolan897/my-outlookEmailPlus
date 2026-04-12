@@ -85,9 +85,7 @@ class TestGraphPermissionPrecheck(unittest.TestCase):
         """token 结果应包含 scope 字段"""
         from outlook_web.services.graph import get_access_token_graph_result
 
-        mock_post.return_value = _make_graph_token_response(
-            "at-123", scope="User.Read Mail.Read profile"
-        )
+        mock_post.return_value = _make_graph_token_response("at-123", scope="User.Read Mail.Read profile")
 
         result = get_access_token_graph_result("cid", "rt", proxy_url=None)
         self.assertTrue(result.get("success"))
@@ -114,9 +112,7 @@ class TestGraphPermissionPrecheck(unittest.TestCase):
         """无 Mail.Read 权限时不发起 Graph messages API 请求"""
         from outlook_web.services.graph import get_emails_graph
 
-        mock_post.return_value = _make_graph_token_response(
-            "at-123", scope="User.Read profile openid email"
-        )
+        mock_post.return_value = _make_graph_token_response("at-123", scope="User.Read profile openid email")
 
         result = get_emails_graph("cid", "rt", folder="inbox", skip=0, top=1)
 
@@ -131,9 +127,7 @@ class TestGraphPermissionPrecheck(unittest.TestCase):
         """有 Mail.Read 权限时正常调用 Graph API"""
         from outlook_web.services.graph import get_emails_graph
 
-        mock_post.return_value = _make_graph_token_response(
-            "at-123", scope="User.Read Mail.Read profile"
-        )
+        mock_post.return_value = _make_graph_token_response("at-123", scope="User.Read Mail.Read profile")
         # Graph messages API 返回
         mock_get_resp = MagicMock()
         mock_get_resp.status_code = 200

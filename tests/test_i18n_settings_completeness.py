@@ -108,15 +108,11 @@ class SettingsI18nCompletenessTests(unittest.TestCase):
 
     def test_self_hosted_provider_desc_has_translation(self):
         js = self._get_i18n_js()
-        self._assert_exact_map_entry(
-            js, "自建域名临时邮箱服务", "Self-hosted custom-domain temp mailbox service"
-        )
+        self._assert_exact_map_entry(js, "自建域名临时邮箱服务", "Self-hosted custom-domain temp mailbox service")
 
     def test_cf_worker_provider_desc_has_translation(self):
         js = self._get_i18n_js()
-        self._assert_exact_map_entry(
-            js, "CF Worker 部署的临时邮箱", "Temp mailbox powered by CF Worker deployment"
-        )
+        self._assert_exact_map_entry(js, "CF Worker 部署的临时邮箱", "Temp mailbox powered by CF Worker deployment")
 
     # ── CF Worker 域名同步区 ──
 
@@ -132,7 +128,7 @@ class SettingsI18nCompletenessTests(unittest.TestCase):
         js = self._get_i18n_js()
         self._assert_exact_map_entry(
             js,
-            '自动读取 CF Worker 的域名配置，同步至下方「临时邮箱可用域名」和「默认域名」。',
+            "自动读取 CF Worker 的域名配置，同步至下方「临时邮箱可用域名」和「默认域名」。",
             'Automatically read the CF Worker domain configuration and sync to the "Available Domains" and "Default Domain" fields below.',
         )
 

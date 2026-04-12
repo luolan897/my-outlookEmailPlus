@@ -22,9 +22,7 @@ def resolve_mailbox(email_addr: str) -> dict[str, Any]:
 
     # BUG-04: accounts 与 temp_emails 同邮箱命中时，必须显式冲突（避免安全边界被绕开）
     account = accounts_repo.get_account_by_email(normalized_email)
-    temp_mailbox = temp_emails_repo.get_temp_email_by_address(
-        normalized_email, view="descriptor"
-    )
+    temp_mailbox = temp_emails_repo.get_temp_email_by_address(normalized_email, view="descriptor")
     if account and temp_mailbox:
         raise external_api_service.MailboxConflictError(
             "邮箱冲突：accounts 与 temp_emails 同时存在",
@@ -54,12 +52,8 @@ def resolve_mailbox(email_addr: str) -> dict[str, Any]:
             if not meta.get("provider_name"):
                 meta["provider_name"] = "cloudflare_temp_mail"
             email_addr_parsed = str(account.get("email") or "").strip()
-            prefix = (
-                email_addr_parsed.split("@", 1)[0] if "@" in email_addr_parsed else ""
-            )
-            domain = (
-                email_addr_parsed.split("@", 1)[1] if "@" in email_addr_parsed else ""
-            )
+            prefix = email_addr_parsed.split("@", 1)[0] if "@" in email_addr_parsed else ""
+            domain = email_addr_parsed.split("@", 1)[1] if "@" in email_addr_parsed else ""
             return {
                 "kind": "temp",
                 "email": email_addr_parsed,
@@ -83,26 +77,18 @@ def resolve_mailbox(email_addr: str) -> dict[str, Any]:
         return {
             "kind": "account",
             "email": normalized_email,
-            "source": str(
-                account.get("provider") or account.get("account_type") or "outlook"
-            ),
+            "source": str(account.get("provider") or account.get("account_type") or "outlook"),
             "provider_name": (
-                "imap_generic"
-                if str(account.get("account_type") or "").strip().lower() == "imap"
-                else "outlook_graph"
+                "imap_generic" if str(account.get("account_type") or "").strip().lower() == "imap" else "outlook_graph"
             ),
             "status": str(account.get("status") or "active"),
-            "read_capability": "imap"
-            if str(account.get("account_type") or "").strip().lower() == "imap"
-            else "graph",
+            "read_capability": "imap" if str(account.get("account_type") or "").strip().lower() == "imap" else "graph",
             "meta": {"account": account},
         }
     if temp_mailbox:
         return temp_mailbox
 
-    raise external_api_service.AccountNotFoundError(
-        "账号不存在", data={"email": normalized_email}
-    )
+    raise external_api_service.AccountNotFoundError("账号不存在", data={"email": normalized_email})
 
 
 def ensure_mailbox_can_read(
@@ -116,10 +102,7 @@ def ensure_mailbox_can_read(
     kind = str(mailbox.get("kind") or "")
 
     if kind == "account":
-        allowed_emails = [
-            str(item or "").strip().lower()
-            for item in (consumer.get("allowed_emails") or [])
-        ]
+        allowed_emails = [str(item or "").strip().lower() for item in (consumer.get("allowed_emails") or [])]
         target_email = str(mailbox.get("email") or "").strip().lower()
         if allowed_emails and target_email not in allowed_emails:
             raise external_api_service.EmailScopeForbiddenError(
@@ -130,20 +113,12 @@ def ensure_mailbox_can_read(
                     "consumer_name": consumer.get("name"),
                 },
             )
-        return external_api_service.ensure_account_can_read(
-            (mailbox.get("meta") or {}).get("account") or {}
-        )
+        return external_api_service.ensure_account_can_read((mailbox.get("meta") or {}).get("account") or {})
 
     if kind != "temp":
-        raise external_api_service.AccountNotFoundError(
-            "账号不存在", data={"email": mailbox.get("email")}
-        )
+        raise external_api_service.AccountNotFoundError("账号不存在", data={"email": mailbox.get("email")})
 
-    temp_mailbox = (
-        mailbox
-        if mailbox.get("kind") == "temp"
-        else (mailbox.get("meta") or {}).get("temp_mailbox") or {}
-    )
+    temp_mailbox = mailbox if mailbox.get("kind") == "temp" else (mailbox.get("meta") or {}).get("temp_mailbox") or {}
     status = str(temp_mailbox.get("status") or "active").strip().lower()
     if status == "finished" and not allow_finished:
         raise external_api_service.TaskFinishedError(

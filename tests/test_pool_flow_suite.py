@@ -30,12 +30,8 @@ class PoolFlowSuiteTests(unittest.TestCase):
             settings_repo.set_setting("external_api_ip_whitelist", "[]")
             settings_repo.set_setting("external_api_rate_limit_per_minute", "60")
             settings_repo.set_setting("external_api_disable_pool_claim_random", "false")
-            settings_repo.set_setting(
-                "external_api_disable_pool_claim_release", "false"
-            )
-            settings_repo.set_setting(
-                "external_api_disable_pool_claim_complete", "false"
-            )
+            settings_repo.set_setting("external_api_disable_pool_claim_release", "false")
+            settings_repo.set_setting("external_api_disable_pool_claim_complete", "false")
             settings_repo.set_setting("external_api_disable_pool_stats", "false")
 
     @staticmethod

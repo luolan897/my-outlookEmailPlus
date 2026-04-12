@@ -37,16 +37,10 @@ def build_verification_channel_plan(preferred_channel: Any) -> List[str]:
     preferred = normalize_verification_channel(preferred_channel)
     if not preferred:
         return list(DEFAULT_VERIFICATION_CHANNEL_CHAIN)
-    return [preferred] + [
-        channel
-        for channel in DEFAULT_VERIFICATION_CHANNEL_CHAIN
-        if channel != preferred
-    ]
+    return [preferred] + [channel for channel in DEFAULT_VERIFICATION_CHANNEL_CHAIN if channel != preferred]
 
 
-def map_method_to_verification_channel(
-    method: str, *, folder: str = "inbox"
-) -> Optional[str]:
+def map_method_to_verification_channel(method: str, *, folder: str = "inbox") -> Optional[str]:
     method_text = str(method or "").strip().lower()
     folder_text = str(folder or "inbox").strip().lower()
     if method_text == "graph api":
@@ -75,9 +69,7 @@ def is_outlook_oauth_account(account: Dict[str, Any]) -> bool:
     account_type = str(account.get("account_type") or "outlook").strip().lower()
     if account_type != "outlook":
         return False
-    return bool(str(account.get("client_id") or "").strip()) and bool(
-        str(account.get("refresh_token") or "").strip()
-    )
+    return bool(str(account.get("client_id") or "").strip()) and bool(str(account.get("refresh_token") or "").strip())
 
 
 def fetch_emails_for_channel(
@@ -253,8 +245,7 @@ def fetch_emails_and_detail_for_channel(
             }
 
         legacy_emails = [
-            dict(item, folder="inbox", _verification_channel=normalized)
-            for item in (legacy_list.get("emails") or [])
+            dict(item, folder="inbox", _verification_channel=normalized) for item in (legacy_list.get("emails") or [])
         ]
 
         legacy_detail = None
@@ -277,10 +268,7 @@ def fetch_emails_and_detail_for_channel(
             "channel": normalized,
         }
 
-    emails = [
-        dict(item, folder="inbox", _verification_channel=normalized)
-        for item in (result.get("emails") or [])
-    ]
+    emails = [dict(item, folder="inbox", _verification_channel=normalized) for item in (result.get("emails") or [])]
     return {
         "success": True,
         "emails": emails,
@@ -301,14 +289,10 @@ def _get_channel_display_name(channel: str) -> str:
 def _is_extraction_success(extracted: Dict[str, Any], expected_field: Any) -> bool:
     if expected_field:
         return bool(extracted.get(expected_field))
-    return bool(
-        extracted.get("verification_code") or extracted.get("verification_link")
-    )
+    return bool(extracted.get("verification_code") or extracted.get("verification_link"))
 
 
-def _build_email_obj_from_channel_detail(
-    *, detail: Dict[str, Any], latest: Dict[str, Any]
-) -> Dict[str, Any]:
+def _build_email_obj_from_channel_detail(*, detail: Dict[str, Any], latest: Dict[str, Any]) -> Dict[str, Any]:
     # Graph 详情
     if "body" in detail and isinstance(detail.get("body"), dict):
         body_content = detail.get("body") or {}
@@ -317,11 +301,7 @@ def _build_email_obj_from_channel_detail(
 
         from_obj = detail.get("from") or {}
         if isinstance(from_obj, dict):
-            from_addr = (
-                (from_obj.get("emailAddress") or {}).get("address")
-                or from_obj.get("address")
-                or ""
-            )
+            from_addr = (from_obj.get("emailAddress") or {}).get("address") or from_obj.get("address") or ""
         else:
             from_addr = str(from_obj or "")
 
@@ -358,13 +338,9 @@ def extract_verification_for_outlook(
 ) -> Dict[str, Any]:
     """Outlook OAuth 账号验证码提取统一入口（Web 端和 External API 均调用此函数）。"""
     account_email = str(account.get("email") or "")
-    preferred = normalize_verification_channel(
-        account.get("preferred_verification_channel")
-    )
+    preferred = normalize_verification_channel(account.get("preferred_verification_channel"))
     channel_plan = build_verification_channel_plan(preferred)
-    channel_plan = channel_capability_cache.filter_channel_plan(
-        account_email, channel_plan
-    )
+    channel_plan = channel_capability_cache.filter_channel_plan(account_email, channel_plan)
 
     # Graph 权限预检：无 Mail.Read 权限时直接跳过 Graph 渠道。
     try:
@@ -375,9 +351,7 @@ def extract_verification_for_outlook(
         )
         if precheck.get("new_refresh_token"):
             account["refresh_token"] = str(precheck.get("new_refresh_token") or "")
-        if precheck.get("success") and not graph_service.has_mail_read_permission(
-            precheck.get("scope", "")
-        ):
+        if precheck.get("success") and not graph_service.has_mail_read_permission(precheck.get("scope", "")):
             channel_plan = [ch for ch in channel_plan if not ch.startswith("graph_")]
     except Exception:
         pass
@@ -489,9 +463,7 @@ def extract_verification_for_outlook(
             try:
                 from outlook_web.repositories import accounts as accounts_repo
 
-                accounts_repo.update_preferred_verification_channel(
-                    int(account["id"]), channel
-                )
+                accounts_repo.update_preferred_verification_channel(int(account["id"]), channel)
             except Exception:
                 pass
 

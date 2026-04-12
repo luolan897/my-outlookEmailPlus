@@ -56,9 +56,7 @@ class TestImapBatchFetch(unittest.TestCase):
             fetch_response=("OK", [((b"1 (RFC822)", raw), b")")]),
         )
 
-        result = get_emails_imap_with_server(
-            "user@test.com", "cid", "rt", folder="inbox", skip=0, top=1
-        )
+        result = get_emails_imap_with_server("user@test.com", "cid", "rt", folder="inbox", skip=0, top=1)
 
         self.assertTrue(result.get("success"))
         emails = result.get("emails", [])
@@ -86,9 +84,7 @@ class TestImapBatchFetch(unittest.TestCase):
             fetch_response=("OK", flat_data),
         )
 
-        result = get_emails_imap_with_server(
-            "user@test.com", "cid", "rt", folder="inbox", skip=0, top=5
-        )
+        result = get_emails_imap_with_server("user@test.com", "cid", "rt", folder="inbox", skip=0, top=5)
 
         self.assertTrue(result.get("success"))
         emails = result.get("emails", [])
@@ -105,9 +101,7 @@ class TestImapBatchFetch(unittest.TestCase):
         mock_token.return_value = _MOCK_TOKEN_OK
         conn = self._make_imap_conn(mock_imap_cls, search_ids=[])
 
-        result = get_emails_imap_with_server(
-            "user@test.com", "cid", "rt", folder="inbox", skip=0, top=5
-        )
+        result = get_emails_imap_with_server("user@test.com", "cid", "rt", folder="inbox", skip=0, top=5)
 
         self.assertTrue(result.get("success"))
         self.assertEqual(result.get("emails"), [])
@@ -138,9 +132,7 @@ class TestImapBatchFetch(unittest.TestCase):
             fetch_response=("OK", flat_data),
         )
 
-        result = get_emails_imap_with_server(
-            "user@test.com", "cid", "rt", folder="inbox", skip=0, top=3
-        )
+        result = get_emails_imap_with_server("user@test.com", "cid", "rt", folder="inbox", skip=0, top=3)
 
         self.assertTrue(result.get("success"))
         emails = result.get("emails", [])
@@ -169,9 +161,7 @@ class TestImapBatchFetch(unittest.TestCase):
             fetch_response=("OK", flat_data),
         )
 
-        result = get_emails_imap_with_server(
-            "user@test.com", "cid", "rt", folder="inbox", skip=0, top=20
-        )
+        result = get_emails_imap_with_server("user@test.com", "cid", "rt", folder="inbox", skip=0, top=20)
 
         self.assertTrue(result.get("success"))
         emails = result.get("emails", [])

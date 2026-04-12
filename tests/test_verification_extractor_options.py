@@ -268,9 +268,7 @@ class VerificationExtractorConfidenceTests(unittest.TestCase):
             "body_html": "",
         }
         result = func(email)
-        self.assertIsNotNone(
-            result.get("verification_code"), "应命中 1181 作为 fallback 候选"
-        )
+        self.assertIsNotNone(result.get("verification_code"), "应命中 1181 作为 fallback 候选")
         self.assertEqual(result["code_confidence"], "low")
 
     def test_code_confidence_low_for_marketing_numbers(self):
@@ -282,12 +280,8 @@ class VerificationExtractorConfidenceTests(unittest.TestCase):
             "body_html": "",
         }
         result = func(email)
-        self.assertIsNotNone(
-            result.get("verification_code"), "应命中某个数字作为 fallback 候选"
-        )
-        self.assertEqual(
-            result["code_confidence"], "low", "营销邮件数字不应获得 high confidence"
-        )
+        self.assertIsNotNone(result.get("verification_code"), "应命中某个数字作为 fallback 候选")
+        self.assertEqual(result["code_confidence"], "low", "营销邮件数字不应获得 high confidence")
 
     # ── link_confidence ──
 
@@ -324,9 +318,7 @@ class VerificationExtractorConfidenceTests(unittest.TestCase):
         }
         result = func(email)
         self.assertIsNotNone(result.get("verification_link"))
-        self.assertEqual(
-            result["link_confidence"], "low", "普通链接不应获得 high link_confidence"
-        )
+        self.assertEqual(result["link_confidence"], "low", "普通链接不应获得 high link_confidence")
 
     def test_link_confidence_low_for_marketing_link(self):
         """营销邮件中的普通跳转链接 → link_confidence=low"""
@@ -337,12 +329,8 @@ class VerificationExtractorConfidenceTests(unittest.TestCase):
             "body_html": "",
         }
         result = func(email)
-        self.assertIsNotNone(
-            result.get("verification_link"), "应命中某个链接作为 fallback"
-        )
-        self.assertEqual(
-            result["link_confidence"], "low", "营销链接不应获得 high link_confidence"
-        )
+        self.assertIsNotNone(result.get("verification_link"), "应命中某个链接作为 fallback")
+        self.assertEqual(result["link_confidence"], "low", "营销链接不应获得 high link_confidence")
 
     # ── confidence 总字段向后兼容 ──
 
@@ -445,9 +433,7 @@ class VerificationExtractorConfidenceTests(unittest.TestCase):
         }
         result = func(email)
         self.assertIsNotNone(result.get("verification_link"))
-        self.assertEqual(
-            result["link_confidence"], "low", "'discount code' 不应触发链接验证语境提权"
-        )
+        self.assertEqual(result["link_confidence"], "low", "'discount code' 不应触发链接验证语境提权")
 
     def test_promo_code_email_link_stays_low(self):
         """正文含 'promo code' → link_confidence 仍为 low"""
@@ -459,9 +445,7 @@ class VerificationExtractorConfidenceTests(unittest.TestCase):
         }
         result = func(email)
         self.assertIsNotNone(result.get("verification_link"))
-        self.assertEqual(
-            result["link_confidence"], "low", "'promo code' 不应触发链接验证语境提权"
-        )
+        self.assertEqual(result["link_confidence"], "low", "'promo code' 不应触发链接验证语境提权")
 
     def test_order_confirmation_link_stays_low(self):
         """正文含 'order confirmation' 但只是交易确认 → link_confidence 仍为 low"""

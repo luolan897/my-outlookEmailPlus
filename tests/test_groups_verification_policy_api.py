@@ -103,9 +103,7 @@ class GroupsVerificationPolicyApiTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 400)
         body = resp.get_json()
         self.assertFalse(body.get("success"))
-        self.assertEqual(
-            (body.get("error") or {}).get("code"), "GROUP_VERIFICATION_LENGTH_INVALID"
-        )
+        self.assertEqual((body.get("error") or {}).get("code"), "GROUP_VERIFICATION_LENGTH_INVALID")
 
     def test_update_group_accepts_single_length_input(self):
         client = self.app.test_client()
@@ -180,9 +178,7 @@ class GroupsVerificationPolicyApiTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 400)
         body = resp.get_json()
         self.assertFalse(body.get("success"))
-        self.assertEqual(
-            (body.get("error") or {}).get("code"), "GROUP_VERIFICATION_REGEX_INVALID"
-        )
+        self.assertEqual((body.get("error") or {}).get("code"), "GROUP_VERIFICATION_REGEX_INVALID")
 
     def test_ai_fields_in_payload_are_soft_ignored(self):
         client = self.app.test_client()

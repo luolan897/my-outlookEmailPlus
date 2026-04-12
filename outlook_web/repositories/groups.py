@@ -51,15 +51,11 @@ def _validate_code_length(value: str) -> str:
 
     match = _CODE_LENGTH_RE.match(text)
     if not match:
-        raise GroupPolicyValidationError(
-            "GROUP_VERIFICATION_LENGTH_INVALID", "验证码长度范围格式无效"
-        )
+        raise GroupPolicyValidationError("GROUP_VERIFICATION_LENGTH_INVALID", "验证码长度范围格式无效")
     min_len = int(match.group(1))
     max_len = int(match.group(2))
     if min_len <= 0 or max_len <= 0 or min_len > max_len:
-        raise GroupPolicyValidationError(
-            "GROUP_VERIFICATION_LENGTH_INVALID", "验证码长度范围格式无效"
-        )
+        raise GroupPolicyValidationError("GROUP_VERIFICATION_LENGTH_INVALID", "验证码长度范围格式无效")
     return f"{min_len}-{max_len}"
 
 
@@ -70,9 +66,7 @@ def _validate_code_regex(value: str) -> str:
     try:
         re.compile(text)
     except re.error as exc:
-        raise GroupPolicyValidationError(
-            "GROUP_VERIFICATION_REGEX_INVALID", "验证码正则表达式无效"
-        ) from exc
+        raise GroupPolicyValidationError("GROUP_VERIFICATION_REGEX_INVALID", "验证码正则表达式无效") from exc
     return text
 
 
@@ -85,9 +79,7 @@ def normalize_group_verification_policy(
 ) -> Dict[str, Any]:
     """标准化并校验分组验证码提取策略。"""
 
-    normalized_length = _validate_code_length(
-        _normalize_str(verification_code_length) or "6-6"
-    )
+    normalized_length = _validate_code_length(_normalize_str(verification_code_length) or "6-6")
     normalized_regex = _validate_code_regex(_normalize_str(verification_code_regex))
     # 历史兼容字段：group 侧 AI 配置已下沉到系统级 settings。
     # 这里不再使用传入值，统一写入默认值，确保旧 payload 不报错（软兼容）。
@@ -105,14 +97,12 @@ def normalize_group_verification_policy(
 def load_groups() -> List[Dict]:
     """加载所有分组（临时邮箱分组排在最前面）"""
     db = get_db()
-    cursor = db.execute(
-        """
+    cursor = db.execute("""
         SELECT * FROM groups
         ORDER BY
             CASE WHEN name = '临时邮箱' THEN 0 ELSE 1 END,
             id
-    """
-    )
+    """)
     rows = cursor.fetchall()
     return [dict(row) for row in rows]
 
@@ -231,9 +221,7 @@ def get_default_group_id() -> int:
     """获取默认分组 ID（不依赖固定 id=1，增强兼容性）"""
     db = get_db()
     try:
-        row = db.execute(
-            "SELECT id FROM groups WHERE name = '默认分组' LIMIT 1"
-        ).fetchone()
+        row = db.execute("SELECT id FROM groups WHERE name = '默认分组' LIMIT 1").fetchone()
         return row["id"] if row else 1
     except Exception:
         return 1
@@ -243,9 +231,7 @@ def delete_group(group_id: int) -> bool:
     """删除分组（将该分组下的邮箱移到默认分组）"""
     db = get_db()
     try:
-        row = db.execute(
-            "SELECT id, name, is_system FROM groups WHERE id = ?", (group_id,)
-        ).fetchone()
+        row = db.execute("SELECT id, name, is_system FROM groups WHERE id = ?", (group_id,)).fetchone()
         if not row:
             return False
         if row["is_system"]:
@@ -269,9 +255,7 @@ def delete_group(group_id: int) -> bool:
 def get_group_account_count(group_id: int) -> int:
     """获取分组下的邮箱数量"""
     db = get_db()
-    cursor = db.execute(
-        "SELECT COUNT(*) as count FROM accounts WHERE group_id = ?", (group_id,)
-    )
+    cursor = db.execute("SELECT COUNT(*) as count FROM accounts WHERE group_id = ?", (group_id,))
     row = cursor.fetchone()
     return row["count"] if row else 0
 
@@ -327,9 +311,7 @@ def resolve_group_verification_policy(
         else:
             # 3) default（仅在调用方允许时应用，避免影响链接提取）
             resolved_regex = None
-            resolved_length = (
-                _validate_code_length(default_code_length) if apply_default else None
-            )
+            resolved_length = _validate_code_length(default_code_length) if apply_default else None
 
     # 兼容返回字段：运行期不再从 group 读取 AI 配置。
     ai_enabled = 0

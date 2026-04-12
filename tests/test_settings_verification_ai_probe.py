@@ -94,9 +94,7 @@ class SettingsVerificationAiProbeTests(unittest.TestCase):
         )
 
     @patch("outlook_web.services.verification_extractor.requests.post")
-    def test_verification_ai_test_connectivity_ok_when_contract_invalid(
-        self, mock_post
-    ):
+    def test_verification_ai_test_connectivity_ok_when_contract_invalid(self, mock_post):
         class _Resp:
             status_code = 200
 
@@ -136,9 +134,7 @@ class SettingsVerificationAiProbeTests(unittest.TestCase):
         self.assertTrue(body.get("contract_ok"))
         probe = body.get("probe") or {}
         self.assertTrue(probe.get("ok"))
-        self.assertEqual(
-            (probe.get("parsed_output") or {}).get("verification_code"), "123456"
-        )
+        self.assertEqual((probe.get("parsed_output") or {}).get("verification_code"), "123456")
 
 
 if __name__ == "__main__":

@@ -100,9 +100,7 @@ def _parse_mime_raw(raw_mime: str) -> dict[str, Any]:
     - has_html      : bool
     """
     try:
-        msg = _email_lib.message_from_string(
-            raw_mime, policy=_email_lib.policy.compat32
-        )
+        msg = _email_lib.message_from_string(raw_mime, policy=_email_lib.policy.compat32)
     except Exception:
         return {
             "subject": "",
@@ -179,9 +177,7 @@ def _parse_mime_raw(raw_mime: str) -> dict[str, Any]:
     }
 
 
-def _normalize_domain_entries(
-    raw_domains: Any, default_domain: str
-) -> list[dict[str, Any]]:
+def _normalize_domain_entries(raw_domains: Any, default_domain: str) -> list[dict[str, Any]]:
     domains: list[dict[str, Any]] = []
     seen: set[str] = set()
     values: list[Any] = raw_domains if isinstance(raw_domains, list) else []
@@ -313,18 +309,10 @@ class CloudflareTempMailProvider(TempMailProviderBase):
             if base_url:
                 try:
                     sync_result = self.get_cf_worker_domains()
-                    if sync_result.get("success") and (
-                        sync_result.get("domains") or []
-                    ):
+                    if sync_result.get("success") and (sync_result.get("domains") or []):
                         domains: list[str] = sync_result.get("domains") or []
-                        default_domain: str = str(
-                            sync_result.get("default_domain") or ""
-                        ).strip()
-                        domains_payload = [
-                            {"name": d, "enabled": True}
-                            for d in domains
-                            if str(d or "").strip()
-                        ]
+                        default_domain: str = str(sync_result.get("default_domain") or "").strip()
+                        domains_payload = [{"name": d, "enabled": True} for d in domains if str(d or "").strip()]
                         if domains_payload:
                             settings_repo.set_setting(
                                 "cf_worker_domains",
@@ -339,9 +327,7 @@ class CloudflareTempMailProvider(TempMailProviderBase):
                                 )
                             # 重新读取一次，确保后续逻辑使用最新配置（并避免重复回源）
                             cf_domains = settings_repo.get_cf_worker_domains()
-                            cf_default_domain = (
-                                settings_repo.get_cf_worker_default_domain()
-                            )
+                            cf_default_domain = settings_repo.get_cf_worker_default_domain()
                 except Exception as exc:
                     logger.warning("[cf_provider] auto sync domains failed err=%s", exc)
 
@@ -350,9 +336,7 @@ class CloudflareTempMailProvider(TempMailProviderBase):
         legacy_prefix_rules = settings_repo.get_temp_mail_prefix_rules()
 
         domains_payload = cf_domains if cf_domains else legacy_domains
-        default_domain = (cf_default_domain or "").strip() or (
-            legacy_default_domain or ""
-        ).strip()
+        default_domain = (cf_default_domain or "").strip() or (legacy_default_domain or "").strip()
         prefix_rules = cf_prefix_rules if cf_prefix_rules else legacy_prefix_rules
 
         # 防御：确保类型
@@ -362,15 +346,9 @@ class CloudflareTempMailProvider(TempMailProviderBase):
             prefix_rules = {}
 
         normalized_prefix_rules = {
-            "min_length": int(
-                prefix_rules.get("min_length", DEFAULT_PREFIX_RULES["min_length"])
-            ),
-            "max_length": int(
-                prefix_rules.get("max_length", DEFAULT_PREFIX_RULES["max_length"])
-            ),
-            "pattern": str(
-                prefix_rules.get("pattern") or DEFAULT_PREFIX_RULES["pattern"]
-            ),
+            "min_length": int(prefix_rules.get("min_length", DEFAULT_PREFIX_RULES["min_length"])),
+            "max_length": int(prefix_rules.get("max_length", DEFAULT_PREFIX_RULES["max_length"])),
+            "pattern": str(prefix_rules.get("pattern") or DEFAULT_PREFIX_RULES["pattern"]),
         }
 
         return {
@@ -384,9 +362,7 @@ class CloudflareTempMailProvider(TempMailProviderBase):
             "api_base_url": self._base_url(),
         }
 
-    def create_mailbox(
-        self, *, prefix: str | None = None, domain: str | None = None
-    ) -> dict[str, Any]:
+    def create_mailbox(self, *, prefix: str | None = None, domain: str | None = None) -> dict[str, Any]:
         """
         调用 POST /admin/new_address 创建邮箱。
 
@@ -533,9 +509,7 @@ class CloudflareTempMailProvider(TempMailProviderBase):
             )
             return resp.ok
         except requests.RequestException as exc:
-            logger.warning(
-                "[cf_provider] delete_mailbox failed id=%s err=%s", address_id, exc
-            )
+            logger.warning("[cf_provider] delete_mailbox failed id=%s err=%s", address_id, exc)
             return False
 
     def list_messages(self, mailbox: dict[str, Any] | str) -> list[dict[str, Any]]:
@@ -638,9 +612,7 @@ class CloudflareTempMailProvider(TempMailProviderBase):
             }
 
         # BUG-CF-01：from_address 优先从解析后的 MIME 中取，其次使用 CF 的 source 字段
-        from_address = (
-            parsed.get("from_address") or str(cf_msg.get("source") or "")
-        ).strip()
+        from_address = (parsed.get("from_address") or str(cf_msg.get("source") or "")).strip()
 
         # subject 优先从 MIME 中取，其次从顶层字段取（部分 CF 版本可能有）
         subject = (parsed.get("subject") or str(cf_msg.get("subject") or "")).strip()
@@ -662,9 +634,7 @@ class CloudflareTempMailProvider(TempMailProviderBase):
             "raw_message_id": cf_message_id_header,
         }
 
-    def get_message_detail(
-        self, mailbox: dict[str, Any] | str, message_id: str
-    ) -> dict[str, Any] | None:
+    def get_message_detail(self, mailbox: dict[str, Any] | str, message_id: str) -> dict[str, Any] | None:
         """
         CF Worker 无独立「获取单封邮件」接口，
         通过 list_messages 获取全部邮件后按 message_id 过滤。
@@ -704,9 +674,7 @@ class CloudflareTempMailProvider(TempMailProviderBase):
             )
             return resp.ok
         except requests.RequestException as exc:
-            logger.warning(
-                "[cf_provider] delete_message failed id=%s err=%s", message_id, exc
-            )
+            logger.warning("[cf_provider] delete_message failed id=%s err=%s", message_id, exc)
             return False
 
     def clear_messages(self, mailbox: dict[str, Any] | str) -> bool:

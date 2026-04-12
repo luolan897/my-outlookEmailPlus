@@ -26,13 +26,15 @@ def _make_success_result(emails_count=1, server_label="server1"):
     """构造成功的 IMAP fetch 结果"""
     emails = []
     for i in range(emails_count):
-        emails.append({
-            "id": str(i + 1),
-            "subject": f"Email {i+1} from {server_label}",
-            "from": "test@example.com",
-            "date": "Mon, 11 Apr 2026 10:00:00 +0800",
-            "body_preview": f"Preview {i+1}",
-        })
+        emails.append(
+            {
+                "id": str(i + 1),
+                "subject": f"Email {i+1} from {server_label}",
+                "from": "test@example.com",
+                "date": "Mon, 11 Apr 2026 10:00:00 +0800",
+                "body_preview": f"Preview {i+1}",
+            }
+        )
     return {"success": True, "emails": emails}
 
 
@@ -64,7 +66,12 @@ class TestImapConcurrentServers(unittest.TestCase):
         mock_fetch.side_effect = side_effect
 
         result = get_emails_imap_concurrent(
-            "user@test.com", "cid", "rt", "inbox", 0, 1,
+            "user@test.com",
+            "cid",
+            "rt",
+            "inbox",
+            0,
+            1,
             servers=("outlook.live.com", "outlook.office365.com"),
         )
 
@@ -86,7 +93,12 @@ class TestImapConcurrentServers(unittest.TestCase):
         mock_fetch.side_effect = side_effect
 
         result = get_emails_imap_concurrent(
-            "user@test.com", "cid", "rt", "inbox", 0, 1,
+            "user@test.com",
+            "cid",
+            "rt",
+            "inbox",
+            0,
+            1,
             servers=("outlook.live.com", "outlook.office365.com"),
         )
 
@@ -100,7 +112,12 @@ class TestImapConcurrentServers(unittest.TestCase):
         mock_fetch.return_value = _make_error_result()
 
         result = get_emails_imap_concurrent(
-            "user@test.com", "cid", "rt", "inbox", 0, 1,
+            "user@test.com",
+            "cid",
+            "rt",
+            "inbox",
+            0,
+            1,
             servers=("outlook.live.com", "outlook.office365.com"),
         )
 
@@ -121,7 +138,12 @@ class TestImapConcurrentServers(unittest.TestCase):
         mock_fetch.side_effect = side_effect
 
         result = get_emails_imap_concurrent(
-            "user@test.com", "cid", "rt", "inbox", 0, 1,
+            "user@test.com",
+            "cid",
+            "rt",
+            "inbox",
+            0,
+            1,
             servers=("outlook.live.com", "outlook.office365.com"),
         )
 
@@ -135,7 +157,12 @@ class TestImapConcurrentServers(unittest.TestCase):
         mock_fetch.return_value = _make_success_result(1, "live")
 
         result = get_emails_imap_concurrent(
-            "user@test.com", "cid", "rt", "inbox", 0, 1,
+            "user@test.com",
+            "cid",
+            "rt",
+            "inbox",
+            0,
+            1,
             servers=("outlook.live.com",),
         )
 
@@ -151,7 +178,12 @@ class TestImapConcurrentServers(unittest.TestCase):
         mock_fetch.return_value = _make_success_result(1, "any")
 
         get_emails_imap_concurrent(
-            "user@test.com", "cid", "rt", "inbox", 0, 1,
+            "user@test.com",
+            "cid",
+            "rt",
+            "inbox",
+            0,
+            1,
             servers=("outlook.live.com", "outlook.office365.com"),
         )
 

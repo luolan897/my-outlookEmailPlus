@@ -108,9 +108,7 @@ class TestImapConnectionReuse(unittest.TestCase):
         mock_token.return_value = self._mock_token_result(True)
         self._setup_imap_mock(mock_imap_cls, search_ids=[])
 
-        result = fetch_and_detail_imap_with_server(
-            "user@test.com", "cid", "rt", folder="inbox", top=1
-        )
+        result = fetch_and_detail_imap_with_server("user@test.com", "cid", "rt", folder="inbox", top=1)
 
         self.assertTrue(result.get("success"))
         self.assertEqual(result.get("emails"), [])
@@ -125,9 +123,7 @@ class TestImapConnectionReuse(unittest.TestCase):
         mock_token.return_value = self._mock_token_result(True)
         self._setup_imap_mock(mock_imap_cls, auth_fail=True)
 
-        result = fetch_and_detail_imap_with_server(
-            "user@test.com", "cid", "rt", folder="inbox", top=1
-        )
+        result = fetch_and_detail_imap_with_server("user@test.com", "cid", "rt", folder="inbox", top=1)
 
         self.assertFalse(result.get("success"))
         self.assertIsNotNone(result.get("error"))
@@ -140,9 +136,7 @@ class TestImapConnectionReuse(unittest.TestCase):
 
         mock_token.return_value = self._mock_token_result(False)
 
-        result = fetch_and_detail_imap_with_server(
-            "user@test.com", "cid", "rt", folder="inbox", top=1
-        )
+        result = fetch_and_detail_imap_with_server("user@test.com", "cid", "rt", folder="inbox", top=1)
 
         self.assertFalse(result.get("success"))
         mock_imap_cls.assert_not_called()
@@ -159,9 +153,7 @@ class TestImapConnectionReuse(unittest.TestCase):
         mock_conn = self._setup_imap_mock(mock_imap_cls, search_ids=[b"1"])
         mock_conn.fetch.return_value = ("OK", [((b"1 (RFC822)", raw), b")")])
 
-        result = fetch_and_detail_imap_with_server(
-            "user@test.com", "cid", "rt", folder="inbox", top=1
-        )
+        result = fetch_and_detail_imap_with_server("user@test.com", "cid", "rt", folder="inbox", top=1)
 
         self.assertTrue(result.get("success"))
         # fetch 只调用一次（摘要和详情共用一次 FETCH）
@@ -180,9 +172,7 @@ class TestImapConnectionReuse(unittest.TestCase):
         mock_conn.select.return_value = ("OK", [b"3"])
         mock_conn.search.side_effect = ConnectionResetError("Connection reset by peer")
 
-        result = fetch_and_detail_imap_with_server(
-            "user@test.com", "cid", "rt", folder="inbox", top=1
-        )
+        result = fetch_and_detail_imap_with_server("user@test.com", "cid", "rt", folder="inbox", top=1)
 
         self.assertFalse(result.get("success"))
         # logout 应该被尝试调用
@@ -199,9 +189,7 @@ class TestImapConnectionReuse(unittest.TestCase):
         mock_conn = self._setup_imap_mock(mock_imap_cls, search_ids=[b"1", b"2"])
         mock_conn.fetch.return_value = ("OK", [((b"2 (RFC822)", raw), b")")])
 
-        fetch_and_detail_imap_with_server(
-            "user@test.com", "cid", "rt", folder="inbox", top=2
-        )
+        fetch_and_detail_imap_with_server("user@test.com", "cid", "rt", folder="inbox", top=2)
 
         self.assertEqual(mock_imap_cls.call_count, 1)
         self.assertEqual(mock_conn.authenticate.call_count, 1)

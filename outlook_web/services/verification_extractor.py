@@ -441,9 +441,7 @@ def _build_code_regex(*, code_regex: str | None, code_length: str | None) -> re.
     return re.compile(r"\b\d{4,8}\b")
 
 
-def _smart_extract_code_by_keywords(
-    email_content: str, code_re: re.Pattern
-) -> Optional[str]:
+def _smart_extract_code_by_keywords(email_content: str, code_re: re.Pattern) -> Optional[str]:
     if not email_content:
         return None
 
@@ -499,9 +497,7 @@ def _fallback_extract_code(email_content: str, code_re: re.Pattern) -> Optional[
     return candidates[0] if candidates else None
 
 
-def _pick_preferred_link(
-    links: List[str], prefer_link_keywords: List[str]
-) -> Optional[str]:
+def _pick_preferred_link(links: List[str], prefer_link_keywords: List[str]) -> Optional[str]:
     if not links:
         return None
 
@@ -545,9 +541,7 @@ def extract_verification_info_with_options(
     """
     subject = str(email.get("subject") or "").strip()
     content = _extract_content_text_without_subject(email)
-    html_content = str(
-        email.get("body_html") or email.get("html_content") or ""
-    ).strip()
+    html_content = str(email.get("body_html") or email.get("html_content") or "").strip()
 
     source = str(code_source or "all").strip().lower()
     if source == "subject":
@@ -600,9 +594,7 @@ def extract_verification_info_with_options(
                         break
 
     # 总 confidence 向后兼容：取 code / link 中较高者
-    confidence = (
-        "high" if code_confidence == "high" or link_confidence == "high" else "low"
-    )
+    confidence = "high" if code_confidence == "high" or link_confidence == "high" else "low"
 
     parts: List[str] = []
     if verification_code:
@@ -623,9 +615,7 @@ def extract_verification_info_with_options(
     }
 
 
-def apply_confidence_gate(
-    extracted: Dict[str, Any], *, enforce_mutual_exclusion: bool = True
-) -> Dict[str, Any]:
+def apply_confidence_gate(extracted: Dict[str, Any], *, enforce_mutual_exclusion: bool = True) -> Dict[str, Any]:
     """
     对 extract_verification_info_with_options() 的返回结果应用置信度门控。
 
@@ -655,17 +645,10 @@ def apply_confidence_gate(
         result["verification_link"] = None
         result["link_confidence"] = "low"
 
-    parts = [
-        v
-        for v in (result.get("verification_code"), result.get("verification_link"))
-        if v
-    ]
+    parts = [v for v in (result.get("verification_code"), result.get("verification_link")) if v]
     result["formatted"] = " ".join(parts) if parts else None
     result["confidence"] = (
-        "high"
-        if result.get("code_confidence") == "high"
-        or result.get("link_confidence") == "high"
-        else "low"
+        "high" if result.get("code_confidence") == "high" or result.get("link_confidence") == "high" else "low"
     )
     return result
 
@@ -786,12 +769,8 @@ def _parse_verification_ai_content(raw_content: str) -> Optional[Dict[str, Any]]
     }
 
 
-def _call_verification_ai(
-    ai_config: Dict[str, Any], ai_input: Dict[str, Any]
-) -> Optional[Dict[str, Any]]:
-    endpoint = _normalize_verification_ai_endpoint(
-        str((ai_config or {}).get("base_url") or "")
-    )
+def _call_verification_ai(ai_config: Dict[str, Any], ai_input: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    endpoint = _normalize_verification_ai_endpoint(str((ai_config or {}).get("base_url") or ""))
     api_key = str((ai_config or {}).get("api_key") or "").strip()
     model = str((ai_config or {}).get("model") or "").strip()
     if not endpoint or not api_key or not model:
@@ -857,9 +836,7 @@ def probe_verification_ai_runtime(
     - endpoint/model/http_status/latency_ms
     - parsed_output: 合法输出时返回固定 JSON 契约对象
     """
-    endpoint = _normalize_verification_ai_endpoint(
-        str((ai_config or {}).get("base_url") or "")
-    )
+    endpoint = _normalize_verification_ai_endpoint(str((ai_config or {}).get("base_url") or ""))
     model = str((ai_config or {}).get("model") or "").strip()
     api_key = str((ai_config or {}).get("api_key") or "").strip()
 
@@ -1045,10 +1022,7 @@ def enhance_verification_with_ai_fallback(
             parts.append(str(normalized.get("verification_link")))
         normalized["formatted"] = " ".join(parts) if parts else None
         normalized["confidence"] = (
-            "high"
-            if normalized.get("code_confidence") == "high"
-            or normalized.get("link_confidence") == "high"
-            else "low"
+            "high" if normalized.get("code_confidence") == "high" or normalized.get("link_confidence") == "high" else "low"
         )
         return normalized
 

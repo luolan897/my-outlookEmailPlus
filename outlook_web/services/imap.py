@@ -39,9 +39,7 @@ def decode_header_value(header_value: str) -> str:
         for part, charset in decoded_parts:
             if isinstance(part, bytes):
                 try:
-                    decoded_string += part.decode(
-                        charset if charset else "utf-8", "replace"
-                    )
+                    decoded_string += part.decode(charset if charset else "utf-8", "replace")
                 except (LookupError, UnicodeDecodeError):
                     decoded_string += part.decode("utf-8", "replace")
             else:
@@ -67,11 +65,7 @@ def get_email_body(msg) -> str:
                     break
                 except Exception:
                     continue
-            elif (
-                content_type == "text/html"
-                and "attachment" not in content_disposition
-                and not body
-            ):
+            elif content_type == "text/html" and "attachment" not in content_disposition and not body:
                 try:
                     payload = part.get_payload(decode=True)
                     charset = part.get_content_charset() or "utf-8"
@@ -121,9 +115,7 @@ def _get_html_body(msg) -> str:
         if msg.get_content_type() == "text/html":
             payload = msg.get_payload(decode=True)
             if payload:
-                return payload.decode(
-                    msg.get_content_charset() or "utf-8", errors="replace"
-                )
+                return payload.decode(msg.get_content_charset() or "utf-8", errors="replace")
     return ""
 
 
@@ -135,22 +127,16 @@ def _parse_batch_fetch_response(all_data: list) -> List[tuple]:
 
         if isinstance(item, tuple) and len(item) == 2:
             first, second = item
-            if isinstance(first, (bytes, bytearray)) and isinstance(
-                second, (bytes, bytearray)
-            ):
+            if isinstance(first, (bytes, bytearray)) and isinstance(second, (bytes, bytearray)):
                 header = bytes(first)
                 raw_email = bytes(second)
             elif isinstance(first, tuple) and len(first) == 2:
                 nested_header, nested_raw = first
-                if isinstance(nested_header, (bytes, bytearray)) and isinstance(
-                    nested_raw, (bytes, bytearray)
-                ):
+                if isinstance(nested_header, (bytes, bytearray)) and isinstance(nested_raw, (bytes, bytearray)):
                     header = bytes(nested_header)
                     raw_email = bytes(nested_raw)
 
-        if not isinstance(header, (bytes, bytearray)) or not isinstance(
-            raw_email, (bytes, bytearray)
-        ):
+        if not isinstance(header, (bytes, bytearray)) or not isinstance(raw_email, (bytes, bytearray)):
             continue
 
         msg_id_str = header.split(b" ", 1)[0].decode("ascii", errors="ignore").strip()
@@ -260,9 +246,7 @@ def get_emails_imap(
     top: int = 20,
 ) -> Dict[str, Any]:
     """使用 IMAP 获取邮件列表（支持分页和文件夹选择）- 默认使用新版服务器"""
-    return get_emails_imap_with_server(
-        account, client_id, refresh_token, folder, skip, top, IMAP_SERVER_NEW
-    )
+    return get_emails_imap_with_server(account, client_id, refresh_token, folder, skip, top, IMAP_SERVER_NEW)
 
 
 def get_emails_imap_with_server(
@@ -296,9 +280,7 @@ def get_emails_imap_with_server(
                 if status == "OK" and folder_list:
                     for folder_item in folder_list:
                         if isinstance(folder_item, bytes):
-                            available_folders.append(
-                                folder_item.decode("utf-8", errors="ignore")
-                            )
+                            available_folders.append(folder_item.decode("utf-8", errors="ignore"))
                         else:
                             available_folders.append(str(folder_item))
 
@@ -395,11 +377,7 @@ def get_emails_imap_with_server(
                         "subject": decode_header_value(msg.get("Subject", "无主题")),
                         "from": decode_header_value(msg.get("From", "未知发件人")),
                         "date": msg.get("Date", "未知时间"),
-                        "body_preview": (
-                            body_preview[:200] + "..."
-                            if len(body_preview) > 200
-                            else body_preview
-                        ),
+                        "body_preview": (body_preview[:200] + "..." if len(body_preview) > 200 else body_preview),
                     }
                 )
             except Exception as fetch_err:
@@ -462,18 +440,14 @@ def fetch_and_detail_imap_with_server(
 
     try:
         connection = imaplib.IMAP4_SSL(server, IMAP_PORT)
-        auth_string = f"user={account}\x01auth=Bearer {access_token}\x01\x01".encode(
-            "utf-8"
-        )
+        auth_string = f"user={account}\x01auth=Bearer {access_token}\x01\x01".encode("utf-8")
         connection.authenticate("XOAUTH2", lambda x: auth_string)
 
         selected = _select_folder(connection, folder)
         if not selected:
             return {
                 "success": False,
-                "error": build_error_payload(
-                    "FOLDER_NOT_FOUND", "文件夹选择失败", "IMAPError", 500, ""
-                ),
+                "error": build_error_payload("FOLDER_NOT_FOUND", "文件夹选择失败", "IMAPError", 500, ""),
                 "emails": [],
                 "detail": None,
             }
@@ -498,9 +472,7 @@ def fetch_and_detail_imap_with_server(
         if status != "OK":
             return {"success": True, "emails": [], "detail": None}
 
-        for i, (msg_id_str, raw_email) in enumerate(
-            _parse_batch_fetch_response(all_data or [])
-        ):
+        for i, (msg_id_str, raw_email) in enumerate(_parse_batch_fetch_response(all_data or [])):
             msg = email.message_from_bytes(raw_email)
             body_preview = get_email_body(msg)
             email_item = {
@@ -508,18 +480,12 @@ def fetch_and_detail_imap_with_server(
                 "subject": decode_header_value(msg.get("Subject", "无主题")),
                 "from": decode_header_value(msg.get("From", "未知发件人")),
                 "date": msg.get("Date", "未知时间"),
-                "body_preview": body_preview[:200] + "..."
-                if len(body_preview) > 200
-                else body_preview,
+                "body_preview": body_preview[:200] + "..." if len(body_preview) > 200 else body_preview,
             }
             emails_data.append(email_item)
 
             if i == 0:
-                raw_text = (
-                    raw_email.decode("utf-8", errors="replace")
-                    if isinstance(raw_email, (bytes, bytearray))
-                    else ""
-                )
+                raw_text = raw_email.decode("utf-8", errors="replace") if isinstance(raw_email, (bytes, bytearray)) else ""
                 detail = {
                     "id": email_item["id"],
                     "subject": email_item["subject"],
@@ -536,9 +502,7 @@ def fetch_and_detail_imap_with_server(
     except imaplib.IMAP4.error as exc:
         return {
             "success": False,
-            "error": build_error_payload(
-                "AUTH_FAILED", "IMAP认证失败", "IMAP4Error", 401, str(exc)
-            ),
+            "error": build_error_payload("AUTH_FAILED", "IMAP认证失败", "IMAP4Error", 401, str(exc)),
             "emails": [],
             "detail": None,
         }
@@ -619,9 +583,7 @@ def get_email_detail_imap(
     folder: str = "inbox",
 ) -> Optional[Dict]:
     """使用 IMAP 获取邮件详情（默认使用新版服务器）。"""
-    return get_email_detail_imap_with_server(
-        account, client_id, refresh_token, message_id, folder, IMAP_SERVER_NEW
-    )
+    return get_email_detail_imap_with_server(account, client_id, refresh_token, message_id, folder, IMAP_SERVER_NEW)
 
 
 def get_email_detail_imap_with_server(
@@ -686,11 +648,7 @@ def get_email_detail_imap_with_server(
 
         raw_text = ""
         try:
-            raw_text = (
-                raw_email.decode("utf-8", errors="replace")
-                if isinstance(raw_email, (bytes, bytearray))
-                else ""
-            )
+            raw_text = raw_email.decode("utf-8", errors="replace") if isinstance(raw_email, (bytes, bytearray)) else ""
         except Exception:
             raw_text = ""
 

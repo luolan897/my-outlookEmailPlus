@@ -57,15 +57,11 @@ def _mask(value: str, head: int = 4, tail: int = 4) -> str:
 
 def main() -> None:
     base_url = os.getenv("OEP_BASE_URL", "http://127.0.0.1:5000").rstrip("/")
-    login_password = (
-        os.getenv("OEP_LOGIN_PASSWORD") or _read_login_password_from_env_file()
-    )
+    login_password = os.getenv("OEP_LOGIN_PASSWORD") or _read_login_password_from_env_file()
     target_email = (os.getenv("OEP_TARGET_EMAIL") or "").strip()
 
     if not login_password:
-        raise SystemExit(
-            "❌ 未提供登录密码：请设置 OEP_LOGIN_PASSWORD 或在 .env 中配置 LOGIN_PASSWORD"
-        )
+        raise SystemExit("❌ 未提供登录密码：请设置 OEP_LOGIN_PASSWORD 或在 .env 中配置 LOGIN_PASSWORD")
 
     s = requests.Session()
     # 避免被系统代理干扰本地联调
@@ -91,9 +87,7 @@ def main() -> None:
         "verification_ai_base_url": settings.get("verification_ai_base_url"),
         "verification_ai_model": settings.get("verification_ai_model"),
         "verification_ai_api_key_set": settings.get("verification_ai_api_key_set"),
-        "verification_ai_api_key_masked": settings.get(
-            "verification_ai_api_key_masked"
-        ),
+        "verification_ai_api_key_masked": settings.get("verification_ai_api_key_masked"),
     }
     print("status:", settings_resp.status_code)
     print(_pretty(settings_view))
@@ -144,9 +138,7 @@ def main() -> None:
     print("=" * 72)
     print("[6/6] 调用提取接口 /api/emails/<email>/extract-verification")
     email_q = urllib.parse.quote(target_email, safe="")
-    extract_url = (
-        f"{base_url}/api/emails/{email_q}/extract-verification?code_source=all"
-    )
+    extract_url = f"{base_url}/api/emails/{email_q}/extract-verification?code_source=all"
     extract_resp = s.get(extract_url, timeout=45)
     extract_json = extract_resp.json()
     print("status:", extract_resp.status_code)

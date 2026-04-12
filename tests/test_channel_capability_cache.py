@@ -19,6 +19,7 @@ class TestChannelCapabilityCache(unittest.TestCase):
         """每个测试前清空缓存"""
         try:
             from outlook_web.services.channel_capability_cache import clear_all
+
             clear_all()
         except ImportError:
             pass
@@ -26,6 +27,7 @@ class TestChannelCapabilityCache(unittest.TestCase):
     def tearDown(self):
         try:
             from outlook_web.services.channel_capability_cache import clear_all
+
             clear_all()
         except ImportError:
             pass

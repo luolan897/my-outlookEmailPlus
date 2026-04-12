@@ -49,9 +49,7 @@ def _validate_recipient(recipient: str) -> str:
     return normalized
 
 
-def _parse_int_env(
-    name: str, default: int, *, code: str, message: str, message_en: str
-) -> int:
+def _parse_int_env(name: str, default: int, *, code: str, message: str, message_en: str) -> int:
     raw_value = str(os.getenv(name, str(default))).strip() or str(default)
     try:
         value = int(raw_value)
@@ -164,9 +162,7 @@ def _normalize_smtp_transport_mode(
     return use_tls, use_ssl
 
 
-def _build_message(
-    *, recipient: str, subject: str, text_body: str, html_body: str | None = None
-) -> EmailMessage:
+def _build_message(*, recipient: str, subject: str, text_body: str, html_body: str | None = None) -> EmailMessage:
     sender = get_email_push_service_config()["sender"]
     message = EmailMessage()
     message["From"] = sender
@@ -178,20 +174,14 @@ def _build_message(
     return message
 
 
-def send_email_message(
-    *, recipient: str, subject: str, text_body: str, html_body: str | None = None
-) -> None:
+def send_email_message(*, recipient: str, subject: str, text_body: str, html_body: str | None = None) -> None:
     recipient = _validate_recipient(recipient)
     config = get_email_push_service_config()
-    message = _build_message(
-        recipient=recipient, subject=subject, text_body=text_body, html_body=html_body
-    )
+    message = _build_message(recipient=recipient, subject=subject, text_body=text_body, html_body=html_body)
 
     smtp_cls = smtplib.SMTP_SSL if config["use_ssl"] else smtplib.SMTP
     try:
-        with smtp_cls(
-            config["host"], config["port"], timeout=config["timeout"]
-        ) as client:
+        with smtp_cls(config["host"], config["port"], timeout=config["timeout"]) as client:
             if not config["use_ssl"]:
                 client.ehlo()
                 if config["use_tls"]:

@@ -75,9 +75,7 @@ class GroupVerificationPolicyRepositoryTests(unittest.TestCase):
             self.assertIsNotNone(group_id, "分组创建失败")
 
             db = get_db()
-            row = db.execute(
-                "SELECT * FROM groups WHERE id = ?", (group_id,)
-            ).fetchone()
+            row = db.execute("SELECT * FROM groups WHERE id = ?", (group_id,)).fetchone()
             self.assertIsNotNone(row)
 
             self.assertEqual(row["verification_code_length"], "6-6")

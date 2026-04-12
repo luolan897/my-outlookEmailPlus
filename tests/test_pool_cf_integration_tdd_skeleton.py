@@ -137,9 +137,7 @@ class PoolCFTddSkeletonTests(unittest.TestCase):
                         email_domain="cf-domain.com",
                     )
 
-            self.assertEqual(
-                ctx.exception.error_code, "TEMP_MAIL_PROVIDER_NOT_CONFIGURED"
-            )
+            self.assertEqual(ctx.exception.error_code, "TEMP_MAIL_PROVIDER_NOT_CONFIGURED")
 
     def test_claim_non_cf_pool_empty_returns_none(self):
         """R-CF-CLAIM-05: 非 CF provider 且池空 → 不动态创建，应返回 no_available_account（service 层）"""
@@ -165,8 +163,8 @@ class PoolCFTddSkeletonTests(unittest.TestCase):
     def test_complete_cf_deletes_remote_on_success(self):
         """R-CF-COMP-01: CF + result=success → delete_mailbox 被调用（非阻塞）"""
         with self.app.app_context():
-            from outlook_web.services import pool as pool_service
             from outlook_web.db import get_db
+            from outlook_web.services import pool as pool_service
 
             # 预置一个 claimed 的 CF 账号（字段按实现期望补齐）
             db = get_db()
@@ -188,9 +186,7 @@ class PoolCFTddSkeletonTests(unittest.TestCase):
                 ),
             )
             db.commit()
-            row = db.execute(
-                "SELECT id FROM accounts WHERE claim_token = ?", ("clm_xxx",)
-            ).fetchone()
+            row = db.execute("SELECT id FROM accounts WHERE claim_token = ?", ("clm_xxx",)).fetchone()
             account_id = int(row["id"])
 
             with patch(
@@ -212,8 +208,8 @@ class PoolCFTddSkeletonTests(unittest.TestCase):
     def test_complete_cf_deletes_remote_on_credential_invalid(self):
         """R-CF-COMP-02: CF + result=credential_invalid → delete_mailbox 被调用；本地状态为 retired"""
         with self.app.app_context():
-            from outlook_web.services import pool as pool_service
             from outlook_web.db import get_db
+            from outlook_web.services import pool as pool_service
 
             db = get_db()
             db.execute(
@@ -260,8 +256,8 @@ class PoolCFTddSkeletonTests(unittest.TestCase):
     def test_complete_cf_skip_delete_on_timeout(self):
         """R-CF-COMP-03: CF + result=verification_timeout → 不调用 delete；本地状态为 cooldown"""
         with self.app.app_context():
-            from outlook_web.services import pool as pool_service
             from outlook_web.db import get_db
+            from outlook_web.services import pool as pool_service
 
             db = get_db()
             db.execute(
@@ -282,11 +278,7 @@ class PoolCFTddSkeletonTests(unittest.TestCase):
                 ),
             )
             db.commit()
-            account_id = int(
-                db.execute(
-                    "SELECT id FROM accounts WHERE claim_token = ?", ("clm_timeout",)
-                ).fetchone()["id"]
-            )
+            account_id = int(db.execute("SELECT id FROM accounts WHERE claim_token = ?", ("clm_timeout",)).fetchone()["id"])
 
             with patch(
                 "outlook_web.services.temp_mail_provider_cf.CloudflareTempMailProvider.delete_mailbox",
@@ -307,8 +299,8 @@ class PoolCFTddSkeletonTests(unittest.TestCase):
     def test_complete_cf_delete_failure_nonblocking(self):
         """R-CF-COMP-04: delete_mailbox 返回 False / 抛异常 → complete 仍成功返回，状态流转不受影响"""
         with self.app.app_context():
-            from outlook_web.services import pool as pool_service
             from outlook_web.db import get_db
+            from outlook_web.services import pool as pool_service
 
             db = get_db()
             db.execute(
@@ -329,11 +321,7 @@ class PoolCFTddSkeletonTests(unittest.TestCase):
                 ),
             )
             db.commit()
-            account_id = int(
-                db.execute(
-                    "SELECT id FROM accounts WHERE claim_token = ?", ("clm_del_fail",)
-                ).fetchone()["id"]
-            )
+            account_id = int(db.execute("SELECT id FROM accounts WHERE claim_token = ?", ("clm_del_fail",)).fetchone()["id"])
 
             with patch(
                 "outlook_web.services.temp_mail_provider_cf.CloudflareTempMailProvider.delete_mailbox",
@@ -357,8 +345,8 @@ class PoolCFTddSkeletonTests(unittest.TestCase):
     def test_claim_cf_with_project_key_records_usage(self):
         """R-CF-PROJ-01: project_key 存在时，应记录 account_project_usage（或等价行为）"""
         with self.app.app_context():
-            from outlook_web.services import pool as pool_service
             from outlook_web.db import get_db
+            from outlook_web.services import pool as pool_service
 
             mock_result = {
                 "success": True,
@@ -388,8 +376,8 @@ class PoolCFTddSkeletonTests(unittest.TestCase):
     def test_release_clears_project_usage(self):
         """R-CF-PROJ-02: release 时 project usage 应清理逻辑不被破坏"""
         with self.app.app_context():
-            from outlook_web.services import pool as pool_service
             from outlook_web.db import get_db
+            from outlook_web.services import pool as pool_service
 
             # 先 claim 一个 CF
             mock_result = {
@@ -485,9 +473,9 @@ class PoolServiceProviderValidationTddSkeletonTests(unittest.TestCase):
     def test_claim_random_maps_repo_error_code(self):
         """S-CF-VAL-03: repo 抛 PoolRepositoryError → service 转换为 PoolServiceError 且保留 error_code"""
         with self.app.app_context():
+            from outlook_web.repositories.pool import PoolRepositoryError
             from outlook_web.services import pool as pool_service
             from outlook_web.services.pool import PoolServiceError
-            from outlook_web.repositories.pool import PoolRepositoryError
 
             # PoolRepositoryError 在 repo 层抛出时，service 层应捕获并转换为 PoolServiceError
             with patch(
@@ -535,12 +523,8 @@ class ExternalPoolApiContractTddSkeletonTests(unittest.TestCase):
             settings_repo.set_setting("pool_external_enabled", "true")
             settings_repo.set_setting("external_api_ip_whitelist", "[]")
             settings_repo.set_setting("external_api_disable_pool_claim_random", "false")
-            settings_repo.set_setting(
-                "external_api_disable_pool_claim_release", "false"
-            )
-            settings_repo.set_setting(
-                "external_api_disable_pool_claim_complete", "false"
-            )
+            settings_repo.set_setting("external_api_disable_pool_claim_release", "false")
+            settings_repo.set_setting("external_api_disable_pool_claim_complete", "false")
             settings_repo.set_setting("external_api_disable_pool_stats", "false")
 
             # CF Worker 配置（占位）
@@ -591,9 +575,7 @@ class ExternalPoolApiContractTddSkeletonTests(unittest.TestCase):
 
         with patch(
             "outlook_web.controllers.external_pool.claim_random",
-            side_effect=PoolServiceError(
-                "invalid provider", "invalid_provider", http_status=400
-            ),
+            side_effect=PoolServiceError("invalid provider", "invalid_provider", http_status=400),
         ):
             resp = client.post(
                 "/api/external/pool/claim-random",
@@ -619,9 +601,7 @@ class ExternalPoolApiContractTddSkeletonTests(unittest.TestCase):
 
         with patch(
             "outlook_web.controllers.external_pool.claim_random",
-            side_effect=PoolServiceError(
-                "upstream timeout", "upstream_timeout", http_status=502
-            ),
+            side_effect=PoolServiceError("upstream timeout", "upstream_timeout", http_status=502),
         ):
             resp = client.post(
                 "/api/external/pool/claim-random",

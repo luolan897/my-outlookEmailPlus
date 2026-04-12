@@ -68,9 +68,7 @@ def insert_claimed_account(
 
     # 生成 claim_token
     now_str = _utcnow().isoformat() + "Z"
-    lease_expires_at_str = (
-        _utcnow() + timedelta(seconds=lease_seconds)
-    ).isoformat() + "Z"
+    lease_expires_at_str = (_utcnow() + timedelta(seconds=lease_seconds)).isoformat() + "Z"
     token = "clm_" + secrets.token_urlsafe(9)
 
     # 序列化 meta（明文 JSON）
@@ -78,9 +76,7 @@ def insert_claimed_account(
     if isinstance(meta_obj, str):
         temp_mail_meta_json = meta_obj
     else:
-        temp_mail_meta_json = (
-            json.dumps(meta_obj, ensure_ascii=False) if meta_obj else "{}"
-        )
+        temp_mail_meta_json = json.dumps(meta_obj, ensure_ascii=False) if meta_obj else "{}"
 
     try:
         conn.execute("BEGIN IMMEDIATE")
@@ -212,9 +208,7 @@ def claim_atomic(
             params.append(tag_name)
 
     if exclude_recent_minutes and exclude_recent_minutes > 0:
-        cutoff = (
-            _utcnow() - timedelta(minutes=exclude_recent_minutes)
-        ).isoformat() + "Z"
+        cutoff = (_utcnow() - timedelta(minutes=exclude_recent_minutes)).isoformat() + "Z"
         sql += " AND (a.last_claimed_at IS NULL OR a.last_claimed_at < ?)"
         params.append(cutoff)
 
@@ -246,9 +240,7 @@ def claim_atomic(
         return None
 
     now_str = _utcnow().isoformat() + "Z"
-    lease_expires_at_str = (
-        _utcnow() + timedelta(seconds=lease_seconds)
-    ).isoformat() + "Z"
+    lease_expires_at_str = (_utcnow() + timedelta(seconds=lease_seconds)).isoformat() + "Z"
     token = "clm_" + secrets.token_urlsafe(9)
 
     conn.execute(

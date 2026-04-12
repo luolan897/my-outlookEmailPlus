@@ -69,27 +69,21 @@ def _validate_caller_id(caller_id: str) -> None:
     if not caller_id or not caller_id.strip():
         raise PoolServiceError("caller_id 不能为空", "caller_id_empty")
     if len(caller_id) > CALLER_ID_MAX_LEN:
-        raise PoolServiceError(
-            f"caller_id 超过最大长度 {CALLER_ID_MAX_LEN}", "caller_id_too_long"
-        )
+        raise PoolServiceError(f"caller_id 超过最大长度 {CALLER_ID_MAX_LEN}", "caller_id_too_long")
 
 
 def _validate_task_id(task_id: str) -> None:
     if not task_id or not task_id.strip():
         raise PoolServiceError("task_id 不能为空", "task_id_empty")
     if len(task_id) > TASK_ID_MAX_LEN:
-        raise PoolServiceError(
-            f"task_id 超过最大长度 {TASK_ID_MAX_LEN}", "task_id_too_long"
-        )
+        raise PoolServiceError(f"task_id 超过最大长度 {TASK_ID_MAX_LEN}", "task_id_too_long")
 
 
 def _validate_lease_seconds(lease_seconds: int, max_lease: int = 3600) -> None:
     if lease_seconds <= 0:
         raise PoolServiceError("lease_seconds 必须大于 0", "lease_seconds_invalid")
     if lease_seconds > max_lease:
-        raise PoolServiceError(
-            f"lease_seconds 不能超过 {max_lease} 秒", "lease_seconds_too_large"
-        )
+        raise PoolServiceError(f"lease_seconds 不能超过 {max_lease} 秒", "lease_seconds_too_large")
 
 
 def _validate_project_key(project_key: Optional[str]) -> Optional[str]:
@@ -99,9 +93,7 @@ def _validate_project_key(project_key: Optional[str]) -> Optional[str]:
     if not pk:
         return None
     if len(pk) > PROJECT_KEY_MAX_LEN:
-        raise PoolServiceError(
-            f"project_key 超过最大长度 {PROJECT_KEY_MAX_LEN}", "project_key_too_long"
-        )
+        raise PoolServiceError(f"project_key 超过最大长度 {PROJECT_KEY_MAX_LEN}", "project_key_too_long")
     return pk
 
 
@@ -112,9 +104,7 @@ def _validate_email_domain(email_domain: Optional[str]) -> Optional[str]:
     if not d:
         return None
     if len(d) > EMAIL_DOMAIN_MAX_LEN:
-        raise PoolServiceError(
-            f"email_domain 超过最大长度 {EMAIL_DOMAIN_MAX_LEN}", "email_domain_too_long"
-        )
+        raise PoolServiceError(f"email_domain 超过最大长度 {EMAIL_DOMAIN_MAX_LEN}", "email_domain_too_long")
     return d
 
 
@@ -172,9 +162,7 @@ def claim_random(
 
         # 池为空：仅当显式指定 provider=cloudflare_temp_mail 时，动态创建 CF 临时邮箱
         if provider == "cloudflare_temp_mail":
-            created_email, created_meta = _create_cf_mailbox_for_pool(
-                email_domain=email_domain
-            )
+            created_email, created_meta = _create_cf_mailbox_for_pool(email_domain=email_domain)
 
             try:
                 inserted = pool_repo.insert_claimed_account(
@@ -196,13 +184,9 @@ def claim_random(
                 raise PoolServiceError(str(e), e.error_code, http_status=500) from e
             except Exception as e:
                 _delete_cf_mailbox_nonblocking(email=created_email, meta=created_meta)
-                raise PoolServiceError(
-                    "动态写入 CF 邮箱失败", "db_error", http_status=500
-                ) from e
+                raise PoolServiceError("动态写入 CF 邮箱失败", "db_error", http_status=500) from e
 
-        raise PoolServiceError(
-            "池中没有符合条件的可用邮箱", "no_available_account", http_status=200
-        )
+        raise PoolServiceError("池中没有符合条件的可用邮箱", "no_available_account", http_status=200)
     finally:
         conn.close()
 
@@ -221,9 +205,7 @@ def release_claim(
     if not claim_token or not claim_token.strip():
         raise PoolServiceError("claim_token 不能为空", "claim_token_empty")
     if reason and len(reason) > REASON_MAX_LEN:
-        raise PoolServiceError(
-            f"reason 超过最大长度 {REASON_MAX_LEN}", "reason_too_long"
-        )
+        raise PoolServiceError(f"reason 超过最大长度 {REASON_MAX_LEN}", "reason_too_long")
 
     conn = create_sqlite_connection()
     try:
@@ -240,9 +222,7 @@ def release_claim(
                 http_status=409,
             )
         if row["claim_token"] != claim_token:
-            raise PoolServiceError(
-                "claim_token 不匹配", "token_mismatch", http_status=403
-            )
+            raise PoolServiceError("claim_token 不匹配", "token_mismatch", http_status=403)
         expected_claimed_by = f"{caller_id}:{task_id}"
         if row["claimed_by"] != expected_claimed_by:
             raise PoolServiceError(
@@ -280,9 +260,7 @@ def complete_claim(
             "invalid_result",
         )
     if detail and len(detail) > DETAIL_MAX_LEN:
-        raise PoolServiceError(
-            f"detail 超过最大长度 {DETAIL_MAX_LEN}", "detail_too_long"
-        )
+        raise PoolServiceError(f"detail 超过最大长度 {DETAIL_MAX_LEN}", "detail_too_long")
 
     conn = create_sqlite_connection()
     try:
@@ -304,9 +282,7 @@ def complete_claim(
                 http_status=409,
             )
         if row["claim_token"] != claim_token:
-            raise PoolServiceError(
-                "claim_token 不匹配", "token_mismatch", http_status=403
-            )
+            raise PoolServiceError("claim_token 不匹配", "token_mismatch", http_status=403)
         expected_claimed_by = f"{caller_id}:{task_id}"
         if row["claimed_by"] != expected_claimed_by:
             raise PoolServiceError(
@@ -316,13 +292,9 @@ def complete_claim(
             )
 
         # complete 先更新本地状态（事务内），再做 CF 删除（非阻塞）
-        new_status = pool_repo.complete(
-            conn, account_id, claim_token, caller_id, task_id, result, detail
-        )
+        new_status = pool_repo.complete(conn, account_id, claim_token, caller_id, task_id, result, detail)
 
-        if (
-            row["provider"] or ""
-        ).strip() == "cloudflare_temp_mail" and result in CF_DELETE_ON_RESULTS:
+        if (row["provider"] or "").strip() == "cloudflare_temp_mail" and result in CF_DELETE_ON_RESULTS:
             meta_str = row["temp_mail_meta"]
             meta_obj = {}
             if isinstance(meta_str, str) and meta_str.strip():
@@ -349,14 +321,10 @@ def _create_cf_mailbox_for_pool(*, email_domain: Optional[str]) -> tuple[str, di
     except Exception as e:
         # 上游异常：统一映射为 UPSTREAM_SERVER_ERROR
         logger.warning("[pool] CF create_mailbox exception: %s", e)
-        raise PoolServiceError(
-            "CF Worker 创建邮箱异常", "UPSTREAM_SERVER_ERROR", http_status=500
-        ) from e
+        raise PoolServiceError("CF Worker 创建邮箱异常", "UPSTREAM_SERVER_ERROR", http_status=500) from e
 
     if not isinstance(result, dict):
-        raise PoolServiceError(
-            "CF Worker 返回格式错误", "UPSTREAM_BAD_PAYLOAD", http_status=500
-        )
+        raise PoolServiceError("CF Worker 返回格式错误", "UPSTREAM_BAD_PAYLOAD", http_status=500)
 
     if not result.get("success"):
         error_code = str(result.get("error_code") or "UPSTREAM_SERVER_ERROR")
@@ -365,9 +333,7 @@ def _create_cf_mailbox_for_pool(*, email_domain: Optional[str]) -> tuple[str, di
 
     email = str(result.get("email") or "").strip()
     if not email:
-        raise PoolServiceError(
-            "CF Worker 未返回邮箱地址", "UPSTREAM_BAD_PAYLOAD", http_status=500
-        )
+        raise PoolServiceError("CF Worker 未返回邮箱地址", "UPSTREAM_BAD_PAYLOAD", http_status=500)
 
     meta = result.get("meta") or {}
     if isinstance(meta, str):
@@ -428,9 +394,7 @@ def append_claim_read_context(
         return
     conn = create_sqlite_connection()
     try:
-        pool_repo.append_claim_read_context(
-            conn, account_id, claim_token, caller_id, task_id, detail
-        )
+        pool_repo.append_claim_read_context(conn, account_id, claim_token, caller_id, task_id, detail)
     finally:
         conn.close()
 

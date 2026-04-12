@@ -26,9 +26,7 @@ class DbMigrationTaskTokenUniqueTests(unittest.TestCase):
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
                 """)
-            conn.execute(
-                "INSERT OR REPLACE INTO settings (key, value) VALUES ('db_schema_version', '14')"
-            )
+            conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('db_schema_version', '14')")
 
             # 旧库：temp_emails 有 task_token 列，但没有 UNIQUE 约束。
             conn.execute("""
@@ -75,9 +73,7 @@ class DbMigrationTaskTokenUniqueTests(unittest.TestCase):
             conn = sqlite3.connect(str(db_path))
             try:
                 # 失败时应记录到 schema_migrations，且不要创建唯一索引。
-                row = conn.execute(
-                    "SELECT status, error FROM schema_migrations ORDER BY id DESC LIMIT 1"
-                ).fetchone()
+                row = conn.execute("SELECT status, error FROM schema_migrations ORDER BY id DESC LIMIT 1").fetchone()
                 self.assertIsNotNone(row)
                 self.assertEqual(row[0], "failed")
                 self.assertIn("task_token", str(row[1] or ""))
@@ -94,16 +90,13 @@ class DbMigrationTaskTokenUniqueTests(unittest.TestCase):
             db_path = Path(tmp) / "legacy.db"
             self._seed_legacy_db(db_path, duplicate_token=False)
 
-            from outlook_web.db import init_db
-            from outlook_web.db import DB_SCHEMA_VERSION
+            from outlook_web.db import DB_SCHEMA_VERSION, init_db
 
             init_db(database_path=str(db_path))
 
             conn = sqlite3.connect(str(db_path))
             try:
-                version_row = conn.execute(
-                    "SELECT value FROM settings WHERE key = 'db_schema_version'"
-                ).fetchone()
+                version_row = conn.execute("SELECT value FROM settings WHERE key = 'db_schema_version'").fetchone()
                 self.assertIsNotNone(version_row)
                 # init_db 会升级到当前最新 schema 版本（不应固定断言到历史版本）
                 self.assertEqual(str(version_row[0]), str(DB_SCHEMA_VERSION))

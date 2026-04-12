@@ -66,12 +66,8 @@ class VerificationAiJsonContractTests(unittest.TestCase):
                 code_source="all",
             )
 
-        self.assertEqual(
-            enhanced.get("verification_code"), base.get("verification_code")
-        )
-        self.assertEqual(
-            enhanced.get("verification_link"), base.get("verification_link")
-        )
+        self.assertEqual(enhanced.get("verification_code"), base.get("verification_code"))
+        self.assertEqual(enhanced.get("verification_link"), base.get("verification_link"))
 
     @patch("outlook_web.services.verification_extractor.requests.post")
     def test_ai_link_does_not_override_when_code_exists(self, mock_post):

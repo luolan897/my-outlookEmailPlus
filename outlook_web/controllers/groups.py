@@ -121,11 +121,8 @@ def api_add_group() -> Any:
                 "has_description": bool(description),
                 "color": color,
                 "proxy_configured": bool(proxy_url),
-                "verification_code_length": str(verification_code_length or "").strip()
-                or "6-6",
-                "verification_regex_configured": bool(
-                    str(verification_code_regex or "").strip()
-                ),
+                "verification_code_length": str(verification_code_length or "").strip() or "6-6",
+                "verification_regex_configured": bool(str(verification_code_regex or "").strip()),
             },
             ensure_ascii=False,
         )
@@ -217,11 +214,8 @@ def api_update_group(group_id: int) -> Any:
                 "has_description": bool(description),
                 "color": color,
                 "proxy_configured": bool(proxy_url),
-                "verification_code_length": str(verification_code_length or "").strip()
-                or "6-6",
-                "verification_regex_configured": bool(
-                    str(verification_code_regex or "").strip()
-                ),
+                "verification_code_length": str(verification_code_length or "").strip() or "6-6",
+                "verification_regex_configured": bool(str(verification_code_regex or "").strip()),
             },
             ensure_ascii=False,
         )
@@ -340,16 +334,12 @@ def api_export_group(group_id: int) -> Any:
     content = "\n".join(lines)
 
     # 生成文件名（使用 URL 编码处理中文）
-    filename = (
-        f"{group['name']}_accounts_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-    )
+    filename = f"{group['name']}_accounts_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
     encoded_filename = quote(filename)
 
     # 返回文件下载响应
     return Response(
         content,
         mimetype="text/plain; charset=utf-8",
-        headers={
-            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
-        },
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"},
     )
