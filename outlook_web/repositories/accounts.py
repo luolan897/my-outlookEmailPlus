@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import sqlite3
 from typing import Any, Dict, List, Optional
 
@@ -17,7 +16,12 @@ COMPACT_SUMMARY_FIELDS = (
     "latest_verification_received_at",
 )
 
-logger = logging.getLogger(__name__)
+VERIFICATION_CHANNEL_FIELDS = (
+    "graph_inbox",
+    "graph_junk",
+    "imap_new",
+    "imap_old",
+)
 
 
 def _normalize_account_email_domain(email: str) -> str:
@@ -148,6 +152,104 @@ def get_account_by_id(account_id: int) -> Optional[Dict]:
     _decrypt_account_field(account, "refresh_token")
     _decrypt_account_field(account, "imap_password")
     return account
+
+
+def get_preferred_verification_channel(account_id: int) -> Optional[str]:
+    db = get_db()
+    row = db.execute(
+        "SELECT preferred_verification_channel FROM accounts WHERE id = ?",
+        (account_id,),
+    ).fetchone()
+    if not row:
+        return None
+    value = str(row["preferred_verification_channel"] or "").strip().lower()
+    if value in VERIFICATION_CHANNEL_FIELDS:
+        return value
+    return None
+
+
+def update_preferred_verification_channel(account_id: int, channel: Optional[str]) -> bool:
+    normalized = str(channel or "").strip().lower()
+    value_to_store: Optional[str]
+    if not normalized:
+        value_to_store = None
+    elif normalized in VERIFICATION_CHANNEL_FIELDS:
+        value_to_store = normalized
+    else:
+        return False
+
+    db = get_db()
+    cursor = db.execute(
+        """
+        UPDATE accounts
+        SET preferred_verification_channel = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+        """,
+        (value_to_store, account_id),
+    )
+    db.commit()
+    return cursor.rowcount > 0
+
+
+def _decrypt_refresh_token_or_raw(value: Any) -> str:
+    """安全解密 refresh_token，解密失败时返回原文（兼容历史明文存量数据）。"""
+    if not value:
+        return ""
+    try:
+        return str(decrypt_data(value) or "")
+    except Exception:
+        return str(value or "")
+
+
+def update_refresh_token_if_changed(account_id: int, new_refresh_token: str) -> bool:
+    """当 refresh_token 发生变化时更新数据库（统一 token 持久化入口）。"""
+    token = str(new_refresh_token or "").strip()
+    if not token:
+        return False
+
+    db = get_db()
+    row = db.execute(
+        "SELECT refresh_token FROM accounts WHERE id = ?",
+        (account_id,),
+    ).fetchone()
+    if not row:
+        return False
+
+    current_token = _decrypt_refresh_token_or_raw(row["refresh_token"])
+    if token == current_token:
+        return False
+
+    try:
+        db.execute(
+            """
+            UPDATE accounts
+            SET refresh_token = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (encrypt_data(token), account_id),
+        )
+        db.commit()
+        return True
+    except Exception:
+        return False
+
+
+def touch_last_refresh_at(account_id: int) -> bool:
+    """仅刷新账号的 last_refresh_at 时间戳。"""
+    db = get_db()
+    try:
+        cursor = db.execute(
+            """
+            UPDATE accounts
+            SET last_refresh_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (account_id,),
+        )
+        db.commit()
+        return cursor.rowcount > 0
+    except Exception:
+        return False
 
 
 def add_account(
@@ -327,17 +429,10 @@ def delete_account_by_id(account_id: int) -> bool:
     """删除邮箱账号"""
     db = get_db()
     try:
-        db.execute("DELETE FROM account_claim_logs WHERE account_id = ?", (account_id,))
-        db.execute("DELETE FROM account_project_usage WHERE account_id = ?", (account_id,))
-        cursor = db.execute("DELETE FROM accounts WHERE id = ?", (account_id,))
+        db.execute("DELETE FROM accounts WHERE id = ?", (account_id,))
         db.commit()
-        return cursor.rowcount > 0
+        return True
     except Exception:
-        try:
-            db.rollback()
-        except Exception:
-            pass
-        logger.exception("delete_account_by_id failed: account_id=%s", account_id)
         return False
 
 
@@ -345,12 +440,10 @@ def delete_account_by_email(email_addr: str) -> bool:
     """根据邮箱地址删除账号"""
     db = get_db()
     try:
-        row = db.execute("SELECT id FROM accounts WHERE email = ?", (email_addr,)).fetchone()
-        if not row:
-            return False
-        return delete_account_by_id(int(row["id"]))
+        db.execute("DELETE FROM accounts WHERE email = ?", (email_addr,))
+        db.commit()
+        return True
     except Exception:
-        logger.exception("delete_account_by_email failed: email=%s", email_addr)
         return False
 
 

@@ -18,7 +18,7 @@ OutlookMail Plus 是一款面向个人与团队的注册邮箱管理器。
 
 ## 演示站点
 
-演示站点：https://demo.outlookmailplus.tech/
+演示站点：https://gbcoinystsyz.ap-southeast-1.clawcloudrun.com
 登录密码：`12345678`
 
 站点内置 10 个邮箱账号用于演示，数据会定期重置。请勿删除演示账号或将其用于个人用途。
@@ -42,7 +42,7 @@ OutlookMail Plus 是一款面向个人与团队的注册邮箱管理器。
 
 重点包括：
 
-- 当前稳定版本：`v1.14.0`
+- 当前稳定版本：`v1.13.0`
 
 **一键更新**
 - 支持两种更新方式：Watchtower（推荐）和 Docker API 自更新（高级）

@@ -1603,6 +1603,44 @@ ${details}
                     // 密码不回显
                     document.getElementById('settingsPassword').value = '';
 
+                    const verificationAiEnabledEl = document.getElementById('settingsVerificationAiEnabled');
+                    if (verificationAiEnabledEl) {
+                        verificationAiEnabledEl.checked = !!data.settings.verification_ai_enabled;
+                    }
+
+                    const verificationAiBaseUrlEl = document.getElementById('settingsVerificationAiBaseUrl');
+                    if (verificationAiBaseUrlEl) {
+                        verificationAiBaseUrlEl.value = data.settings.verification_ai_base_url || '';
+                    }
+
+                    const verificationAiModelEl = document.getElementById('settingsVerificationAiModel');
+                    if (verificationAiModelEl) {
+                        verificationAiModelEl.value = data.settings.verification_ai_model || '';
+                    }
+
+                    const verificationAiApiKeyEl = document.getElementById('settingsVerificationAiApiKey');
+                    if (verificationAiApiKeyEl) {
+                        const maskedValue = data.settings.verification_ai_api_key_masked || '';
+                        verificationAiApiKeyEl.value = maskedValue;
+                        verificationAiApiKeyEl.dataset.maskedValue = maskedValue;
+                        verificationAiApiKeyEl.dataset.isSet = data.settings.verification_ai_api_key_set ? 'true' : 'false';
+                    }
+
+                    const verificationAiApiKeyHintEl = document.getElementById('verificationAiApiKeyHint');
+                    if (verificationAiApiKeyHintEl) {
+                        if (data.settings.verification_ai_api_key_set) {
+                            verificationAiApiKeyHintEl.textContent = `已设置：${data.settings.verification_ai_api_key_masked || ''}`;
+                        } else {
+                            verificationAiApiKeyHintEl.textContent = '未设置';
+                        }
+                    }
+
+                    const verificationAiTestResultEl = document.getElementById('verificationAiTestResult');
+                    if (verificationAiTestResultEl) {
+                        verificationAiTestResultEl.textContent = '建议先保存配置再测试。';
+                        verificationAiTestResultEl.style.color = 'var(--text-secondary, #666)';
+                    }
+
                     // v0.3: Provider 选择器改为单选按钮
                     const rawProvider = data.settings.temp_mail_provider || 'legacy_bridge';
                     const mappedProvider = (rawProvider === 'custom_domain_temp_mail' || rawProvider === 'legacy_bridge' || rawProvider === 'legacy_gptmail' || rawProvider === 'gptmail')
@@ -1989,6 +2027,18 @@ ${details}
         async function saveSettings() {
             const password = document.getElementById('settingsPassword').value;
 
+            const verificationAiEnabledEl = document.getElementById('settingsVerificationAiEnabled');
+            const verificationAiBaseUrlEl = document.getElementById('settingsVerificationAiBaseUrl');
+            const verificationAiApiKeyEl = document.getElementById('settingsVerificationAiApiKey');
+            const verificationAiModelEl = document.getElementById('settingsVerificationAiModel');
+
+            const verificationAiEnabled = verificationAiEnabledEl ? verificationAiEnabledEl.checked : false;
+            const verificationAiBaseUrl = verificationAiBaseUrlEl ? verificationAiBaseUrlEl.value.trim() : '';
+            const verificationAiModel = verificationAiModelEl ? verificationAiModelEl.value.trim() : '';
+            const verificationAiApiKey = verificationAiApiKeyEl ? verificationAiApiKeyEl.value.trim() : '';
+            const verificationAiApiKeyMasked = verificationAiApiKeyEl ? (verificationAiApiKeyEl.dataset.maskedValue || '') : '';
+            const verificationAiApiKeyIsSet = verificationAiApiKeyEl ? verificationAiApiKeyEl.dataset.isSet === 'true' : false;
+
             // v0.3: Provider 改为 radio button
             const tempMailProviderRadio = document.querySelector('input[name="tempMailProvider"]:checked');
             const tempMailApiBaseUrlEl = document.getElementById('settingsTempMailApiBaseUrl');
@@ -2029,6 +2079,30 @@ ${details}
             // 只有输入了密码才更新密码
             if (password) {
                 settings.login_password = password;
+            }
+
+            settings.verification_ai_enabled = verificationAiEnabled;
+            settings.verification_ai_base_url = verificationAiBaseUrl;
+            settings.verification_ai_model = verificationAiModel;
+
+            if (!(verificationAiApiKeyIsSet && verificationAiApiKey && verificationAiApiKey === verificationAiApiKeyMasked)) {
+                settings.verification_ai_api_key = verificationAiApiKey;
+            }
+
+            if (verificationAiEnabled) {
+                if (!verificationAiBaseUrl) {
+                    showToast('请填写 AI Base URL', 'error');
+                    return;
+                }
+                if (!verificationAiModel) {
+                    showToast('请填写 AI 模型 ID', 'error');
+                    return;
+                }
+                const hasApiKey = !!verificationAiApiKey || (verificationAiApiKeyIsSet && verificationAiApiKey === verificationAiApiKeyMasked);
+                if (!hasApiKey) {
+                    showToast('请填写 AI API Key', 'error');
+                    return;
+                }
             }
 
             settings.temp_mail_provider = tempMailProviderRadio ? (tempMailProviderRadio.value.trim() || 'legacy_bridge') : 'legacy_bridge';
@@ -2392,6 +2466,71 @@ ${details}
                 showToast(`${translateAppTextLocal('请求失败')}: ${e.message}`, 'error');
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = translateAppTextLocal('📨 发送测试邮件'); }
+            }
+        }
+
+        async function testVerificationAiConfig() {
+            const btn = document.getElementById('btnTestVerificationAi');
+            const resultEl = document.getElementById('verificationAiTestResult');
+            if (btn) { btn.disabled = true; btn.textContent = translateAppTextLocal('⏳ 测试中…'); }
+            if (resultEl) {
+                resultEl.textContent = '正在验证已保存的 AI 配置连通性...';
+                resultEl.style.color = 'var(--text-secondary, #666)';
+            }
+
+            try {
+                const resp = await fetch('/api/settings/verification-ai-test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const data = await resp.json();
+
+                if (!data.success) {
+                    handleApiError(data, 'AI 配置测试失败');
+                    if (resultEl) {
+                        resultEl.textContent = '❌ AI 配置测试失败';
+                        resultEl.style.color = 'var(--danger, red)';
+                    }
+                    return;
+                }
+
+                const probe = data.probe || {};
+                if (data.ok) {
+                    const parsed = probe.parsed_output || {};
+                    const code = parsed.verification_code || '-';
+                    const confidence = parsed.confidence || '-';
+                    const latency = probe.latency_ms || 0;
+                    const connectivityOnly = data.connectivity_ok && !data.contract_ok;
+                    if (resultEl) {
+                        if (connectivityOnly) {
+                            resultEl.textContent = `✅ 连通正常（${latency}ms，HTTP ${probe.http_status || 200}）；契约校验未通过：${probe.error || '-'}`;
+                            resultEl.style.color = 'var(--warning, #ff8c00)';
+                        } else {
+                            resultEl.textContent = `✅ 可用（${latency}ms，code=${code}，confidence=${confidence}）`;
+                            resultEl.style.color = 'var(--success, green)';
+                        }
+                    }
+                    showToast(connectivityOnly ? 'AI 连通性测试成功' : 'AI 配置测试成功', 'success');
+                    return;
+                }
+
+                const message = probe.message || 'AI 配置测试失败';
+                const detail = probe.error ? `（${probe.error}）` : '';
+                if (resultEl) {
+                    resultEl.textContent = `❌ ${message}${detail}`;
+                    resultEl.style.color = 'var(--danger, red)';
+                }
+                showToast(message, 'warning');
+            } catch (e) {
+                const msg = `${translateAppTextLocal('请求失败')}: ${e.message}`;
+                if (resultEl) {
+                    resultEl.textContent = `❌ ${msg}`;
+                    resultEl.style.color = 'var(--danger, red)';
+                }
+                showToast(msg, 'error');
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = translateAppTextLocal('🤖 测试 AI 配置'); }
             }
         }
 

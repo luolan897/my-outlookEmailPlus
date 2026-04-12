@@ -9,31 +9,11 @@ from outlook_web.services.http import get_response_details
 
 # Token 端点
 TOKEN_URL_GRAPH = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
+GRAPH_DEFAULT_SCOPE = "https://graph.microsoft.com/.default"
+GRAPH_MAIL_READ_SCOPES = ("Mail.Read", "Mail.ReadWrite")
 
-# Graph API 返回 401 时的状态码（可能是 token 过期，也可能是权限不足，需进一步解析响应体区分）
+# Graph API 返回 401 时表示账号授权失效（与 token endpoint 失败不同）
 GRAPH_AUTH_EXPIRED_STATUS = 401
-
-# 表示 token 真正过期的 Graph API error code；权限不足（如 ErrorAccessDenied）不在此列
-_GRAPH_TOKEN_EXPIRED_CODES = {
-    "InvalidAuthenticationToken",
-    "Authentication.TokenExpired",
-    "TokenExpired",
-}
-
-
-def _is_graph_auth_expired(status_code: int, details: Any) -> bool:
-    """判断 Graph API 401 是 token 真正过期，而非权限不足。
-
-    - 权限不足（ErrorAccessDenied 等）→ False，IMAP 仍可回退
-    - token 真正过期 → True
-    - 无法解析响应体 → False（保守策略：不阻断 IMAP 回退）
-    """
-    if status_code != GRAPH_AUTH_EXPIRED_STATUS:
-        return False
-    if isinstance(details, dict):
-        error_code = details.get("error", {}).get("code", "")
-        return error_code in _GRAPH_TOKEN_EXPIRED_CODES
-    return False
 
 
 def build_proxies(proxy_url: str) -> Optional[Dict[str, str]]:
@@ -43,7 +23,9 @@ def build_proxies(proxy_url: str) -> Optional[Dict[str, str]]:
     return {"http": proxy_url, "https": proxy_url}
 
 
-def get_access_token_graph_result(client_id: str, refresh_token: str, proxy_url: str = None) -> Dict[str, Any]:
+def get_access_token_graph_result(
+    client_id: str, refresh_token: str, proxy_url: str = None
+) -> Dict[str, Any]:
     """获取 Graph API access_token（包含错误详情）"""
     try:
         proxies = build_proxies(proxy_url)
@@ -53,7 +35,7 @@ def get_access_token_graph_result(client_id: str, refresh_token: str, proxy_url:
                 "client_id": client_id,
                 "grant_type": "refresh_token",
                 "refresh_token": refresh_token,
-                "scope": "https://graph.microsoft.com/.default",
+                "scope": GRAPH_DEFAULT_SCOPE,
             },
             timeout=30,
             proxies=proxies,
@@ -92,6 +74,8 @@ def get_access_token_graph_result(client_id: str, refresh_token: str, proxy_url:
             "success": True,
             "access_token": access_token,
             "refresh_token": new_refresh_token,
+            "new_refresh_token": new_refresh_token,
+            "scope": payload.get("scope", ""),
         }
     except Exception as exc:
         return {
@@ -106,7 +90,14 @@ def get_access_token_graph_result(client_id: str, refresh_token: str, proxy_url:
         }
 
 
-def get_access_token_graph(client_id: str, refresh_token: str, proxy_url: str = None) -> Optional[str]:
+def has_mail_read_permission(scope: Any) -> bool:
+    scope_str = str(scope or "")
+    return any(mail_scope in scope_str for mail_scope in GRAPH_MAIL_READ_SCOPES)
+
+
+def get_access_token_graph(
+    client_id: str, refresh_token: str, proxy_url: str = None
+) -> Optional[str]:
     """获取 Graph API access_token"""
     result = get_access_token_graph_result(client_id, refresh_token, proxy_url)
     if result.get("success"):
@@ -128,6 +119,20 @@ def get_emails_graph(
         return {"success": False, "error": token_result.get("error")}
 
     access_token = token_result.get("access_token")
+    scope = token_result.get("scope", "")
+    if not has_mail_read_permission(scope):
+        return {
+            "success": False,
+            "auth_expired": True,
+            "no_mail_permission": True,
+            "error": build_error_payload(
+                "NO_MAIL_PERMISSION",
+                "此账号未授予邮件读取权限 (scope 中不含 Mail.Read)",
+                "PermissionError",
+                403,
+                f"scope={scope}",
+            ),
+        }
 
     try:
         folder_map = {
@@ -151,13 +156,15 @@ def get_emails_graph(
         }
 
         proxies = build_proxies(proxy_url)
-        res = requests.get(url, headers=headers, params=params, timeout=30, proxies=proxies)
+        res = requests.get(
+            url, headers=headers, params=params, timeout=30, proxies=proxies
+        )
 
         if res.status_code != 200:
             details = get_response_details(res)
             return {
                 "success": False,
-                "auth_expired": _is_graph_auth_expired(res.status_code, details),
+                "auth_expired": res.status_code == GRAPH_AUTH_EXPIRED_STATUS,
                 "error": build_error_payload(
                     "EMAIL_FETCH_FAILED",
                     "获取邮件失败，请检查账号配置",
@@ -207,7 +214,9 @@ def get_email_detail_graph(
         }
 
         proxies = build_proxies(proxy_url)
-        res = requests.get(url, headers=headers, params=params, timeout=30, proxies=proxies)
+        res = requests.get(
+            url, headers=headers, params=params, timeout=30, proxies=proxies
+        )
 
         if res.status_code != 200:
             return None
@@ -246,9 +255,13 @@ def get_email_raw_graph(
         return None
 
 
-def test_refresh_token(client_id: str, refresh_token: str, proxy_url: str = None) -> tuple[bool, str | None]:
+def test_refresh_token(
+    client_id: str, refresh_token: str, proxy_url: str = None
+) -> tuple[bool, str | None]:
     """测试 refresh token 是否有效，返回 (是否成功, 错误信息)"""
-    ok, err, _new_refresh_token = test_refresh_token_with_rotation(client_id, refresh_token, proxy_url)
+    ok, err, _new_refresh_token = test_refresh_token_with_rotation(
+        client_id, refresh_token, proxy_url
+    )
     return ok, err
 
 
@@ -264,7 +277,7 @@ def test_refresh_token_with_rotation(
                 "client_id": client_id,
                 "grant_type": "refresh_token",
                 "refresh_token": refresh_token,
-                "scope": "https://graph.microsoft.com/.default",
+                "scope": GRAPH_DEFAULT_SCOPE,
             },
             timeout=30,
             proxies=proxies,
@@ -333,7 +346,9 @@ def delete_emails_graph(
 
         batch_requests = []
         for idx, msg_id in enumerate(batch):
-            batch_requests.append({"id": str(idx), "method": "DELETE", "url": f"/me/messages/{msg_id}"})
+            batch_requests.append(
+                {"id": str(idx), "method": "DELETE", "url": f"/me/messages/{msg_id}"}
+            )
 
         try:
             proxies = build_proxies(proxy_url)
@@ -353,7 +368,9 @@ def delete_emails_graph(
                     else:
                         failed_count += 1
                         try:
-                            errors.append(f"Msg ID: {batch[int(res['id'])]}, Status: {res.get('status')}")
+                            errors.append(
+                                f"Msg ID: {batch[int(res['id'])]}, Status: {res.get('status')}"
+                            )
                         except Exception:
                             errors.append(f"Status: {res.get('status')}")
             else:

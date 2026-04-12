@@ -39,6 +39,10 @@ ERROR_MESSAGE_EN_MAP = {
     "GROUP_NAME_DUPLICATED": "Group name already exists",
     "GROUP_NAME_REQUIRED": "Group name is required",
     "GROUP_NOT_FOUND": "Group not found",
+    "GROUP_VERIFICATION_LENGTH_INVALID": "Group verification code length is invalid",
+    "GROUP_VERIFICATION_REGEX_INVALID": "Group verification regex is invalid",
+    "GROUP_AI_MODEL_REQUIRED": "Group AI model ID is required",
+    "VERIFICATION_AI_CONFIG_INCOMPLETE": "Verification AI configuration is incomplete",
     "GROUP_UPDATE_FAILED": "Failed to update group",
     "HTTP_ERROR": "Request failed",
     "INTERNAL_ERROR": "Internal server error",
@@ -89,6 +93,10 @@ ERROR_MESSAGE_MAP = {
     "GROUP_NAME_DUPLICATED": "分组名称已存在",
     "GROUP_NAME_REQUIRED": "分组名称不能为空",
     "GROUP_NOT_FOUND": "分组不存在",
+    "GROUP_VERIFICATION_LENGTH_INVALID": "分组验证码长度范围格式无效",
+    "GROUP_VERIFICATION_REGEX_INVALID": "分组验证码正则表达式无效",
+    "GROUP_AI_MODEL_REQUIRED": "请填写模型 ID",
+    "VERIFICATION_AI_CONFIG_INCOMPLETE": "验证码 AI 配置不完整",
     "INVALID_PARAM": "参数错误",
     "LOGIN_INVALID_PASSWORD": "密码错误",
     "LOGIN_RATE_LIMITED": "登录失败次数过多，请稍后再试",
@@ -236,7 +244,11 @@ def build_error_payload(
     # - 5xx: ERROR（服务端错误）
     # - 4xx: WARNING（客户端错误，如验证失败、权限不足等，属于正常业务流程）
     # - 其他: INFO
-    log_level = logging.ERROR if status >= 500 else (logging.WARNING if status >= 400 else logging.INFO)
+    log_level = (
+        logging.ERROR
+        if status >= 500
+        else (logging.WARNING if status >= 400 else logging.INFO)
+    )
 
     try:
         current_app.logger.log(

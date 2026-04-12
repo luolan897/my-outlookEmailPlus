@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Optional
 
 _APP_INSTANCE = None
@@ -103,7 +104,9 @@ def create_app(*, autostart_scheduler: Optional[bool] = None):
         _ow_logger = logging.getLogger("outlook_web")
         if not _ow_logger.handlers:
             _ow_logger.addHandler(_log_handler)
-            _ow_logger.setLevel(logging.INFO)
+            # PERF_LOGGING=true 时输出 DEBUG 级别性能日志；默认 INFO（生产模式不输出）
+            _perf_logging = os.getenv("PERF_LOGGING", "").strip().lower() == "true"
+            _ow_logger.setLevel(logging.DEBUG if _perf_logging else logging.INFO)
 
         # CSRF（可选）
         _csrf, csrf_exempt, _generate_csrf = init_csrf(app)

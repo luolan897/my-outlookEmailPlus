@@ -16,6 +16,17 @@ Outlook 邮件 Web 应用（兼容入口）
 
 import os
 
+try:
+    # 兼容直接执行 `python web_outlook_app.py` 的场景：
+    # 自动加载当前工作目录下 .env，避免 SECRET_KEY / LOGIN_PASSWORD 未注入导致
+    # 启动失败或凭据解密口径不一致。
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except Exception:
+    # 保持部署兼容：即使未安装 python-dotenv 也不阻断导入。
+    pass
+
 from outlook_web.app import create_app
 from outlook_web.db import create_sqlite_connection
 from outlook_web.errors import build_error_payload, sanitize_error_details

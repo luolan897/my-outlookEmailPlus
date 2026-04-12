@@ -49,14 +49,28 @@ def _validate_recipient(recipient: str) -> str:
     return normalized
 
 
-def _parse_int_env(name: str, default: int, *, code: str, message: str, message_en: str) -> int:
+def _parse_int_env(
+    name: str, default: int, *, code: str, message: str, message_en: str
+) -> int:
     raw_value = str(os.getenv(name, str(default))).strip() or str(default)
     try:
         value = int(raw_value)
     except (TypeError, ValueError) as exc:
-        raise EmailPushError(code, message, message_en=message_en, status=503, details=f"{name}={raw_value}") from exc
+        raise EmailPushError(
+            code,
+            message,
+            message_en=message_en,
+            status=503,
+            details=f"{name}={raw_value}",
+        ) from exc
     if value <= 0:
-        raise EmailPushError(code, message, message_en=message_en, status=503, details=f"{name}={raw_value}")
+        raise EmailPushError(
+            code,
+            message,
+            message_en=message_en,
+            status=503,
+            details=f"{name}={raw_value}",
+        )
     return value
 
 
@@ -85,14 +99,22 @@ def get_email_push_service_config() -> dict[str, Any]:
         message="邮件通知 SMTP 超时配置无效",
         message_en="Email notification SMTP timeout is invalid",
     )
+    use_tls = _env_bool("EMAIL_NOTIFICATION_SMTP_USE_TLS", default=port == 587)
+    use_ssl = _env_bool("EMAIL_NOTIFICATION_SMTP_USE_SSL", default=port == 465)
+    use_tls, use_ssl = _normalize_smtp_transport_mode(
+        port=port,
+        use_tls=use_tls,
+        use_ssl=use_ssl,
+    )
+
     return {
         "host": host,
         "sender": sender,
         "port": port,
         "username": str(os.getenv("EMAIL_NOTIFICATION_SMTP_USERNAME", "")).strip(),
         "password": str(os.getenv("EMAIL_NOTIFICATION_SMTP_PASSWORD", "")).strip(),
-        "use_tls": _env_bool("EMAIL_NOTIFICATION_SMTP_USE_TLS", default=port == 587),
-        "use_ssl": _env_bool("EMAIL_NOTIFICATION_SMTP_USE_SSL", default=port == 465),
+        "use_tls": use_tls,
+        "use_ssl": use_ssl,
         "timeout": timeout,
     }
 
@@ -125,7 +147,26 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return value in {"1", "true", "yes", "on"}
 
 
-def _build_message(*, recipient: str, subject: str, text_body: str, html_body: str | None = None) -> EmailMessage:
+def _normalize_smtp_transport_mode(
+    *,
+    port: int,
+    use_tls: bool,
+    use_ssl: bool,
+) -> tuple[bool, bool]:
+    """按端口自动纠正 SMTP 传输模式，避免模式冲突导致测试/运行不稳定。"""
+    if port == 587:
+        return True, False
+    if port == 465:
+        return False, True
+    if use_tls and use_ssl:
+        # 非标准端口下若两者都开，优先保留 SSL 避免重复握手路径
+        return False, True
+    return use_tls, use_ssl
+
+
+def _build_message(
+    *, recipient: str, subject: str, text_body: str, html_body: str | None = None
+) -> EmailMessage:
     sender = get_email_push_service_config()["sender"]
     message = EmailMessage()
     message["From"] = sender
@@ -137,14 +178,20 @@ def _build_message(*, recipient: str, subject: str, text_body: str, html_body: s
     return message
 
 
-def send_email_message(*, recipient: str, subject: str, text_body: str, html_body: str | None = None) -> None:
+def send_email_message(
+    *, recipient: str, subject: str, text_body: str, html_body: str | None = None
+) -> None:
     recipient = _validate_recipient(recipient)
     config = get_email_push_service_config()
-    message = _build_message(recipient=recipient, subject=subject, text_body=text_body, html_body=html_body)
+    message = _build_message(
+        recipient=recipient, subject=subject, text_body=text_body, html_body=html_body
+    )
 
     smtp_cls = smtplib.SMTP_SSL if config["use_ssl"] else smtplib.SMTP
     try:
-        with smtp_cls(config["host"], config["port"], timeout=config["timeout"]) as client:
+        with smtp_cls(
+            config["host"], config["port"], timeout=config["timeout"]
+        ) as client:
             if not config["use_ssl"]:
                 client.ehlo()
                 if config["use_tls"]:

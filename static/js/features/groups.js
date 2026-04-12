@@ -93,7 +93,6 @@
         async function selectGroup(groupId) {
             currentGroupId = groupId;
             currentAccountPage = 1;  // 切换分组时重置到第 1 页
-            isSearchMode = false;
 
             // 切换分组时停止所有正在运行的轮询（避免跨分组轮询堆积）
             if (typeof stopAllPolls === 'function') {
@@ -246,7 +245,11 @@
                         <p>${translateAppTextLocal('该分组暂无邮箱')}</p>
                     </div>
                 `;
-                updateSelectAllCheckbox();
+                const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+                if (selectAllCheckbox) {
+                    selectAllCheckbox.checked = false;
+                    selectAllCheckbox.indeterminate = selectedAccountIds.size > 0;
+                }
                 updateBatchActionBar();
                 return;
             }
@@ -394,7 +397,6 @@
         // 账号列表分页状态
         let currentAccountPage = 1;
         const ACCOUNT_PAGE_SIZE = 50;
-        let isSearchMode = false;
 
         // 排序账号列表
         function sortAccounts(sortBy) {
@@ -482,13 +484,10 @@
             const titleElement = document.getElementById('currentGroupName');
 
             if (!query.trim()) {
-                isSearchMode = false;
                 currentAccountPage = 1;  // 清空搜索时重置页码
                 loadAccountsByGroup(currentGroupId);
                 return;
             }
-
-            isSearchMode = true;
 
             container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> 搜索中…</div>';
 
@@ -547,6 +546,8 @@
             document.getElementById('customColorInput').value = selectedColor;
             document.getElementById('customColorHex').value = selectedColor;
             document.getElementById('groupProxyUrl').value = '';
+            document.getElementById('groupVerificationCodeLength').value = '6-6';
+            document.getElementById('groupVerificationCodeRegex').value = '';
             document.getElementById('addGroupModal').classList.add('show');
         }
 
@@ -586,6 +587,10 @@
                     // 填充代理设置
                     document.getElementById('groupProxyUrl').value = data.group.proxy_url || '';
 
+                    // 回填验证码提取策略
+                    document.getElementById('groupVerificationCodeLength').value = data.group.verification_code_length || '6-6';
+                    document.getElementById('groupVerificationCodeRegex').value = data.group.verification_code_regex || '';
+
                     document.getElementById('addGroupModal').classList.add('show');
                 }
             } catch (error) {
@@ -597,6 +602,8 @@
         async function saveGroup() {
             const name = document.getElementById('groupName').value.trim();
             const description = document.getElementById('groupDescription').value.trim();
+            const verificationCodeLength = document.getElementById('groupVerificationCodeLength')?.value?.trim() || '6-6';
+            const verificationCodeRegex = document.getElementById('groupVerificationCodeRegex')?.value?.trim() || '';
 
             if (!name) {
                 showToast(translateAppTextLocal('请输入分组名称'), 'error');
@@ -614,7 +621,9 @@
                         name,
                         description,
                         color: selectedColor,
-                        proxy_url: document.getElementById('groupProxyUrl').value.trim()
+                        proxy_url: document.getElementById('groupProxyUrl').value.trim(),
+                        verification_code_length: verificationCodeLength,
+                        verification_code_regex: verificationCodeRegex
                     })
                 });
 
@@ -661,42 +670,8 @@
 
         // ==================== 全选功能 ====================
 
-        function getCurrentAccountScopeIds() {
-            const source = Array.isArray(accountsCache[currentGroupId])
-                ? applyFiltersAndSort(accountsCache[currentGroupId])
-                : [];
-            return source
-                .map(acc => Number(acc && acc.id))
-                .filter(id => Number.isInteger(id) && id > 0);
-        }
-
-        function getCurrentAccountScopeStats() {
-            const scopeIds = getCurrentAccountScopeIds();
-            const selectedInScope = scopeIds.filter(id => selectedAccountIds.has(id)).length;
-            return {
-                scopeCount: scopeIds.length,
-                selectedInScope,
-                allSelected: scopeIds.length > 0 && selectedInScope === scopeIds.length,
-                noneSelected: selectedInScope === 0,
-            };
-        }
-
-        function syncActiveCheckboxesFromSelection() {
-            const checkboxes = getActiveAccountCheckboxes();
-            checkboxes.forEach(cb => {
-                const id = Number(cb.value);
-                cb.checked = selectedAccountIds.has(id);
-            });
-        }
-
         // 全选/取消全选账号（当前分组）
         function toggleSelectAll() {
-            if (isSearchMode) {
-                showToast(translateAppTextLocal('搜索模式下不支持全选本分组，请先清空搜索'), 'warning');
-                updateSelectAllCheckbox();
-                return;
-            }
-
             const selectAllCheckbox = mailboxViewMode === 'compact'
                 ? document.getElementById('compactSelectAllCheckbox')
                 : document.getElementById('selectAllCheckbox');
@@ -710,35 +685,43 @@
 
         // 全选当前分组所有账号
         function selectAllAccounts() {
-            const scopeIds = getCurrentAccountScopeIds();
-            scopeIds.forEach(id => selectedAccountIds.add(id));
-            syncActiveCheckboxesFromSelection();
+            const checkboxes = getActiveAccountCheckboxes();
+            checkboxes.forEach(cb => {
+                cb.checked = true;
+                selectedAccountIds.add(parseInt(cb.value));
+            });
             updateBatchActionBar();
             updateSelectAllCheckbox();
         }
 
         // 取消全选当前分组
         function unselectAllAccounts() {
-            const scopeIds = getCurrentAccountScopeIds();
-            scopeIds.forEach(id => selectedAccountIds.delete(id));
-            syncActiveCheckboxesFromSelection();
+            const checkboxes = getActiveAccountCheckboxes();
+            checkboxes.forEach(cb => {
+                cb.checked = false;
+                selectedAccountIds.delete(parseInt(cb.value));
+            });
             updateBatchActionBar();
             updateSelectAllCheckbox();
         }
 
         // 更新全选复选框状态（基于当前分组）
         function updateSelectAllCheckbox() {
-            const stats = getCurrentAccountScopeStats();
+            const checkboxes = getActiveAccountCheckboxes();
+            const checkedCount = checkboxes.filter(cb => cb.checked).length;
             const selectAllCheckboxes = [
                 document.getElementById('selectAllCheckbox'),
                 document.getElementById('compactSelectAllCheckbox')
             ].filter(Boolean);
 
             selectAllCheckboxes.forEach(selectAllCheckbox => {
-                if (stats.scopeCount === 0 || stats.noneSelected) {
+                if (checkboxes.length === 0) {
                     selectAllCheckbox.checked = false;
-                    selectAllCheckbox.indeterminate = false;
-                } else if (stats.allSelected) {
+                    selectAllCheckbox.indeterminate = selectedAccountIds.size > 0;
+                } else if (checkedCount === 0) {
+                    selectAllCheckbox.checked = false;
+                    selectAllCheckbox.indeterminate = selectedAccountIds.size > 0;
+                } else if (checkedCount === checkboxes.length) {
                     selectAllCheckbox.checked = true;
                     selectAllCheckbox.indeterminate = false;
                 } else {

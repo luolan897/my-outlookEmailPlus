@@ -64,7 +64,9 @@ class RealCFWorkerE2ETests(unittest.TestCase):
             # 配置域名
             settings_repo.set_setting(
                 "temp_mail_domains",
-                json.dumps([{"name": self.CF_DOMAIN, "enabled": True, "is_default": True}]),
+                json.dumps(
+                    [{"name": self.CF_DOMAIN, "enabled": True, "is_default": True}]
+                ),
             )
 
     @staticmethod
@@ -197,7 +199,9 @@ class RealCFWorkerE2ETests(unittest.TestCase):
             from outlook_web.db import get_db
 
             db = get_db()
-            row = db.execute("SELECT pool_status FROM accounts WHERE id = ?", (account_id,)).fetchone()
+            row = db.execute(
+                "SELECT pool_status FROM accounts WHERE id = ?", (account_id,)
+            ).fetchone()
             self.assertEqual(row["pool_status"], "used")
 
         # 4) 验证远程邮箱已删除 — 尝试读邮件
@@ -209,7 +213,9 @@ class RealCFWorkerE2ETests(unittest.TestCase):
             from outlook_web.db import get_db
 
             db = get_db()
-            row = db.execute("SELECT temp_mail_meta FROM accounts WHERE id = ?", (account_id,)).fetchone()
+            row = db.execute(
+                "SELECT temp_mail_meta FROM accounts WHERE id = ?", (account_id,)
+            ).fetchone()
             meta = json.loads(row["temp_mail_meta"] or "{}")
             jwt = meta.get("provider_jwt", "")
 
@@ -268,7 +274,9 @@ class RealCFWorkerE2ETests(unittest.TestCase):
             from outlook_web.db import get_db
 
             db = get_db()
-            row = db.execute("SELECT temp_mail_meta, email FROM accounts WHERE id = ?", (account_id,)).fetchone()
+            row = db.execute(
+                "SELECT temp_mail_meta, email FROM accounts WHERE id = ?", (account_id,)
+            ).fetchone()
             meta = json.loads(row["temp_mail_meta"] or "{}")
             jwt = meta.get("provider_jwt", "")
             email = row["email"]

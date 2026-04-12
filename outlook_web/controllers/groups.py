@@ -9,7 +9,10 @@ from urllib.parse import quote
 from flask import Response, jsonify, request
 
 from outlook_web.audit import log_audit
-from outlook_web.errors import build_error_response, build_export_verify_failure_response
+from outlook_web.errors import (
+    build_error_response,
+    build_export_verify_failure_response,
+)
 from outlook_web.repositories import accounts as accounts_repo
 from outlook_web.repositories import groups as groups_repo
 from outlook_web.repositories import temp_emails as temp_emails_repo
@@ -65,7 +68,12 @@ def api_get_group(group_id: int) -> Any:
     """获取单个分组"""
     group = groups_repo.get_group_by_id(group_id)
     if not group:
-        return build_error_response("GROUP_NOT_FOUND", err_type="NotFoundError", status=404, details=f"group_id={group_id}")
+        return build_error_response(
+            "GROUP_NOT_FOUND",
+            err_type="NotFoundError",
+            status=404,
+            details=f"group_id={group_id}",
+        )
     group["account_count"] = groups_repo.get_group_account_count(group_id)
     return jsonify({"success": True, "group": group})
 
@@ -79,33 +87,101 @@ def api_add_group() -> Any:
     color = data.get("color", "#1a1a1a")
     proxy_url = data.get("proxy_url", "").strip()
 
-    if not name:
-        return build_error_response("GROUP_NAME_REQUIRED", "分组名称不能为空", message_en="Group name is required")
+    verification_code_length = data.get("verification_code_length", "6-6")
+    verification_code_regex = data.get("verification_code_regex", "")
+    # group 侧 AI 配置已迁移到系统设置；对历史字段软兼容（忽略）
+    verification_ai_enabled = 0
+    verification_ai_model = ""
 
-    group_id = groups_repo.add_group(name, description, color, proxy_url)
-    if group_id:
-        log_audit("create", "group", str(group_id), f"创建分组：{name}")
-        return jsonify(
-            {"success": True, "message": "分组创建成功", "message_en": "Group created successfully", "group_id": group_id}
+    if not name:
+        return build_error_response(
+            "GROUP_NAME_REQUIRED",
+            "分组名称不能为空",
+            message_en="Group name is required",
         )
-    return build_error_response("GROUP_NAME_DUPLICATED", "分组名称已存在", message_en="Group name already exists")
+
+    try:
+        group_id = groups_repo.add_group(
+            name,
+            description,
+            color,
+            proxy_url,
+            verification_code_length=verification_code_length,
+            verification_code_regex=verification_code_regex,
+            verification_ai_enabled=verification_ai_enabled,
+            verification_ai_model=verification_ai_model,
+        )
+    except groups_repo.GroupPolicyValidationError as exc:
+        return build_error_response(exc.code, exc.message, status=400)
+
+    if group_id:
+        details = json.dumps(
+            {
+                "name": name,
+                "has_description": bool(description),
+                "color": color,
+                "proxy_configured": bool(proxy_url),
+                "verification_code_length": str(verification_code_length or "").strip()
+                or "6-6",
+                "verification_regex_configured": bool(
+                    str(verification_code_regex or "").strip()
+                ),
+            },
+            ensure_ascii=False,
+        )
+        log_audit("create", "group", str(group_id), details)
+        return jsonify(
+            {
+                "success": True,
+                "message": "分组创建成功",
+                "message_en": "Group created successfully",
+                "group_id": group_id,
+            }
+        )
+    return build_error_response(
+        "GROUP_NAME_DUPLICATED",
+        "分组名称已存在",
+        message_en="Group name already exists",
+    )
 
 
 @login_required
 def api_update_group(group_id: int) -> Any:
     """更新分组"""
     data = request.json
+
+    existing = groups_repo.get_group_by_id(group_id)
+    if not existing:
+        return build_error_response(
+            "GROUP_NOT_FOUND",
+            err_type="NotFoundError",
+            status=404,
+            details=f"group_id={group_id}",
+        )
+
     name = sanitize_input(data.get("name", "").strip(), max_length=100)
     description = sanitize_input(data.get("description", ""), max_length=500)
     color = data.get("color", "#1a1a1a")
     proxy_url = data.get("proxy_url", "").strip()
 
-    if not name:
-        return build_error_response("GROUP_NAME_REQUIRED", "分组名称不能为空", message_en="Group name is required")
+    verification_code_length = data.get(
+        "verification_code_length",
+        existing.get("verification_code_length") if existing else "6-6",
+    )
+    verification_code_regex = data.get(
+        "verification_code_regex",
+        existing.get("verification_code_regex") if existing else "",
+    )
+    # group 侧 AI 配置已迁移到系统设置；对历史字段软兼容（忽略）
+    verification_ai_enabled = 0
+    verification_ai_model = ""
 
-    existing = groups_repo.get_group_by_id(group_id)
-    if not existing:
-        return build_error_response("GROUP_NOT_FOUND", err_type="NotFoundError", status=404, details=f"group_id={group_id}")
+    if not name:
+        return build_error_response(
+            "GROUP_NAME_REQUIRED",
+            "分组名称不能为空",
+            message_en="Group name is required",
+        )
 
     # 系统分组保护：不允许重命名（避免破坏系统逻辑）
     if existing.get("is_system") and name != existing.get("name"):
@@ -118,7 +194,22 @@ def api_update_group(group_id: int) -> Any:
             details=f"group_id={group_id}",
         )
 
-    if groups_repo.update_group(group_id, name, description, color, proxy_url):
+    try:
+        updated = groups_repo.update_group(
+            group_id,
+            name,
+            description,
+            color,
+            proxy_url,
+            verification_code_length=verification_code_length,
+            verification_code_regex=verification_code_regex,
+            verification_ai_enabled=verification_ai_enabled,
+            verification_ai_model=verification_ai_model,
+        )
+    except groups_repo.GroupPolicyValidationError as exc:
+        return build_error_response(exc.code, exc.message, status=400)
+
+    if updated:
         # 不记录 proxy_url 明文（可能包含代理账号/密码）
         details = json.dumps(
             {
@@ -126,12 +217,28 @@ def api_update_group(group_id: int) -> Any:
                 "has_description": bool(description),
                 "color": color,
                 "proxy_configured": bool(proxy_url),
+                "verification_code_length": str(verification_code_length or "").strip()
+                or "6-6",
+                "verification_regex_configured": bool(
+                    str(verification_code_regex or "").strip()
+                ),
             },
             ensure_ascii=False,
         )
         log_audit("update", "group", str(group_id), details)
-        return jsonify({"success": True, "message": "分组更新成功", "message_en": "Group updated successfully"})
-    return build_error_response("GROUP_UPDATE_FAILED", "更新失败", message_en="Failed to update group", status=500)
+        return jsonify(
+            {
+                "success": True,
+                "message": "分组更新成功",
+                "message_en": "Group updated successfully",
+            }
+        )
+    return build_error_response(
+        "GROUP_UPDATE_FAILED",
+        "更新失败",
+        message_en="Failed to update group",
+        status=500,
+    )
 
 
 @login_required
@@ -139,7 +246,12 @@ def api_delete_group(group_id: int) -> Any:
     """删除分组"""
     group = groups_repo.get_group_by_id(group_id)
     if not group:
-        return build_error_response("GROUP_NOT_FOUND", err_type="NotFoundError", status=404, details=f"group_id={group_id}")
+        return build_error_response(
+            "GROUP_NOT_FOUND",
+            err_type="NotFoundError",
+            status=404,
+            details=f"group_id={group_id}",
+        )
 
     if group.get("is_system"):
         return build_error_response(
@@ -171,7 +283,12 @@ def api_delete_group(group_id: int) -> Any:
                 "message_en": "Group deleted and accounts moved to the default group",
             }
         )
-    return build_error_response("GROUP_DELETE_FAILED", "删除失败", message_en="Failed to delete group", status=500)
+    return build_error_response(
+        "GROUP_DELETE_FAILED",
+        "删除失败",
+        message_en="Failed to delete group",
+        status=500,
+    )
 
 
 @login_required
@@ -188,7 +305,12 @@ def api_export_group(group_id: int) -> Any:
 
     group = groups_repo.get_group_by_id(group_id)
     if not group:
-        return build_error_response("GROUP_NOT_FOUND", err_type="NotFoundError", status=404, details=f"group_id={group_id}")
+        return build_error_response(
+            "GROUP_NOT_FOUND",
+            err_type="NotFoundError",
+            status=404,
+            details=f"group_id={group_id}",
+        )
 
     # 使用 load_accounts 获取该分组下的所有账号（自动解密）
     accounts = accounts_repo.load_accounts(group_id)
@@ -218,12 +340,16 @@ def api_export_group(group_id: int) -> Any:
     content = "\n".join(lines)
 
     # 生成文件名（使用 URL 编码处理中文）
-    filename = f"{group['name']}_accounts_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    filename = (
+        f"{group['name']}_accounts_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    )
     encoded_filename = quote(filename)
 
     # 返回文件下载响应
     return Response(
         content,
         mimetype="text/plain; charset=utf-8",
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"},
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+        },
     )

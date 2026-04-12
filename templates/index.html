@@ -432,6 +432,34 @@
                                     <input type="password" class="form-input" id="settingsPassword" placeholder="输入新密码（留空则不修改）">
                                     <div class="form-hint">用于登录系统的密码</div>
                                 </div>
+
+                                <div style="border-top: 1px solid var(--border-light); margin-top: 1rem; padding-top: 1rem;">
+                                    <div class="card-title" style="font-size: 0.95rem; margin-bottom: 0.8rem;">🤖 验证码 AI 增强</div>
+                                    <div class="form-group">
+                                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                                            <input type="checkbox" id="settingsVerificationAiEnabled">
+                                            <span class="form-label" style="margin:0;">启用验证码 AI 增强（系统级）</span>
+                                        </label>
+                                        <div class="form-hint">规则提取优先；仅在规则不足时触发 AI 回退。</div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">AI Base URL</label>
+                                        <input type="text" class="form-input" id="settingsVerificationAiBaseUrl" placeholder="https://api.openai.com/v1/chat/completions">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">AI API Key</label>
+                                        <input type="password" class="form-input" id="settingsVerificationAiApiKey" placeholder="输入 AI API Key" autocomplete="off">
+                                        <div class="form-hint" id="verificationAiApiKeyHint">未设置</div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">AI 模型 ID</label>
+                                        <input type="text" class="form-input" id="settingsVerificationAiModel" placeholder="例如：gpt-4.1-mini">
+                                    </div>
+                                    <div class="form-group" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                                        <button class="btn btn-outline" type="button" onclick="testVerificationAiConfig()" id="btnTestVerificationAi" style="font-size: 0.85rem;">🤖 测试 AI 配置</button>
+                                        <span class="form-hint" id="verificationAiTestResult">建议先保存配置再测试。</span>
+                                    </div>
+                                </div>
                                 <!-- 保存按钮 -->
                                 <div style="margin-top: 1.5rem;">
                                     <button class="btn btn-primary" onclick="saveSettings()">💾 保存设置</button>

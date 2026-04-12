@@ -48,6 +48,16 @@
                         placeholder="http://host:port 或 socks5://user:pass@host:port">
                     <div class="form-hint">可选，设置后该分组下所有邮箱获取邮件时走此代理（支持 HTTP/SOCKS5）</div>
                 </div>
+                <div class="form-group">
+                    <label class="form-label">验证码长度范围</label>
+                    <input type="text" class="form-input" id="groupVerificationCodeLength" placeholder="例如：6-6 或 4-8">
+                    <div class="form-hint">仅作用于验证码提取，格式为 min-max。</div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">验证码自定义正则</label>
+                    <input type="text" class="form-input" id="groupVerificationCodeRegex" placeholder="可选，例如：\\b[A-Z0-9]{6}\\b">
+                    <div class="form-hint">同组内 regex 优先于 length。</div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="hideAddGroupModal()">取消</button>

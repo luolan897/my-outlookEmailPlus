@@ -346,6 +346,50 @@ When no mailbox is available, the current implementation returns:
 - response body with `success=false`
 - `code=no_available_account`
 
+#### Copy-paste Example (CF pool: claim-random)
+
+```bash
+curl -X POST https://api.example.com/api/external/pool/claim-random \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "caller_id": "reg-worker-001",
+    "task_id": "task-20260409-0001",
+    "provider": "cloudflare_temp_mail",
+    "project_key": "project-A",
+    "email_domain": "zerodotsix.top"
+  }'
+```
+
+Success response example:
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "account_id": 123,
+    "email": "abc123@zerodotsix.top",
+    "email_domain": "zerodotsix.top",
+    "claim_token": "clm_xxx",
+    "claimed_at": "2026-04-09T05:38:26.123Z",
+    "lease_expires_at": "2026-04-09T05:48:26.123Z"
+  }
+}
+```
+
+No-available response example:
+
+```json
+{
+  "success": false,
+  "code": "no_available_account",
+  "message": "No eligible mailbox available in pool",
+  "data": null
+}
+```
+
 ### `POST /api/external/pool/claim-release`
 
 Request body:
@@ -388,6 +432,51 @@ Current implementation notes:
 - for `provider=cloudflare_temp_mail`:
   - `result in ('success','credential_invalid')` triggers a best-effort remote mailbox deletion
   - deletion failure is non-blocking and does not break `claim-complete` success response
+
+#### Copy-paste Example (task success callback: claim-complete)
+
+```bash
+curl -X POST https://api.example.com/api/external/pool/claim-complete \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "account_id": 123,
+    "claim_token": "clm_xxx",
+    "caller_id": "reg-worker-001",
+    "task_id": "task-20260409-0001",
+    "result": "success",
+    "detail": "registration succeeded"
+  }'
+```
+
+Success response example:
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "account_id": 123,
+    "pool_status": "used"
+  }
+}
+```
+
+#### Copy-paste Example (abort task: claim-release)
+
+```bash
+curl -X POST https://api.example.com/api/external/pool/claim-release \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "account_id": 123,
+    "claim_token": "clm_xxx",
+    "caller_id": "reg-worker-001",
+    "task_id": "task-20260409-0001",
+    "reason": "upstream registration API is temporarily unavailable"
+  }'
+```
 
 ### `GET /api/external/pool/stats`
 

@@ -104,7 +104,9 @@ def validate_temp_mail_provider_name(value: str | None) -> str:
 
 
 def get_temp_mail_provider() -> str:
-    return normalize_temp_mail_provider_name(get_setting("temp_mail_provider", DEFAULT_TEMP_MAIL_PROVIDER))
+    return normalize_temp_mail_provider_name(
+        get_setting("temp_mail_provider", DEFAULT_TEMP_MAIL_PROVIDER)
+    )
 
 
 def get_temp_mail_runtime_provider_name(provider_name: str | None = None) -> str:
@@ -207,6 +209,36 @@ def get_external_api_key() -> str:
         return ""
 
 
+def get_verification_ai_enabled() -> bool:
+    return get_setting("verification_ai_enabled", "false").lower() == "true"
+
+
+def get_verification_ai_base_url() -> str:
+    return get_setting("verification_ai_base_url", "").strip()
+
+
+def get_verification_ai_model() -> str:
+    return get_setting("verification_ai_model", "").strip()
+
+
+def get_verification_ai_api_key() -> str:
+    """
+    获取验证码 AI API Key。
+
+    - 若为空，返回空字符串
+    - 若为 enc: 加密格式，自动解密
+    - 若为历史明文（兼容），直接返回明文
+    """
+    value = get_setting("verification_ai_api_key", "").strip()
+    if not value:
+        return ""
+    try:
+        return decrypt_data(value)
+    except Exception:
+        # 兼容历史明文
+        return value
+
+
 def get_external_api_key_masked(head: int = 4, tail: int = 4) -> str:
     """对外 API Key 脱敏展示：前 N 位 + 若干 * + 后 N 位。"""
     key = get_external_api_key()
@@ -215,7 +247,9 @@ def get_external_api_key_masked(head: int = 4, tail: int = 4) -> str:
     safe_value = str(key)
     if len(safe_value) <= head + tail:
         return "*" * len(safe_value)
-    return safe_value[:head] + ("*" * (len(safe_value) - head - tail)) + safe_value[-tail:]
+    return (
+        safe_value[:head] + ("*" * (len(safe_value) - head - tail)) + safe_value[-tail:]
+    )
 
 
 # ── P1：公网模式安全配置 ──────────────────────────────
@@ -262,15 +296,23 @@ def get_pool_external_enabled() -> bool:
 
 
 def get_external_api_disable_pool_claim_random() -> bool:
-    return get_setting("external_api_disable_pool_claim_random", "false").lower() == "true"
+    return (
+        get_setting("external_api_disable_pool_claim_random", "false").lower() == "true"
+    )
 
 
 def get_external_api_disable_pool_claim_release() -> bool:
-    return get_setting("external_api_disable_pool_claim_release", "false").lower() == "true"
+    return (
+        get_setting("external_api_disable_pool_claim_release", "false").lower()
+        == "true"
+    )
 
 
 def get_external_api_disable_pool_claim_complete() -> bool:
-    return get_setting("external_api_disable_pool_claim_complete", "false").lower() == "true"
+    return (
+        get_setting("external_api_disable_pool_claim_complete", "false").lower()
+        == "true"
+    )
 
 
 def get_external_api_disable_pool_stats() -> bool:

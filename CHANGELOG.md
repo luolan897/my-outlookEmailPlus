@@ -2,34 +2,30 @@
 
 All notable changes to OutlookMail Plus are documented in this file.
 
-## [v1.14.0] - 2026-04-09
+## [Unreleased]
 
-### 新功能 / New Features
+### 验证码提取策略与 AI 配置重构（Web + External + Temp Mail）
 
-- **CF 临时邮箱接入邮箱池（Phase 0-6）**：`/api/external/pool/claim-random` 在 `provider=cloudflare_temp_mail` 且池空时支持动态创建并直接进入 `claimed` 状态，统一纳入池化生命周期
-- **CF 读信链路打通**：`mailbox_resolver` 新增 `provider=cloudflare_temp_mail` 识别与 `kind=temp` 描述返回，外部读信/验证码提取链路可透明处理 CF pool 账号
-- **临时邮箱 Options 按 Provider 返回**：`/api/temp-emails/options` 支持 `provider_name` 参数，前端会按当前 provider 请求域名与规则，减少跨 provider 配置串扰
-- **账号管理保护增强**：池化管理的 CF 账号在 UI 和后端都增加删除/编辑保护，避免手工误操作破坏池状态
+- **分层口径收敛（why）**：分组策略仅保留规则项（`verification_code_length`、`verification_code_regex`），运行期 AI 配置统一迁移到系统设置（settings Basic Tab），避免“分组配置与系统配置双口径”导致的运维混乱。
+- **系统级 AI 配置闭环（why）**：`GET/PUT /api/settings` 新增并承载 `verification_ai_enabled/base_url/api_key/model`；API Key 加密存储、脱敏回显；开启 AI 时执行保存期完整性校验。
+- **提取链路提速与稳定性（why）**：保持规则快路径优先，仅在低置信度场景触发 AI fallback；AI 输出异常/无效时快速回退规则结果，不阻塞主流程。
+- **AI fallback 触发条件收紧（方案 A）**：`enhance_verification_with_ai_fallback()` 由"code/link 任一低置信即触发 AI"调整为"code/link 任一高置信即跳过 AI"；仅在两者均为 low 时才调用 AI，避免"验证码已高置信命中却因链接低置信而白白调用 AI"的浪费。对外仍保留 `verification_code`/`verification_link` 双字段结构不变。
+- **固定 JSON 契约（why）**：新增 AI 输入/输出固定 JSON 契约（`verification_ai_v1`），并在服务端进行结构与类型校验，降低模型返回漂移风险。
+- **前端迁移策略（why）**：分组弹窗移除 AI 字段，历史 group AI payload 软兼容（忽略旧字段，不硬失败），实现平滑内部切换。
 
-### 修复 / Bug Fixes
+### 错误码与兼容性
 
-- **Graph 401 回退策略修复**：区分 token 过期与权限不足（如 `ErrorAccessDenied`），权限不足场景允许继续 IMAP 回退，避免误判为必须重新授权
-- **Issue #32 后端 500 修复**：删除账号前事务化清理 `account_claim_logs` 与 `account_project_usage`，修复关联历史导致的删除失败
-- **全选交互修复**：账号全选改为基于分组数据源计算，并补充搜索模式下的显式拦截提示，减少“只选中当前页”误解
-- **批量导入换行问题修复**：修复复制凭据时 refresh_token 折行导致的导入失败，新增续行合并逻辑
-- **CF 配置兼容修复**：增强 CF Worker domains/options 读取与自动同步兜底，修复部分场景下域名下拉不生效
+- 新增并统一错误码映射：`GROUP_VERIFICATION_LENGTH_INVALID`、`GROUP_VERIFICATION_REGEX_INVALID`、`VERIFICATION_AI_CONFIG_INCOMPLETE`。
+- 保持提取未命中语义稳定（如 `VERIFICATION_CODE_NOT_FOUND` / `VERIFICATION_LINK_NOT_FOUND`），避免影响既有调用方错误处理逻辑。
+- 修复本地直启环境一致性问题：`web_outlook_app.py` 现在会自动加载 `.env`，避免 `SECRET_KEY` 未注入导致的凭据解密失败与“看似功能回退”的误判。
+- 修复邮件通知测试链路在 `SMTP_PORT=587` 且环境残留 `EMAIL_NOTIFICATION_SMTP_USE_SSL=true` 时的模式冲突：新增端口驱动的传输模式规范化（587 强制 STARTTLS、465 强制 SSL），避免 `/api/settings/email-test` 在测试与运行时出现误报 502。
 
-### 测试 / Verification
+### 验证码 AI 配置可用性探测（settings）
 
-- 新增与补强测试覆盖：
-  - `tests/test_pool_cf_integration_tdd_skeleton.py`
-  - `tests/test_pool_cf_real_e2e.py`
-  - `tests/test_graph_401_imap_fallback_regression.py`
-  - `tests/test_account_delete_with_pool_history.py`
-  - `tests/test_temp_emails_api_regression.py`
-  - `tests/test_cf_pool_missing_coverage.py`
-
----
+- 新增 `POST /api/settings/verification-ai-test`：基于**已保存**的系统级 AI 配置执行连通性与契约探测，返回结构化诊断结果（`ok/error/message/latency_ms/http_status/parsed_output`）。
+- 探测口径调整为“连通性优先”：上游返回 HTTP 2xx 即判定 `ok=true`；同时暴露 `connectivity_ok` 与 `contract_ok` 区分“可连通”与“契约完全通过”。
+- 前端“基础 -> 验证码 AI 增强”新增“🤖 测试 AI 配置”按钮与结果提示区，支持在页面内快速判断配置是否真正可用。
+- 探测逻辑复用 `probe_verification_ai_runtime(...)`，重点覆盖：配置缺项、HTTP 错误、响应格式错误、AI 输出不符合固定 JSON 契约、探测成功。
 
 ## [v1.13.0] - 2026-04-09
 
@@ -45,7 +41,6 @@ All notable changes to OutlookMail Plus are documented in this file.
 
 ### 修复 / Bug Fixes
 
-- 修复 Graph API 401 被统一视为授权失效的问题，现可区分 token 过期与权限不足，避免错误跳过 IMAP 回退
 - 修复 Watchtower 连通测试 5s 超时（Watchtower 同步检查需 25-30s），增加到 35s
 - 修复 Watchtower 200 响应被误判为"更新成功"（实际为"已是最新"）
 - 修复 GHCR 镜像不在白名单导致 Docker API 更新被拦截

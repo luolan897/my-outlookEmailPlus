@@ -44,7 +44,9 @@ class ExternalApiBaseTest(unittest.TestCase):
         enabled: bool = True,
     ):
         with self.app.app_context():
-            from outlook_web.repositories import external_api_keys as external_api_keys_repo
+            from outlook_web.repositories import (
+                external_api_keys as external_api_keys_repo,
+            )
 
             return external_api_keys_repo.create_external_api_key(
                 name=name,
@@ -64,7 +66,16 @@ class ExternalApiBaseTest(unittest.TestCase):
                 INSERT INTO accounts (email, password, client_id, refresh_token, group_id, status, account_type, provider)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (email_addr, "pw", "cid-test", "rt-test", 1, "active", "outlook", "outlook"),
+                (
+                    email_addr,
+                    "pw",
+                    "cid-test",
+                    "rt-test",
+                    1,
+                    "active",
+                    "outlook",
+                    "outlook",
+                ),
             )
             db.commit()
         return email_addr
@@ -82,7 +93,19 @@ class ExternalApiBaseTest(unittest.TestCase):
                     account_type, provider, imap_host, imap_port, imap_password
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (email_addr, "pw", "cid-test", "rt-test", 1, "active", "imap", "custom", "imap.test.com", 993, "imap-pass"),
+                (
+                    email_addr,
+                    "pw",
+                    "cid-test",
+                    "rt-test",
+                    1,
+                    "active",
+                    "imap",
+                    "custom",
+                    "imap.test.com",
+                    993,
+                    "imap-pass",
+                ),
             )
             db.commit()
         return email_addr
@@ -92,7 +115,9 @@ class ExternalApiBaseTest(unittest.TestCase):
             from outlook_web.db import get_db
 
             db = get_db()
-            db.execute("UPDATE accounts SET status = ? WHERE email = ?", (status, email_addr))
+            db.execute(
+                "UPDATE accounts SET status = ? WHERE email = ?", (status, email_addr)
+            )
             db.commit()
 
     @staticmethod
@@ -106,7 +131,9 @@ class ExternalApiBaseTest(unittest.TestCase):
 
     @staticmethod
     def _utc_iso(minutes_delta: int = 0) -> str:
-        dt = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(minutes=minutes_delta)
+        dt = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(
+            minutes=minutes_delta
+        )
         return dt.isoformat().replace("+00:00", "Z")
 
     @classmethod
@@ -141,7 +168,10 @@ class ExternalApiBaseTest(unittest.TestCase):
             "from": {"emailAddress": {"address": "noreply@example.com"}},
             "toRecipients": [{"emailAddress": {"address": "user@outlook.com"}}],
             "receivedDateTime": received_at or cls._utc_iso(),
-            "body": {"content": body_text if body_text else html_text, "contentType": "text" if body_text else "html"},
+            "body": {
+                "content": body_text if body_text else html_text,
+                "contentType": "text" if body_text else "html",
+            },
         }
 
     def _external_audit_logs(self):
@@ -205,7 +235,9 @@ class ExternalApiAuthTests(ExternalApiBaseTest):
         client = self.app.test_client()
         self._create_external_api_key("partner-a", "multi-123")
 
-        resp = client.get("/api/external/health", headers=self._auth_headers("multi-123"))
+        resp = client.get(
+            "/api/external/health", headers=self._auth_headers("multi-123")
+        )
 
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.get_json().get("success"))
@@ -214,7 +246,9 @@ class ExternalApiAuthTests(ExternalApiBaseTest):
         client = self.app.test_client()
         self._create_external_api_key("partner-a", "multi-123", enabled=False)
 
-        resp = client.get("/api/external/health", headers=self._auth_headers("multi-123"))
+        resp = client.get(
+            "/api/external/health", headers=self._auth_headers("multi-123")
+        )
 
         self.assertEqual(resp.status_code, 403)
         self.assertEqual(resp.get_json().get("code"), "API_KEY_NOT_CONFIGURED")
@@ -224,7 +258,9 @@ class ExternalApiAuthTests(ExternalApiBaseTest):
         self._create_external_api_key("partner-a", "multi-123", enabled=False)
         self._create_external_api_key("partner-b", "multi-456", enabled=True)
 
-        resp = client.get("/api/external/health", headers=self._auth_headers("multi-123"))
+        resp = client.get(
+            "/api/external/health", headers=self._auth_headers("multi-123")
+        )
 
         self.assertEqual(resp.status_code, 401)
         self.assertEqual(resp.get_json().get("code"), "UNAUTHORIZED")
@@ -234,7 +270,9 @@ class ExternalApiAuthTests(ExternalApiBaseTest):
         self._create_external_api_key("partner-a", "multi-123")
         self._set_external_api_key("legacy-123")
 
-        resp = client.get("/api/external/health", headers=self._auth_headers("legacy-123"))
+        resp = client.get(
+            "/api/external/health", headers=self._auth_headers("legacy-123")
+        )
 
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.get_json().get("success"))
@@ -242,11 +280,19 @@ class ExternalApiAuthTests(ExternalApiBaseTest):
 
 class ExternalApiMessageTests(ExternalApiBaseTest):
     @patch("outlook_web.services.graph.get_emails_graph")
-    def test_external_latest_message_returns_filtered_latest_email(self, mock_get_emails_graph):
+    def test_external_latest_message_returns_filtered_latest_email(
+        self, mock_get_emails_graph
+    ):
         email_addr = self._insert_outlook_account()
         self._set_external_api_key("abc123")
-        newer = self._graph_email(message_id="msg-new", subject="Target mail", received_at=self._utc_iso())
-        older = self._graph_email(message_id="msg-old", subject="Ignore mail", received_at=self._utc_iso(minutes_delta=-2))
+        newer = self._graph_email(
+            message_id="msg-new", subject="Target mail", received_at=self._utc_iso()
+        )
+        older = self._graph_email(
+            message_id="msg-old",
+            subject="Ignore mail",
+            received_at=self._utc_iso(minutes_delta=-2),
+        )
         mock_get_emails_graph.return_value = {"success": True, "emails": [older, newer]}
 
         client = self.app.test_client()
@@ -273,10 +319,15 @@ class ExternalApiMessageTests(ExternalApiBaseTest):
         self.assertEqual(resp.get_json().get("code"), "ACCOUNT_NOT_FOUND")
 
     @patch("outlook_web.services.graph.get_emails_graph")
-    def test_external_messages_returns_list_when_graph_succeeds(self, mock_get_emails_graph):
+    def test_external_messages_returns_list_when_graph_succeeds(
+        self, mock_get_emails_graph
+    ):
         email_addr = self._insert_outlook_account()
         self._set_external_api_key("abc123")
-        mock_get_emails_graph.return_value = {"success": True, "emails": [self._graph_email()]}
+        mock_get_emails_graph.return_value = {
+            "success": True,
+            "emails": [self._graph_email()],
+        }
 
         client = self.app.test_client()
         resp = client.get(
@@ -293,10 +344,17 @@ class ExternalApiMessageTests(ExternalApiBaseTest):
 
 class ExternalApiKeyScopeTests(ExternalApiBaseTest):
     @patch("outlook_web.services.graph.get_emails_graph")
-    def test_external_messages_allows_email_within_key_scope(self, mock_get_emails_graph):
+    def test_external_messages_allows_email_within_key_scope(
+        self, mock_get_emails_graph
+    ):
         email_addr = self._insert_outlook_account()
-        self._create_external_api_key("partner-a", "scope-123", allowed_emails=[email_addr])
-        mock_get_emails_graph.return_value = {"success": True, "emails": [self._graph_email()]}
+        self._create_external_api_key(
+            "partner-a", "scope-123", allowed_emails=[email_addr]
+        )
+        mock_get_emails_graph.return_value = {
+            "success": True,
+            "emails": [self._graph_email()],
+        }
 
         client = self.app.test_client()
         resp = client.get(
@@ -310,7 +368,9 @@ class ExternalApiKeyScopeTests(ExternalApiBaseTest):
     def test_external_messages_reject_email_outside_key_scope(self):
         allowed_email = self._insert_outlook_account()
         denied_email = self._insert_outlook_account()
-        self._create_external_api_key("partner-a", "scope-123", allowed_emails=[allowed_email])
+        self._create_external_api_key(
+            "partner-a", "scope-123", allowed_emails=[allowed_email]
+        )
 
         client = self.app.test_client()
         resp = client.get(
@@ -324,7 +384,9 @@ class ExternalApiKeyScopeTests(ExternalApiBaseTest):
     def test_external_account_status_reject_email_outside_key_scope(self):
         allowed_email = self._insert_outlook_account()
         denied_email = self._insert_outlook_account()
-        self._create_external_api_key("partner-a", "scope-123", allowed_emails=[allowed_email])
+        self._create_external_api_key(
+            "partner-a", "scope-123", allowed_emails=[allowed_email]
+        )
 
         client = self.app.test_client()
         resp = client.get(
@@ -338,7 +400,9 @@ class ExternalApiKeyScopeTests(ExternalApiBaseTest):
     def test_probe_status_rejects_email_outside_key_scope(self):
         allowed_email = self._insert_outlook_account()
         denied_email = self._insert_outlook_account()
-        self._create_external_api_key("partner-a", "scope-123", allowed_emails=[allowed_email])
+        self._create_external_api_key(
+            "partner-a", "scope-123", allowed_emails=[allowed_email]
+        )
 
         with self.app.app_context():
             from outlook_web.db import get_db
@@ -357,7 +421,9 @@ class ExternalApiKeyScopeTests(ExternalApiBaseTest):
             db.commit()
 
         client = self.app.test_client()
-        resp = client.get("/api/external/probe/scope-probe-1", headers=self._auth_headers("scope-123"))
+        resp = client.get(
+            "/api/external/probe/scope-probe-1", headers=self._auth_headers("scope-123")
+        )
 
         self.assertEqual(resp.status_code, 403)
         self.assertEqual(resp.get_json().get("code"), "EMAIL_SCOPE_FORBIDDEN")
@@ -365,10 +431,17 @@ class ExternalApiKeyScopeTests(ExternalApiBaseTest):
 
 class ExternalApiConsumerAuditTests(ExternalApiBaseTest):
     @patch("outlook_web.services.graph.get_emails_graph")
-    def test_multi_key_request_records_consumer_metadata_and_usage(self, mock_get_emails_graph):
+    def test_multi_key_request_records_consumer_metadata_and_usage(
+        self, mock_get_emails_graph
+    ):
         email_addr = self._insert_outlook_account()
-        created = self._create_external_api_key("partner-a", "audit-123", allowed_emails=[email_addr])
-        mock_get_emails_graph.return_value = {"success": True, "emails": [self._graph_email()]}
+        created = self._create_external_api_key(
+            "partner-a", "audit-123", allowed_emails=[email_addr]
+        )
+        mock_get_emails_graph.return_value = {
+            "success": True,
+            "emails": [self._graph_email()],
+        }
 
         client = self.app.test_client()
         resp = client.get(
@@ -392,7 +465,9 @@ class ExternalApiConsumerAuditTests(ExternalApiBaseTest):
 
     @patch("outlook_web.services.imap.get_emails_imap_with_server")
     @patch("outlook_web.services.graph.get_emails_graph")
-    def test_external_messages_falls_back_to_imap_when_graph_fails(self, mock_get_emails_graph, mock_get_emails_imap):
+    def test_external_messages_falls_back_to_imap_when_graph_fails(
+        self, mock_get_emails_graph, mock_get_emails_imap
+    ):
         email_addr = self._insert_outlook_account()
         self._set_external_api_key("abc123")
         mock_get_emails_graph.return_value = {"success": False, "error": "graph failed"}
@@ -424,7 +499,9 @@ class ExternalApiConsumerAuditTests(ExternalApiBaseTest):
 
     @patch("outlook_web.services.graph.get_email_raw_graph")
     @patch("outlook_web.services.graph.get_email_detail_graph")
-    def test_external_message_detail_returns_message_content(self, mock_get_email_detail_graph, mock_get_email_raw_graph):
+    def test_external_message_detail_returns_message_content(
+        self, mock_get_email_detail_graph, mock_get_email_raw_graph
+    ):
         email_addr = self._insert_outlook_account()
         self._set_external_api_key("abc123")
         mock_get_email_detail_graph.return_value = self._graph_detail()
@@ -445,10 +522,14 @@ class ExternalApiConsumerAuditTests(ExternalApiBaseTest):
 
     @patch("outlook_web.services.graph.get_email_raw_graph")
     @patch("outlook_web.services.graph.get_email_detail_graph")
-    def test_external_message_raw_returns_raw_content_and_audits(self, mock_get_email_detail_graph, mock_get_email_raw_graph):
+    def test_external_message_raw_returns_raw_content_and_audits(
+        self, mock_get_email_detail_graph, mock_get_email_raw_graph
+    ):
         email_addr = self._insert_outlook_account()
         self._set_external_api_key("abc123")
-        mock_get_email_detail_graph.return_value = self._graph_detail(body_text="raw test")
+        mock_get_email_detail_graph.return_value = self._graph_detail(
+            body_text="raw test"
+        )
         mock_get_email_raw_graph.return_value = "MIME-Version: 1.0\r\nraw test"
 
         client = self.app.test_client()
@@ -460,11 +541,15 @@ class ExternalApiConsumerAuditTests(ExternalApiBaseTest):
         self.assertEqual(resp.status_code, 200)
         data = resp.get_json()
         self.assertTrue(data.get("success"))
-        self.assertEqual(data.get("data", {}).get("raw_content"), "MIME-Version: 1.0\r\nraw test")
+        self.assertEqual(
+            data.get("data", {}).get("raw_content"), "MIME-Version: 1.0\r\nraw test"
+        )
 
         audit_logs = self._external_audit_logs()
         self.assertEqual(len(audit_logs), 1)
-        self.assertIn("/api/external/messages/{message_id}/raw", audit_logs[0]["details"])
+        self.assertIn(
+            "/api/external/messages/{message_id}/raw", audit_logs[0]["details"]
+        )
 
 
 class ExternalApiVerificationTests(ExternalApiBaseTest):
@@ -479,8 +564,13 @@ class ExternalApiVerificationTests(ExternalApiBaseTest):
     ):
         email_addr = self._insert_outlook_account()
         self._set_external_api_key("abc123")
-        mock_get_emails_graph.return_value = {"success": True, "emails": [self._graph_email()]}
-        mock_get_email_detail_graph.return_value = self._graph_detail(body_text="Your code is 123456")
+        mock_get_emails_graph.return_value = {
+            "success": True,
+            "emails": [self._graph_email()],
+        }
+        mock_get_email_detail_graph.return_value = self._graph_detail(
+            body_text="Your code is 123456"
+        )
         mock_get_email_raw_graph.return_value = "RAW MIME CONTENT"
 
         client = self.app.test_client()
@@ -495,7 +585,9 @@ class ExternalApiVerificationTests(ExternalApiBaseTest):
         self.assertEqual(data.get("data", {}).get("verification_code"), "123456")
 
     @patch("outlook_web.services.graph.get_emails_graph")
-    def test_external_verification_code_defaults_to_recent_10_minutes(self, mock_get_emails_graph):
+    def test_external_verification_code_defaults_to_recent_10_minutes(
+        self, mock_get_emails_graph
+    ):
         email_addr = self._insert_outlook_account()
         self._set_external_api_key("abc123")
         mock_get_emails_graph.return_value = {
@@ -544,12 +636,19 @@ class ExternalApiVerificationTests(ExternalApiBaseTest):
         self.assertIn("verify", data.get("data", {}).get("verification_link", ""))
 
     @patch("outlook_web.services.graph.get_emails_graph")
-    def test_external_verification_link_defaults_to_recent_10_minutes(self, mock_get_emails_graph):
+    def test_external_verification_link_defaults_to_recent_10_minutes(
+        self, mock_get_emails_graph
+    ):
         email_addr = self._insert_outlook_account()
         self._set_external_api_key("abc123")
         mock_get_emails_graph.return_value = {
             "success": True,
-            "emails": [self._graph_email(subject="Please verify your email", received_at=self._utc_iso(minutes_delta=-30))],
+            "emails": [
+                self._graph_email(
+                    subject="Please verify your email",
+                    received_at=self._utc_iso(minutes_delta=-30),
+                )
+            ],
         }
 
         client = self.app.test_client()
@@ -564,7 +663,9 @@ class ExternalApiVerificationTests(ExternalApiBaseTest):
     @patch("outlook_web.services.external_api.time.sleep")
     @patch("outlook_web.services.external_api.time.time")
     @patch("outlook_web.services.external_api.get_latest_message_for_external")
-    def test_wait_for_message_only_returns_new_messages(self, mock_get_latest_message, mock_time, mock_sleep):
+    def test_wait_for_message_only_returns_new_messages(
+        self, mock_get_latest_message, mock_time, mock_sleep
+    ):
         from outlook_web.services import external_api as external_api_service
 
         mock_time.side_effect = [100, 100, 100]
@@ -573,7 +674,9 @@ class ExternalApiVerificationTests(ExternalApiBaseTest):
             {"id": "new", "timestamp": 101, "method": "Graph API"},
         ]
 
-        result = external_api_service.wait_for_message(email_addr="user@example.com", timeout_seconds=30, poll_interval=5)
+        result = external_api_service.wait_for_message(
+            email_addr="user@example.com", timeout_seconds=30, poll_interval=5
+        )
 
         self.assertEqual(result.get("id"), "new")
         mock_sleep.assert_called_once_with(5)
@@ -636,8 +739,12 @@ class ExternalApiSystemTests(ExternalApiBaseTest):
         self.assertEqual(len(audit_logs), 1)
         self.assertIn("/api/external/health", audit_logs[0]["details"])
 
-    @patch("outlook_web.controllers.system.external_api_service.probe_instance_upstream")
-    def test_external_health_uses_probe_instance_upstream(self, mock_probe_instance_upstream):
+    @patch(
+        "outlook_web.controllers.system.external_api_service.probe_instance_upstream"
+    )
+    def test_external_health_uses_probe_instance_upstream(
+        self, mock_probe_instance_upstream
+    ):
         client = self.app.test_client()
         self._set_external_api_key("abc123")
         mock_probe_instance_upstream.return_value = {
@@ -654,10 +761,15 @@ class ExternalApiSystemTests(ExternalApiBaseTest):
         mock_probe_instance_upstream.assert_called_once()
 
     @patch("outlook_web.services.external_api.graph_service.get_emails_graph")
-    def test_external_account_status_returns_account_data_and_audits(self, mock_get_emails_graph):
+    def test_external_account_status_returns_account_data_and_audits(
+        self, mock_get_emails_graph
+    ):
         email_addr = self._insert_outlook_account()
         self._set_external_api_key("abc123")
-        mock_get_emails_graph.return_value = {"success": True, "emails": [self._graph_email()]}
+        mock_get_emails_graph.return_value = {
+            "success": True,
+            "emails": [self._graph_email()],
+        }
         client = self.app.test_client()
 
         resp = client.get(
@@ -686,11 +798,19 @@ class ExternalApiSystemTests(ExternalApiBaseTest):
 
     @patch("outlook_web.services.external_api.imap_service.get_emails_imap_with_server")
     @patch("outlook_web.services.external_api.graph_service.get_emails_graph")
-    def test_external_account_status_probe_failure_returns_probe_summary(self, mock_get_emails_graph, mock_get_emails_imap):
+    def test_external_account_status_probe_failure_returns_probe_summary(
+        self, mock_get_emails_graph, mock_get_emails_imap
+    ):
         email_addr = self._insert_outlook_account()
         self._set_external_api_key("abc123")
-        mock_get_emails_graph.return_value = {"success": False, "error": {"message": "token invalid"}}
-        mock_get_emails_imap.return_value = {"success": False, "error": {"message": "imap fallback failed"}}
+        mock_get_emails_graph.return_value = {
+            "success": False,
+            "error": {"message": "token invalid"},
+        }
+        mock_get_emails_imap.return_value = {
+            "success": False,
+            "error": {"message": "imap fallback failed"},
+        }
         client = self.app.test_client()
 
         resp = client.get(
@@ -710,7 +830,10 @@ class ExternalApiRegressionTests(ExternalApiBaseTest):
     @patch("outlook_web.services.graph.get_emails_graph")
     def test_internal_email_list_api_still_works(self, mock_get_emails_graph):
         email_addr = self._insert_outlook_account()
-        mock_get_emails_graph.return_value = {"success": True, "emails": [self._graph_email()]}
+        mock_get_emails_graph.return_value = {
+            "success": True,
+            "emails": [self._graph_email()],
+        }
 
         client = self.app.test_client()
         self._login(client)
@@ -723,10 +846,17 @@ class ExternalApiRegressionTests(ExternalApiBaseTest):
 
     @patch("outlook_web.services.graph.get_email_detail_graph")
     @patch("outlook_web.services.graph.get_emails_graph")
-    def test_internal_extract_verification_api_still_works(self, mock_get_emails_graph, mock_get_email_detail_graph):
+    def test_internal_extract_verification_api_still_works(
+        self, mock_get_emails_graph, mock_get_email_detail_graph
+    ):
         email_addr = self._insert_outlook_account()
-        mock_get_emails_graph.return_value = {"success": True, "emails": [self._graph_email()]}
-        mock_get_email_detail_graph.return_value = self._graph_detail(body_text="Your code is 123456")
+        mock_get_emails_graph.return_value = {
+            "success": True,
+            "emails": [self._graph_email()],
+        }
+        mock_get_email_detail_graph.return_value = self._graph_detail(
+            body_text="Your code is 123456"
+        )
 
         client = self.app.test_client()
         self._login(client)
@@ -758,10 +888,15 @@ class ExternalApiSchemaValidationTests(ExternalApiBaseTest):
     def test_messages_response_schema_has_required_fields(self, mock_get_emails_graph):
         email_addr = self._insert_outlook_account()
         self._set_external_api_key("abc123")
-        mock_get_emails_graph.return_value = {"success": True, "emails": [self._graph_email()]}
+        mock_get_emails_graph.return_value = {
+            "success": True,
+            "emails": [self._graph_email()],
+        }
 
         client = self.app.test_client()
-        resp = client.get(f"/api/external/messages?email={email_addr}", headers=self._auth_headers())
+        resp = client.get(
+            f"/api/external/messages?email={email_addr}", headers=self._auth_headers()
+        )
 
         self.assertEqual(resp.status_code, 200)
         body = resp.get_json()
@@ -774,19 +909,33 @@ class ExternalApiSchemaValidationTests(ExternalApiBaseTest):
         # MessageSummary required 字段
         if data["emails"]:
             msg = data["emails"][0]
-            for key in ("id", "email_address", "from_address", "subject", "has_html", "timestamp", "created_at", "is_read"):
+            for key in (
+                "id",
+                "email_address",
+                "from_address",
+                "subject",
+                "has_html",
+                "timestamp",
+                "created_at",
+                "is_read",
+            ):
                 self.assertIn(key, msg, f"MessageSummary 缺少字段: {key}")
 
     @patch("outlook_web.services.graph.get_email_raw_graph")
     @patch("outlook_web.services.graph.get_email_detail_graph")
-    def test_message_detail_response_schema_has_required_fields(self, mock_detail, mock_raw):
+    def test_message_detail_response_schema_has_required_fields(
+        self, mock_detail, mock_raw
+    ):
         email_addr = self._insert_outlook_account()
         self._set_external_api_key("abc123")
         mock_detail.return_value = self._graph_detail()
         mock_raw.return_value = "RAW"
 
         client = self.app.test_client()
-        resp = client.get(f"/api/external/messages/msg-1?email={email_addr}", headers=self._auth_headers())
+        resp = client.get(
+            f"/api/external/messages/msg-1?email={email_addr}",
+            headers=self._auth_headers(),
+        )
 
         self.assertEqual(resp.status_code, 200)
         data = resp.get_json().get("data", {})
@@ -807,7 +956,9 @@ class ExternalApiSchemaValidationTests(ExternalApiBaseTest):
     @patch("outlook_web.services.graph.get_email_raw_graph")
     @patch("outlook_web.services.graph.get_email_detail_graph")
     @patch("outlook_web.services.graph.get_emails_graph")
-    def test_verification_code_response_schema_has_required_fields(self, mock_list, mock_detail, mock_raw):
+    def test_verification_code_response_schema_has_required_fields(
+        self, mock_list, mock_detail, mock_raw
+    ):
         email_addr = self._insert_outlook_account()
         self._set_external_api_key("abc123")
         mock_list.return_value = {"success": True, "emails": [self._graph_email()]}
@@ -815,19 +966,33 @@ class ExternalApiSchemaValidationTests(ExternalApiBaseTest):
         mock_raw.return_value = "RAW"
 
         client = self.app.test_client()
-        resp = client.get(f"/api/external/verification-code?email={email_addr}", headers=self._auth_headers())
+        resp = client.get(
+            f"/api/external/verification-code?email={email_addr}",
+            headers=self._auth_headers(),
+        )
 
         self.assertEqual(resp.status_code, 200)
         data = resp.get_json().get("data", {})
-        for key in ("email", "verification_code", "matched_email_id", "from", "subject", "received_at"):
+        for key in (
+            "email",
+            "verification_code",
+            "matched_email_id",
+            "from",
+            "subject",
+            "received_at",
+        ):
             self.assertIn(key, data, f"VerificationCodeData 缺少字段: {key}")
         # confidence 枚举校验
-        self.assertIn(data.get("confidence"), ("high", "low"), "confidence 应为 high 或 low")
+        self.assertIn(
+            data.get("confidence"), ("high", "low"), "confidence 应为 high 或 low"
+        )
 
     @patch("outlook_web.services.graph.get_email_raw_graph")
     @patch("outlook_web.services.graph.get_email_detail_graph")
     @patch("outlook_web.services.graph.get_emails_graph")
-    def test_verification_link_response_schema_has_required_fields(self, mock_list, mock_detail, mock_raw):
+    def test_verification_link_response_schema_has_required_fields(
+        self, mock_list, mock_detail, mock_raw
+    ):
         email_addr = self._insert_outlook_account()
         self._set_external_api_key("abc123")
         mock_list.return_value = {
@@ -840,11 +1005,21 @@ class ExternalApiSchemaValidationTests(ExternalApiBaseTest):
         mock_raw.return_value = "RAW"
 
         client = self.app.test_client()
-        resp = client.get(f"/api/external/verification-link?email={email_addr}", headers=self._auth_headers())
+        resp = client.get(
+            f"/api/external/verification-link?email={email_addr}",
+            headers=self._auth_headers(),
+        )
 
         self.assertEqual(resp.status_code, 200)
         data = resp.get_json().get("data", {})
-        for key in ("email", "verification_link", "matched_email_id", "from", "subject", "received_at"):
+        for key in (
+            "email",
+            "verification_link",
+            "matched_email_id",
+            "from",
+            "subject",
+            "received_at",
+        ):
             self.assertIn(key, data, f"VerificationLinkData 缺少字段: {key}")
 
     def test_health_response_schema_has_required_fields(self):
@@ -878,27 +1053,47 @@ class ExternalApiSchemaValidationTests(ExternalApiBaseTest):
         self.assertIsInstance(data["features"], list)
 
     @patch("outlook_web.services.external_api.graph_service.get_emails_graph")
-    def test_account_status_response_schema_has_required_fields(self, mock_get_emails_graph):
+    def test_account_status_response_schema_has_required_fields(
+        self, mock_get_emails_graph
+    ):
         email_addr = self._insert_outlook_account()
         self._set_external_api_key("abc123")
-        mock_get_emails_graph.return_value = {"success": True, "emails": [self._graph_email()]}
+        mock_get_emails_graph.return_value = {
+            "success": True,
+            "emails": [self._graph_email()],
+        }
         client = self.app.test_client()
-        resp = client.get(f"/api/external/account-status?email={email_addr}", headers=self._auth_headers())
+        resp = client.get(
+            f"/api/external/account-status?email={email_addr}",
+            headers=self._auth_headers(),
+        )
 
         self.assertEqual(resp.status_code, 200)
         data = resp.get_json().get("data", {})
-        for key in ("email", "exists", "upstream_probe_ok", "probe_method", "last_probe_at", "last_probe_error"):
+        for key in (
+            "email",
+            "exists",
+            "upstream_probe_ok",
+            "probe_method",
+            "last_probe_at",
+            "last_probe_error",
+        ):
             self.assertIn(key, data, f"AccountStatusData 缺少字段: {key}")
         self.assertIn("status", data, "AccountStatusData 应返回 status 字段")
 
     @patch("outlook_web.services.external_api.graph_service.get_emails_graph")
-    def test_account_status_marks_inactive_account_as_not_readable(self, mock_get_emails_graph):
+    def test_account_status_marks_inactive_account_as_not_readable(
+        self, mock_get_emails_graph
+    ):
         email_addr = self._insert_outlook_account()
         self._set_account_status(email_addr, "inactive")
         self._set_external_api_key("abc123")
         client = self.app.test_client()
 
-        resp = client.get(f"/api/external/account-status?email={email_addr}", headers=self._auth_headers())
+        resp = client.get(
+            f"/api/external/account-status?email={email_addr}",
+            headers=self._auth_headers(),
+        )
 
         self.assertEqual(resp.status_code, 200)
         data = resp.get_json().get("data", {})
@@ -919,13 +1114,20 @@ class ExternalApiRawFieldTrimTests(ExternalApiBaseTest):
         mock_raw.return_value = "MIME-Version: 1.0\r\nraw content"
 
         client = self.app.test_client()
-        resp = client.get(f"/api/external/messages/msg-1/raw?email={email_addr}", headers=self._auth_headers())
+        resp = client.get(
+            f"/api/external/messages/msg-1/raw?email={email_addr}",
+            headers=self._auth_headers(),
+        )
 
         self.assertEqual(resp.status_code, 200)
         data = resp.get_json().get("data", {})
         allowed_keys = {"id", "email_address", "raw_content", "method"}
         actual_keys = set(data.keys())
-        self.assertEqual(actual_keys, allowed_keys, f"raw 接口应仅返回 {allowed_keys}，实际返回 {actual_keys}")
+        self.assertEqual(
+            actual_keys,
+            allowed_keys,
+            f"raw 接口应仅返回 {allowed_keys}，实际返回 {actual_keys}",
+        )
         self.assertEqual(data["raw_content"], "MIME-Version: 1.0\r\nraw content")
         # 不应包含详情字段
         self.assertNotIn("content", data)
@@ -939,16 +1141,28 @@ class ExternalApiWaitMessageHttpTests(ExternalApiBaseTest):
     @patch("outlook_web.services.external_api.time.sleep")
     @patch("outlook_web.services.external_api.time.time")
     @patch("outlook_web.services.graph.get_emails_graph")
-    def test_wait_message_http_only_returns_new_message(self, mock_get_emails_graph, mock_time, mock_sleep):
+    def test_wait_message_http_only_returns_new_message(
+        self, mock_get_emails_graph, mock_time, mock_sleep
+    ):
         email_addr = self._insert_outlook_account()
         self._set_external_api_key("abc123")
 
         # baseline_timestamp = int(time.time()) = 2000000000
         # old email timestamp (~1767225600) < baseline → 不匹配
         # new email timestamp (~2019686400) >= baseline → 命中
-        mock_time.side_effect = [2000000000, 2000000000, 2000000000, 2000000000, 2000000000]
-        old_email = self._graph_email(message_id="old-msg", received_at="2026-01-01T00:00:00Z")
-        new_email = self._graph_email(message_id="new-msg", received_at="2034-01-01T00:00:00Z")
+        mock_time.side_effect = [
+            2000000000,
+            2000000000,
+            2000000000,
+            2000000000,
+            2000000000,
+        ]
+        old_email = self._graph_email(
+            message_id="old-msg", received_at="2026-01-01T00:00:00Z"
+        )
+        new_email = self._graph_email(
+            message_id="new-msg", received_at="2034-01-01T00:00:00Z"
+        )
         mock_get_emails_graph.side_effect = [
             {"success": True, "emails": [old_email]},
             {"success": True, "emails": [new_email]},
@@ -1007,7 +1221,11 @@ class ExternalApiWaitMessageHttpTests(ExternalApiBaseTest):
         audit_logs = self._external_audit_logs()
         self.assertGreaterEqual(len(audit_logs), 1)
         last_log = audit_logs[-1]
-        details = json.loads(last_log["details"]) if isinstance(last_log["details"], str) else last_log["details"]
+        details = (
+            json.loads(last_log["details"])
+            if isinstance(last_log["details"], str)
+            else last_log["details"]
+        )
         self.assertEqual(details.get("code"), "INTERNAL_ERROR")
         self.assertEqual(details.get("err"), "RuntimeError")
 
@@ -1022,7 +1240,9 @@ class ExternalApiWrongKeyTests(ExternalApiBaseTest):
         self._set_external_api_key("correct-key-123")
         client = self.app.test_client()
 
-        resp = client.get("/api/external/health", headers=self._auth_headers("wrong-key-456"))
+        resp = client.get(
+            "/api/external/health", headers=self._auth_headers("wrong-key-456")
+        )
 
         self.assertEqual(resp.status_code, 401)
         self.assertEqual(resp.get_json().get("code"), "UNAUTHORIZED")
@@ -1081,8 +1301,12 @@ class ExternalApiMessageParamTests(ExternalApiBaseTest):
         mock_get_emails_graph.return_value = {
             "success": True,
             "emails": [
-                self._graph_email(message_id="m1", sender="openai@example.com", subject="OpenAI Code"),
-                self._graph_email(message_id="m2", sender="google@example.com", subject="Google Code"),
+                self._graph_email(
+                    message_id="m1", sender="openai@example.com", subject="OpenAI Code"
+                ),
+                self._graph_email(
+                    message_id="m2", sender="google@example.com", subject="Google Code"
+                ),
             ],
         }
 
@@ -1105,8 +1329,12 @@ class ExternalApiMessageParamTests(ExternalApiBaseTest):
         mock_get_emails_graph.return_value = {
             "success": True,
             "emails": [
-                self._graph_email(message_id="new", received_at=self._utc_iso(minutes_delta=-2)),
-                self._graph_email(message_id="old", received_at=self._utc_iso(minutes_delta=-60)),
+                self._graph_email(
+                    message_id="new", received_at=self._utc_iso(minutes_delta=-2)
+                ),
+                self._graph_email(
+                    message_id="old", received_at=self._utc_iso(minutes_delta=-60)
+                ),
             ],
         }
 
@@ -1144,7 +1372,9 @@ class ExternalApiMessageErrorTests(ExternalApiBaseTest):
     @patch("outlook_web.services.imap.get_email_detail_imap_with_server")
     @patch("outlook_web.services.graph.get_email_raw_graph")
     @patch("outlook_web.services.graph.get_email_detail_graph")
-    def test_detail_graph_fail_imap_fallback(self, mock_detail_graph, mock_raw_graph, mock_detail_imap):
+    def test_detail_graph_fail_imap_fallback(
+        self, mock_detail_graph, mock_raw_graph, mock_detail_imap
+    ):
         """TC-MSG-13: 详情 Graph 失败后 IMAP 回退成功"""
         email_addr = self._insert_outlook_account()
         self._set_external_api_key("abc123")
@@ -1208,7 +1438,9 @@ class ExternalApiMessageErrorTests(ExternalApiBaseTest):
         self.assertEqual(resp.get_json().get("code"), "PROXY_ERROR")
 
     @patch("outlook_web.services.graph.get_emails_graph")
-    def test_proxy_error_with_nested_payload_still_returns_502_proxy_error(self, mock_graph):
+    def test_proxy_error_with_nested_payload_still_returns_502_proxy_error(
+        self, mock_graph
+    ):
         """TC-MSG-15 扩展：Graph 返回结构化错误 payload 时仍应保持 502 PROXY_ERROR"""
         from outlook_web.errors import build_error_payload
 
@@ -1237,12 +1469,16 @@ class ExternalApiMessageErrorTests(ExternalApiBaseTest):
         audit_logs = self._external_audit_logs()
         self.assertTrue(audit_logs)
         details = (
-            json.loads(audit_logs[-1]["details"]) if isinstance(audit_logs[-1]["details"], str) else audit_logs[-1]["details"]
+            json.loads(audit_logs[-1]["details"])
+            if isinstance(audit_logs[-1]["details"], str)
+            else audit_logs[-1]["details"]
         )
         self.assertEqual(details.get("code"), "PROXY_ERROR")
 
     @patch("outlook_web.services.external_api.get_email_detail_imap_generic_result")
-    def test_imap_detail_nested_error_uses_final_public_code_in_response_and_audit(self, mock_detail_result):
+    def test_imap_detail_nested_error_uses_final_public_code_in_response_and_audit(
+        self, mock_detail_result
+    ):
         email_addr = self._insert_imap_account()
         self._set_external_api_key("abc123")
         mock_detail_result.return_value = {
@@ -1270,7 +1506,9 @@ class ExternalApiMessageErrorTests(ExternalApiBaseTest):
         audit_logs = self._external_audit_logs()
         self.assertTrue(audit_logs)
         details = (
-            json.loads(audit_logs[-1]["details"]) if isinstance(audit_logs[-1]["details"], str) else audit_logs[-1]["details"]
+            json.loads(audit_logs[-1]["details"])
+            if isinstance(audit_logs[-1]["details"], str)
+            else audit_logs[-1]["details"]
         )
         self.assertEqual(details.get("code"), "IMAP_AUTH_FAILED")
 
@@ -1280,7 +1518,9 @@ class ExternalApiMessageErrorTests(ExternalApiBaseTest):
         self._set_external_api_key("abc123")
 
         client = self.app.test_client()
-        resp = client.get(f"/api/external/messages?email={email_addr}", headers=self._auth_headers())
+        resp = client.get(
+            f"/api/external/messages?email={email_addr}", headers=self._auth_headers()
+        )
 
         self.assertEqual(resp.status_code, 403)
         self.assertEqual(resp.get_json().get("code"), "ACCOUNT_ACCESS_FORBIDDEN")
@@ -1291,7 +1531,10 @@ class ExternalApiMessageErrorTests(ExternalApiBaseTest):
         self._set_external_api_key("abc123")
 
         client = self.app.test_client()
-        resp = client.get(f"/api/external/wait-message?email={email_addr}", headers=self._auth_headers())
+        resp = client.get(
+            f"/api/external/wait-message?email={email_addr}",
+            headers=self._auth_headers(),
+        )
 
         self.assertEqual(resp.status_code, 403)
         self.assertEqual(resp.get_json().get("code"), "ACCOUNT_ACCESS_FORBIDDEN")
@@ -1331,7 +1574,9 @@ class ExternalApiVerificationErrorTests(ExternalApiBaseTest):
         email_addr = self._insert_outlook_account()
         self._set_external_api_key("abc123")
         mock_list.return_value = {"success": True, "emails": [self._graph_email()]}
-        mock_detail.return_value = self._graph_detail(body_text="Hello, this is a normal email with no code.")
+        mock_detail.return_value = self._graph_detail(
+            body_text="Hello, this is a normal email with no code."
+        )
         mock_raw.return_value = "RAW"
 
         client = self.app.test_client()
@@ -1433,7 +1678,10 @@ class ExternalApiVerificationConfidenceTests(ExternalApiBaseTest):
             "from": {"emailAddress": {"address": "marketing@runpod.io"}},
             "toRecipients": [{"emailAddress": {"address": "user@outlook.com"}}],
             "receivedDateTime": self._utc_iso(),
-            "body": {"content": "Save big on 1181 new GPU instances! Order now for $2999/month.", "contentType": "text"},
+            "body": {
+                "content": "Save big on 1181 new GPU instances! Order now for $2999/month.",
+                "contentType": "text",
+            },
         }
         mock_detail.return_value = marketing_detail
         mock_raw.return_value = "RAW"
@@ -1488,7 +1736,9 @@ class ExternalApiVerificationConfidenceTests(ExternalApiBaseTest):
     @patch("outlook_web.services.graph.get_email_raw_graph")
     @patch("outlook_web.services.graph.get_email_detail_graph")
     @patch("outlook_web.services.graph.get_emails_graph")
-    def test_legit_verification_code_still_succeeds(self, mock_list, mock_detail, mock_raw):
+    def test_legit_verification_code_still_succeeds(
+        self, mock_list, mock_detail, mock_raw
+    ):
         """标准验证码邮件仍可正常成功提取（高置信度 → 200 OK）"""
         email_addr = self._insert_outlook_account()
         self._set_external_api_key("abc123")
@@ -1516,7 +1766,9 @@ class ExternalApiVerificationConfidenceTests(ExternalApiBaseTest):
     @patch("outlook_web.services.graph.get_email_raw_graph")
     @patch("outlook_web.services.graph.get_email_detail_graph")
     @patch("outlook_web.services.graph.get_emails_graph")
-    def test_legit_verification_link_still_succeeds(self, mock_list, mock_detail, mock_raw):
+    def test_legit_verification_link_still_succeeds(
+        self, mock_list, mock_detail, mock_raw
+    ):
         """标准验证链接邮件仍可正常成功提取（高置信度 → 200 OK）"""
         email_addr = self._insert_outlook_account()
         self._set_external_api_key("abc123")
@@ -1544,7 +1796,69 @@ class ExternalApiVerificationConfidenceTests(ExternalApiBaseTest):
     @patch("outlook_web.services.graph.get_email_raw_graph")
     @patch("outlook_web.services.graph.get_email_detail_graph")
     @patch("outlook_web.services.graph.get_emails_graph")
-    def test_low_confidence_code_response_includes_confidence_metadata(self, mock_list, mock_detail, mock_raw):
+    def test_external_verification_link_returns_link_only_when_code_also_exists(
+        self, mock_list, mock_detail, mock_raw
+    ):
+        """external link 接口应只返回 link，不混杂 code。"""
+        email_addr = self._insert_outlook_account()
+        self._set_external_api_key("abc123")
+        mock_list.return_value = {
+            "success": True,
+            "emails": [self._graph_email(subject="Your verification code")],
+        }
+        mock_detail.return_value = self._graph_detail(
+            body_text="Your verification code is 123456. Click https://auth.example.com/verify?token=abc",
+        )
+        mock_raw.return_value = "RAW"
+
+        client = self.app.test_client()
+        resp = client.get(
+            f"/api/external/verification-link?email={email_addr}",
+            headers=self._auth_headers(),
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertTrue(data.get("success"))
+        self.assertIn("verify", data.get("data", {}).get("verification_link", ""))
+        self.assertIsNone(data.get("data", {}).get("verification_code"))
+
+    @patch("outlook_web.services.graph.get_email_raw_graph")
+    @patch("outlook_web.services.graph.get_email_detail_graph")
+    @patch("outlook_web.services.graph.get_emails_graph")
+    def test_external_verification_code_returns_code_only_when_both_exist(
+        self, mock_list, mock_detail, mock_raw
+    ):
+        """external code 接口应只返回 code，不混杂 link。"""
+        email_addr = self._insert_outlook_account()
+        self._set_external_api_key("abc123")
+        mock_list.return_value = {
+            "success": True,
+            "emails": [self._graph_email(subject="Your verification code")],
+        }
+        mock_detail.return_value = self._graph_detail(
+            body_text="Your verification code is 123456. Click https://auth.example.com/verify?token=abc",
+        )
+        mock_raw.return_value = "RAW"
+
+        client = self.app.test_client()
+        resp = client.get(
+            f"/api/external/verification-code?email={email_addr}",
+            headers=self._auth_headers(),
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertTrue(data.get("success"))
+        self.assertEqual(data.get("data", {}).get("verification_code"), "123456")
+        self.assertIsNone(data.get("data", {}).get("verification_link"))
+
+    @patch("outlook_web.services.graph.get_email_raw_graph")
+    @patch("outlook_web.services.graph.get_email_detail_graph")
+    @patch("outlook_web.services.graph.get_emails_graph")
+    def test_low_confidence_code_response_includes_confidence_metadata(
+        self, mock_list, mock_detail, mock_raw
+    ):
         """低置信度返回 404 时，仍可从错误中辨别原因（非邮件不存在，而是无可信结果）"""
         email_addr = self._insert_outlook_account()
         self._set_external_api_key("abc123")
@@ -1559,7 +1873,10 @@ class ExternalApiVerificationConfidenceTests(ExternalApiBaseTest):
             "from": {"emailAddress": {"address": "noreply@example.com"}},
             "toRecipients": [{"emailAddress": {"address": "user@outlook.com"}}],
             "receivedDateTime": self._utc_iso(),
-            "body": {"content": "There are 445566 active users this quarter.", "contentType": "text"},
+            "body": {
+                "content": "There are 445566 active users this quarter.",
+                "contentType": "text",
+            },
         }
         mock_detail.return_value = report_detail
         mock_raw.return_value = "RAW"
@@ -1576,7 +1893,9 @@ class ExternalApiVerificationConfidenceTests(ExternalApiBaseTest):
     @patch("outlook_web.services.graph.get_email_raw_graph")
     @patch("outlook_web.services.graph.get_email_detail_graph")
     @patch("outlook_web.services.graph.get_emails_graph")
-    def test_code_with_custom_regex_still_returns_high_confidence(self, mock_list, mock_detail, mock_raw):
+    def test_code_with_custom_regex_still_returns_high_confidence(
+        self, mock_list, mock_detail, mock_raw
+    ):
         """调用方传入 code_regex 精确匹配时，关键词命中仍返回 high confidence"""
         email_addr = self._insert_outlook_account()
         self._set_external_api_key("abc123")
@@ -1603,7 +1922,9 @@ class ExternalApiVerificationConfidenceTests(ExternalApiBaseTest):
     @patch("outlook_web.services.graph.get_email_raw_graph")
     @patch("outlook_web.services.graph.get_email_detail_graph")
     @patch("outlook_web.services.graph.get_emails_graph")
-    def test_code_regex_without_keyword_context_still_succeeds(self, mock_list, mock_detail, mock_raw):
+    def test_code_regex_without_keyword_context_still_succeeds(
+        self, mock_list, mock_detail, mock_raw
+    ):
         """code_regex 精确匹配，邮件无验证码关键词 → 仍应返回 200"""
         email_addr = self._insert_outlook_account()
         self._set_external_api_key("abc123")
@@ -1617,7 +1938,10 @@ class ExternalApiVerificationConfidenceTests(ExternalApiBaseTest):
             "from": {"emailAddress": {"address": "noreply@example.com"}},
             "toRecipients": [{"emailAddress": {"address": "user@outlook.com"}}],
             "receivedDateTime": self._utc_iso(),
-            "body": {"content": "Use AB1234 within 5 minutes to proceed.", "contentType": "text"},
+            "body": {
+                "content": "Use AB1234 within 5 minutes to proceed.",
+                "contentType": "text",
+            },
         }
         mock_detail.return_value = detail
         mock_raw.return_value = "RAW"
@@ -1636,7 +1960,9 @@ class ExternalApiVerificationConfidenceTests(ExternalApiBaseTest):
     @patch("outlook_web.services.graph.get_email_raw_graph")
     @patch("outlook_web.services.graph.get_email_detail_graph")
     @patch("outlook_web.services.graph.get_emails_graph")
-    def test_opaque_verify_link_with_email_context_succeeds(self, mock_list, mock_detail, mock_raw):
+    def test_opaque_verify_link_with_email_context_succeeds(
+        self, mock_list, mock_detail, mock_raw
+    ):
         """URL 不含验证关键词但邮件正文有验证语境 → 应返回 200"""
         email_addr = self._insert_outlook_account()
         self._set_external_api_key("abc123")
@@ -1650,7 +1976,10 @@ class ExternalApiVerificationConfidenceTests(ExternalApiBaseTest):
             "from": {"emailAddress": {"address": "noreply@example.com"}},
             "toRecipients": [{"emailAddress": {"address": "user@outlook.com"}}],
             "receivedDateTime": self._utc_iso(),
-            "body": {"content": "Click to verify your email: https://auth.example.com/t/abc123", "contentType": "text"},
+            "body": {
+                "content": "Click to verify your email: https://auth.example.com/t/abc123",
+                "contentType": "text",
+            },
         }
         mock_detail.return_value = detail
         mock_raw.return_value = "RAW"
@@ -1669,7 +1998,9 @@ class ExternalApiVerificationConfidenceTests(ExternalApiBaseTest):
     @patch("outlook_web.services.graph.get_email_raw_graph")
     @patch("outlook_web.services.graph.get_email_detail_graph")
     @patch("outlook_web.services.graph.get_emails_graph")
-    def test_discount_code_email_link_returns_404(self, mock_list, mock_detail, mock_raw):
+    def test_discount_code_email_link_returns_404(
+        self, mock_list, mock_detail, mock_raw
+    ):
         """营销邮件正文含 'discount code' + 普通链接 → 不应被提权，应返回 404"""
         email_addr = self._insert_outlook_account()
         self._set_external_api_key("abc123")
@@ -1691,12 +2022,16 @@ class ExternalApiVerificationConfidenceTests(ExternalApiBaseTest):
             headers=self._auth_headers(),
         )
 
-        self.assertEqual(resp.status_code, 404, "'discount code' 语境不应让普通链接通过门控")
+        self.assertEqual(
+            resp.status_code, 404, "'discount code' 语境不应让普通链接通过门控"
+        )
 
     @patch("outlook_web.services.graph.get_email_raw_graph")
     @patch("outlook_web.services.graph.get_email_detail_graph")
     @patch("outlook_web.services.graph.get_emails_graph")
-    def test_confirm_your_order_link_returns_404(self, mock_list, mock_detail, mock_raw):
+    def test_confirm_your_order_link_returns_404(
+        self, mock_list, mock_detail, mock_raw
+    ):
         """'confirm your order' 不是验证语境 → 普通链接应返回 404"""
         email_addr = self._insert_outlook_account()
         self._set_external_api_key("abc123")
@@ -1718,7 +2053,9 @@ class ExternalApiVerificationConfidenceTests(ExternalApiBaseTest):
             headers=self._auth_headers(),
         )
 
-        self.assertEqual(resp.status_code, 404, "'confirm your order' 不应让普通链接通过门控")
+        self.assertEqual(
+            resp.status_code, 404, "'confirm your order' 不应让普通链接通过门控"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1759,7 +2096,9 @@ class ExternalApiRegressionExtendedTests(ExternalApiBaseTest):
             key = settings_repo.get_external_api_key()
             self.assertTrue(key, "external_api_key 不应被清空")
 
-    def test_settings_empty_legacy_gptmail_api_key_does_not_clear_temp_mail_api_key(self):
+    def test_settings_empty_legacy_gptmail_api_key_does_not_clear_temp_mail_api_key(
+        self,
+    ):
         client = self.app.test_client()
         self._login(client)
 
@@ -1776,8 +2115,12 @@ class ExternalApiRegressionExtendedTests(ExternalApiBaseTest):
         with self.app.app_context():
             from outlook_web.repositories import settings as settings_repo
 
-            self.assertEqual(settings_repo.get_setting("temp_mail_api_key"), "temp-mail-secret")
-            self.assertEqual(settings_repo.get_setting("gptmail_api_key"), "legacy-secret")
+            self.assertEqual(
+                settings_repo.get_setting("temp_mail_api_key"), "temp-mail-secret"
+            )
+            self.assertEqual(
+                settings_repo.get_setting("gptmail_api_key"), "legacy-secret"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -1804,7 +2147,11 @@ class ExternalApiAuditTests(ExternalApiBaseTest):
         audit_logs = self._external_audit_logs()
         self.assertGreaterEqual(len(audit_logs), 1)
         last_log = audit_logs[-1]
-        details = json.loads(last_log["details"]) if isinstance(last_log["details"], str) else last_log["details"]
+        details = (
+            json.loads(last_log["details"])
+            if isinstance(last_log["details"], str)
+            else last_log["details"]
+        )
         self.assertEqual(details.get("code"), "MAIL_NOT_FOUND")
 
     def test_audit_logs_do_not_contain_api_key(self):
@@ -1812,13 +2159,20 @@ class ExternalApiAuditTests(ExternalApiBaseTest):
         self._set_external_api_key("super-secret-api-key-12345")
         client = self.app.test_client()
 
-        resp = client.get("/api/external/health", headers=self._auth_headers("super-secret-api-key-12345"))
+        resp = client.get(
+            "/api/external/health",
+            headers=self._auth_headers("super-secret-api-key-12345"),
+        )
         self.assertEqual(resp.status_code, 200)
 
         audit_logs = self._external_audit_logs()
         for log in audit_logs:
             details_str = json.dumps(log) if isinstance(log, dict) else str(log)
-            self.assertNotIn("super-secret-api-key-12345", details_str, "审计日志不应包含明文 API Key")
+            self.assertNotIn(
+                "super-secret-api-key-12345",
+                details_str,
+                "审计日志不应包含明文 API Key",
+            )
 
 
 if __name__ == "__main__":
@@ -1848,7 +2202,9 @@ class ExternalApiGuardBaseTest(ExternalApiBaseTest):
         with self.app.app_context():
             from outlook_web.repositories import settings as settings_repo
 
-            settings_repo.set_setting("external_api_public_mode", "true" if enabled else "false")
+            settings_repo.set_setting(
+                "external_api_public_mode", "true" if enabled else "false"
+            )
 
     def _set_ip_whitelist(self, ips: list):
         import json as _json
@@ -1868,7 +2224,9 @@ class ExternalApiGuardBaseTest(ExternalApiBaseTest):
         with self.app.app_context():
             from outlook_web.repositories import settings as settings_repo
 
-            settings_repo.set_setting(f"external_api_disable_{feature}", "true" if disabled else "false")
+            settings_repo.set_setting(
+                f"external_api_disable_{feature}", "true" if disabled else "false"
+            )
 
     def _clear_rate_limits(self):
         with self.app.app_context():
@@ -2085,7 +2443,9 @@ class GuardRateLimitTests(ExternalApiGuardBaseTest):
             resp = client.get("/api/external/health", headers=self._auth_headers())
             results.append(resp.status_code)
         # 前 3 次应该通过（200），之后应该是 429
-        self.assertTrue(any(s == 429 for s in results), f"预期至少一个 429，实际: {results}")
+        self.assertTrue(
+            any(s == 429 for s in results), f"预期至少一个 429，实际: {results}"
+        )
         # 检查 429 响应内容
         last_429 = [r for r in range(5) if results[r] == 429]
         if last_429:
@@ -2195,7 +2555,9 @@ class GuardSettingsApiTests(ExternalApiGuardBaseTest):
             resp2 = client.get("/api/settings")
             s = resp2.get_json()["settings"]
             self.assertTrue(s["external_api_public_mode"])
-            self.assertEqual(s["external_api_ip_whitelist"], ["10.0.0.1", "192.168.0.0/16"])
+            self.assertEqual(
+                s["external_api_ip_whitelist"], ["10.0.0.1", "192.168.0.0/16"]
+            )
             self.assertEqual(s["external_api_rate_limit_per_minute"], 30)
             self.assertTrue(s["external_api_disable_raw_content"])
             self.assertTrue(s["external_api_disable_wait_message"])
@@ -2328,7 +2690,9 @@ class ProbeStatusTests(ExternalApiProbeBaseTest):
             headers=self._auth_headers(),
         )
         probe_id = resp.get_json()["data"]["probe_id"]
-        resp2 = client.get(f"/api/external/probe/{probe_id}", headers=self._auth_headers())
+        resp2 = client.get(
+            f"/api/external/probe/{probe_id}", headers=self._auth_headers()
+        )
         data = resp2.get_json()["data"]
         self.assertEqual(data["email"], email_addr)
 
@@ -2364,7 +2728,10 @@ class ProbePollTests(ExternalApiProbeBaseTest):
             from outlook_web.db import get_db
 
             db = get_db()
-            row = db.execute("SELECT status FROM external_probe_cache WHERE id = ?", ("expired-probe-1",)).fetchone()
+            row = db.execute(
+                "SELECT status FROM external_probe_cache WHERE id = ?",
+                ("expired-probe-1",),
+            ).fetchone()
             self.assertEqual(row["status"], "timeout")
 
     def test_poll_matches_new_email(self):
@@ -2398,7 +2765,10 @@ class ProbePollTests(ExternalApiProbeBaseTest):
             "method": "graph",
         }
         with self.app.app_context():
-            with patch("outlook_web.services.external_api.get_latest_message_for_external", return_value=mock_msg):
+            with patch(
+                "outlook_web.services.external_api.get_latest_message_for_external",
+                return_value=mock_msg,
+            ):
                 from outlook_web.services.external_api import poll_pending_probes
 
                 poll_pending_probes()
@@ -2407,7 +2777,9 @@ class ProbePollTests(ExternalApiProbeBaseTest):
             from outlook_web.db import get_db
 
             db = get_db()
-            row = db.execute("SELECT * FROM external_probe_cache WHERE id = ?", ("match-probe-1",)).fetchone()
+            row = db.execute(
+                "SELECT * FROM external_probe_cache WHERE id = ?", ("match-probe-1",)
+            ).fetchone()
             self.assertEqual(row["status"], "matched")
             self.assertIn("msg-new", row["result_json"])
 
@@ -2439,7 +2811,9 @@ class ProbePollTests(ExternalApiProbeBaseTest):
             from outlook_web.db import get_db
 
             db = get_db()
-            row = db.execute("SELECT * FROM external_probe_cache WHERE id = ?", ("old-probe-1",)).fetchone()
+            row = db.execute(
+                "SELECT * FROM external_probe_cache WHERE id = ?", ("old-probe-1",)
+            ).fetchone()
             self.assertIsNone(row)
 
     def test_poll_handles_upstream_error(self):
@@ -2467,7 +2841,8 @@ class ProbePollTests(ExternalApiProbeBaseTest):
 
         with self.app.app_context():
             with patch(
-                "outlook_web.services.external_api.get_latest_message_for_external", side_effect=RuntimeError("Network down")
+                "outlook_web.services.external_api.get_latest_message_for_external",
+                side_effect=RuntimeError("Network down"),
             ):
                 from outlook_web.services.external_api import poll_pending_probes
 
@@ -2477,6 +2852,8 @@ class ProbePollTests(ExternalApiProbeBaseTest):
             from outlook_web.db import get_db
 
             db = get_db()
-            row = db.execute("SELECT * FROM external_probe_cache WHERE id = ?", ("error-probe-1",)).fetchone()
+            row = db.execute(
+                "SELECT * FROM external_probe_cache WHERE id = ?", ("error-probe-1",)
+            ).fetchone()
             self.assertEqual(row["status"], "error")
             self.assertIn("Network down", row["error_message"])

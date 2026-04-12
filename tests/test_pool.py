@@ -26,14 +26,18 @@ class PoolRepositoryTests(unittest.TestCase):
             (email, pool_status),
         )
         conn.commit()
-        row = conn.execute("SELECT id FROM accounts WHERE email = ?", (email,)).fetchone()
+        row = conn.execute(
+            "SELECT id FROM accounts WHERE email = ?", (email,)
+        ).fetchone()
         return row["id"]
 
     def test_claim_and_complete_success(self):
         conn = self.create_conn()
         try:
             self._make_account(conn)
-            result = self.pool_repo.claim_atomic(conn, caller_id="reg_bot", task_id="task_001", lease_seconds=60)
+            result = self.pool_repo.claim_atomic(
+                conn, caller_id="reg_bot", task_id="task_001", lease_seconds=60
+            )
             self.assertIsNotNone(result)
             self.assertTrue(result["claim_token"].startswith("clm_"))
             claimed_id = result["id"]
@@ -68,7 +72,9 @@ class PoolRepositoryTests(unittest.TestCase):
         conn = self.create_conn()
         try:
             account_id = self._make_account(conn)
-            result = self.pool_repo.claim_atomic(conn, caller_id="reg_bot", task_id="task_002", lease_seconds=60)
+            result = self.pool_repo.claim_atomic(
+                conn, caller_id="reg_bot", task_id="task_002", lease_seconds=60
+            )
             self.assertIsNotNone(result)
 
             self.pool_repo.release(
@@ -93,11 +99,15 @@ class PoolRepositoryTests(unittest.TestCase):
         conn = self.create_conn()
         try:
             self._make_account(conn)
-            result = self.pool_repo.claim_atomic(conn, caller_id="reg_bot", task_id="task_003", lease_seconds=60)
+            result = self.pool_repo.claim_atomic(
+                conn, caller_id="reg_bot", task_id="task_003", lease_seconds=60
+            )
             self.assertIsNotNone(result)
             claimed_id = result["id"]
 
-            before = conn.execute("SELECT fail_count FROM accounts WHERE id = ?", (claimed_id,)).fetchone()["fail_count"]
+            before = conn.execute(
+                "SELECT fail_count FROM accounts WHERE id = ?", (claimed_id,)
+            ).fetchone()["fail_count"]
 
             new_status = self.pool_repo.complete(
                 conn,
@@ -154,7 +164,9 @@ class PoolRepositoryTests(unittest.TestCase):
             expired_count = self.pool_repo.expire_stale_claims(conn)
             self.assertGreaterEqual(expired_count, 1)
 
-            row = conn.execute("SELECT pool_status FROM accounts WHERE id = ?", (account_id,)).fetchone()
+            row = conn.execute(
+                "SELECT pool_status FROM accounts WHERE id = ?", (account_id,)
+            ).fetchone()
             self.assertEqual(row["pool_status"], "cooldown")
         finally:
             conn.close()
@@ -172,7 +184,9 @@ class PoolRepositoryTests(unittest.TestCase):
             recovered = self.pool_repo.recover_cooldown(conn, cooldown_seconds=3600)
             self.assertGreaterEqual(recovered, 1)
 
-            row = conn.execute("SELECT pool_status FROM accounts WHERE id = ?", (account_id,)).fetchone()
+            row = conn.execute(
+                "SELECT pool_status FROM accounts WHERE id = ?", (account_id,)
+            ).fetchone()
             self.assertEqual(row["pool_status"], "available")
         finally:
             conn.close()
@@ -218,11 +232,15 @@ class PoolRepositoryTests(unittest.TestCase):
         conn = self.create_conn()
         try:
             account_id = self._make_account(conn)
-            result = self.pool_repo.claim_atomic(conn, caller_id="reg_bot", task_id="task_ne", lease_seconds=60)
+            result = self.pool_repo.claim_atomic(
+                conn, caller_id="reg_bot", task_id="task_ne", lease_seconds=60
+            )
             self.assertIsNotNone(result)
             claimed_id = result["id"]
 
-            before = conn.execute("SELECT fail_count FROM accounts WHERE id = ?", (claimed_id,)).fetchone()["fail_count"]
+            before = conn.execute(
+                "SELECT fail_count FROM accounts WHERE id = ?", (claimed_id,)
+            ).fetchone()["fail_count"]
 
             new_status = self.pool_repo.complete(
                 conn,
@@ -248,11 +266,15 @@ class PoolRepositoryTests(unittest.TestCase):
         conn = self.create_conn()
         try:
             account_id = self._make_account(conn)
-            result = self.pool_repo.claim_atomic(conn, caller_id="reg_bot", task_id="task_pb", lease_seconds=60)
+            result = self.pool_repo.claim_atomic(
+                conn, caller_id="reg_bot", task_id="task_pb", lease_seconds=60
+            )
             self.assertIsNotNone(result)
             claimed_id = result["id"]
 
-            before = conn.execute("SELECT fail_count FROM accounts WHERE id = ?", (claimed_id,)).fetchone()["fail_count"]
+            before = conn.execute(
+                "SELECT fail_count FROM accounts WHERE id = ?", (claimed_id,)
+            ).fetchone()["fail_count"]
 
             new_status = self.pool_repo.complete(
                 conn,
@@ -278,11 +300,15 @@ class PoolRepositoryTests(unittest.TestCase):
         conn = self.create_conn()
         try:
             account_id = self._make_account(conn)
-            result = self.pool_repo.claim_atomic(conn, caller_id="reg_bot", task_id="task_ci", lease_seconds=60)
+            result = self.pool_repo.claim_atomic(
+                conn, caller_id="reg_bot", task_id="task_ci", lease_seconds=60
+            )
             self.assertIsNotNone(result)
             claimed_id = result["id"]
 
-            before = conn.execute("SELECT fail_count FROM accounts WHERE id = ?", (claimed_id,)).fetchone()["fail_count"]
+            before = conn.execute(
+                "SELECT fail_count FROM accounts WHERE id = ?", (claimed_id,)
+            ).fetchone()["fail_count"]
 
             new_status = self.pool_repo.complete(
                 conn,
@@ -308,7 +334,9 @@ class PoolRepositoryTests(unittest.TestCase):
         conn = self.create_conn()
         try:
             account_id = self._make_account(conn)
-            result = self.pool_repo.claim_atomic(conn, caller_id="log_bot", task_id="log_task_001", lease_seconds=60)
+            result = self.pool_repo.claim_atomic(
+                conn, caller_id="log_bot", task_id="log_task_001", lease_seconds=60
+            )
             self.assertIsNotNone(result)
             claimed_id = result["id"]
             log_row = conn.execute(
@@ -331,7 +359,9 @@ class PoolRepositoryTests(unittest.TestCase):
         conn = self.create_conn()
         try:
             account_id = self._make_account(conn)
-            result = self.pool_repo.claim_atomic(conn, caller_id="log_bot", task_id="log_task_002", lease_seconds=60)
+            result = self.pool_repo.claim_atomic(
+                conn, caller_id="log_bot", task_id="log_task_002", lease_seconds=60
+            )
             self.assertIsNotNone(result)
             claimed_id = result["id"]
             self.pool_repo.complete(
@@ -392,7 +422,9 @@ class PoolRepositoryTests(unittest.TestCase):
         conn = self.create_conn()
         try:
             account_id = self._make_account(conn)
-            result1 = self.pool_repo.claim_atomic(conn, caller_id="bot", task_id="excl_t1", lease_seconds=60)
+            result1 = self.pool_repo.claim_atomic(
+                conn, caller_id="bot", task_id="excl_t1", lease_seconds=60
+            )
             self.assertIsNotNone(result1)
             claimed_id = result1["id"]
             self.pool_repo.release(
@@ -461,7 +493,9 @@ class PoolRepositoryTests(unittest.TestCase):
                 "SELECT * FROM account_project_usage WHERE account_id = ? AND project_key = 'proj_x'",
                 (claimed_id,),
             ).fetchone()
-            self.assertIsNotNone(usage_row, "claim 后应在 account_project_usage 写入记录")
+            self.assertIsNotNone(
+                usage_row, "claim 后应在 account_project_usage 写入记录"
+            )
 
             # 释放该账号
             self.pool_repo.release(
@@ -484,7 +518,9 @@ class PoolRepositoryTests(unittest.TestCase):
             )
 
             # 确认账号状态恢复为 available
-            row = conn.execute("SELECT pool_status FROM accounts WHERE id = ?", (claimed_id,)).fetchone()
+            row = conn.execute(
+                "SELECT pool_status FROM accounts WHERE id = ?", (claimed_id,)
+            ).fetchone()
             self.assertEqual(row["pool_status"], "available")
 
             # 第二次用相同 project_key 再次领取 —— 应该成功（而不是 None）
@@ -509,7 +545,9 @@ class PoolRepositoryTests(unittest.TestCase):
         conn = self.create_conn()
         try:
             account_id = self._make_account(conn)
-            result = self.pool_repo.claim_atomic(conn, caller_id="bot", task_id="task_no_proj", lease_seconds=60)
+            result = self.pool_repo.claim_atomic(
+                conn, caller_id="bot", task_id="task_no_proj", lease_seconds=60
+            )
             self.assertIsNotNone(result)
 
             self.pool_repo.release(
@@ -521,7 +559,9 @@ class PoolRepositoryTests(unittest.TestCase):
                 reason="no project key test",
             )
 
-            row = conn.execute("SELECT pool_status FROM accounts WHERE id = ?", (result["id"],)).fetchone()
+            row = conn.execute(
+                "SELECT pool_status FROM accounts WHERE id = ?", (result["id"],)
+            ).fetchone()
             self.assertEqual(
                 row["pool_status"],
                 "available",
@@ -573,7 +613,9 @@ class PoolRepositoryTests(unittest.TestCase):
                 "SELECT * FROM account_project_usage WHERE account_id = ? AND project_key = 'proj_y'",
                 (r["id"],),
             ).fetchone()
-            self.assertIsNotNone(usage_row, "complete(success) 不应清除 account_project_usage 记录")
+            self.assertIsNotNone(
+                usage_row, "complete(success) 不应清除 account_project_usage 记录"
+            )
         finally:
             conn.close()
 
@@ -582,7 +624,9 @@ class PoolRepositoryTests(unittest.TestCase):
             tokens = set()
             for i in range(5):
                 account_id = self._make_account(conn)
-                result = self.pool_repo.claim_atomic(conn, caller_id="bot", task_id=f"uniq_t{i}", lease_seconds=60)
+                result = self.pool_repo.claim_atomic(
+                    conn, caller_id="bot", task_id=f"uniq_t{i}", lease_seconds=60
+                )
                 self.assertIsNotNone(result)
                 tokens.add(result["claim_token"])
                 self.pool_repo.complete(
@@ -640,7 +684,9 @@ class PoolRepositoryTests(unittest.TestCase):
         conn = self.create_conn()
         try:
             account_id = self._make_account(conn)
-            result = self.pool_repo.claim_atomic(conn, caller_id="log_bot", task_id="log_rel_001", lease_seconds=60)
+            result = self.pool_repo.claim_atomic(
+                conn, caller_id="log_bot", task_id="log_rel_001", lease_seconds=60
+            )
             self.assertIsNotNone(result)
             claimed_id = result["id"]
 
@@ -737,8 +783,12 @@ class PoolRepositoryTests(unittest.TestCase):
             claimed_after = stats_after["pool_counts"]["claimed"]
             cooldown_after = stats_after["pool_counts"]["cooldown"]
 
-            self.assertLess(claimed_after, claimed_before, "expire 后 claimed 数量应减少")
-            self.assertGreater(cooldown_after, cooldown_before, "expire 后 cooldown 数量应增加")
+            self.assertLess(
+                claimed_after, claimed_before, "expire 后 claimed 数量应减少"
+            )
+            self.assertGreater(
+                cooldown_after, cooldown_before, "expire 后 cooldown 数量应增加"
+            )
         finally:
             conn.close()
 
@@ -786,7 +836,9 @@ class PoolServiceTests(unittest.TestCase):
                 (email, pool_status),
             )
             conn.commit()
-            row = conn.execute("SELECT id FROM accounts WHERE email = ?", (email,)).fetchone()
+            row = conn.execute(
+                "SELECT id FROM accounts WHERE email = ?", (email,)
+            ).fetchone()
             return row["id"]
         finally:
             conn.close()
@@ -1001,8 +1053,12 @@ class PoolApiTests(unittest.TestCase):
             settings_repo.set_setting("external_api_ip_whitelist", "[]")
             settings_repo.set_setting("external_api_rate_limit_per_minute", "60")
             settings_repo.set_setting("external_api_disable_pool_claim_random", "false")
-            settings_repo.set_setting("external_api_disable_pool_claim_release", "false")
-            settings_repo.set_setting("external_api_disable_pool_claim_complete", "false")
+            settings_repo.set_setting(
+                "external_api_disable_pool_claim_release", "false"
+            )
+            settings_repo.set_setting(
+                "external_api_disable_pool_claim_complete", "false"
+            )
             settings_repo.set_setting("external_api_disable_pool_stats", "false")
 
     @staticmethod
@@ -1023,7 +1079,9 @@ class PoolApiTests(unittest.TestCase):
                 (email,),
             )
             conn.commit()
-            row = conn.execute("SELECT id FROM accounts WHERE email = ?", (email,)).fetchone()
+            row = conn.execute(
+                "SELECT id FROM accounts WHERE email = ?", (email,)
+            ).fetchone()
             return row["id"]
         finally:
             conn.close()
@@ -1093,7 +1151,9 @@ class PoolApiTests(unittest.TestCase):
         self.assertEqual(complete_resp.status_code, 200)
         complete_data = json.loads(complete_resp.data)
         self.assertTrue(complete_data["success"])
-        self.assertEqual(complete_data["data"]["account_id"], account_data["account_id"])
+        self.assertEqual(
+            complete_data["data"]["account_id"], account_data["account_id"]
+        )
         self.assertEqual(complete_data["data"]["pool_status"], "used")
 
     def test_claim_release_flow(self):

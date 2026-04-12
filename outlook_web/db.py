@@ -32,7 +32,10 @@ from outlook_web.security.crypto import (
 # v16：2026-03-28 patch — 修补 idx_temp_emails_task_token_unique 唯一索引（v15 旧库迁移代码未包含该索引，导致老库升级后缺失）
 # v17：2026-04-02 project-scoped pool reuse — accounts 表新增 email_domain 列，account_project_usage 表（project_key 防同项目重复领取），external_probe_cache 表新增 baseline_timestamp 列
 # v18：2026-04-09 CF临时邮箱接入邮箱池 — accounts 表新增 temp_mail_meta 列（JSON 格式存储 CF 邮箱元数据）
-DB_SCHEMA_VERSION = 19
+# v19：2026-04-10 提取器置信度门控（BUG-00017）
+# v20：2026-04-10 验证码提取提速与 AI 增强（groups 表新增提取策略字段）
+# v21：2026-04-11 Outlook OAuth 验证码提取渠道记忆（accounts.preferred_verification_channel）
+DB_SCHEMA_VERSION = 21
 DB_SCHEMA_VERSION_KEY = "db_schema_version"
 DB_SCHEMA_LAST_UPGRADE_TRACE_ID_KEY = "db_schema_last_upgrade_trace_id"
 DB_SCHEMA_LAST_UPGRADE_ERROR_KEY = "db_schema_last_upgrade_error"
@@ -170,6 +173,10 @@ def init_db(database_path: Optional[str] = None):
                 color TEXT DEFAULT '#1a1a1a',
                 proxy_url TEXT,
                 is_system INTEGER DEFAULT 0,
+                verification_code_length TEXT DEFAULT '6-6',
+                verification_code_regex TEXT DEFAULT '',
+                verification_ai_enabled INTEGER DEFAULT 0,
+                verification_ai_model TEXT DEFAULT '',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -407,6 +414,22 @@ def init_db(database_path: Optional[str] = None):
             cursor.execute("ALTER TABLE groups ADD COLUMN is_system INTEGER DEFAULT 0")
         if "proxy_url" not in group_columns:
             cursor.execute("ALTER TABLE groups ADD COLUMN proxy_url TEXT")
+        if "verification_code_length" not in group_columns:
+            cursor.execute("ALTER TABLE groups ADD COLUMN verification_code_length TEXT DEFAULT '6-6'")
+        if "verification_code_regex" not in group_columns:
+            cursor.execute("ALTER TABLE groups ADD COLUMN verification_code_regex TEXT DEFAULT ''")
+        if "verification_ai_enabled" not in group_columns:
+            cursor.execute("ALTER TABLE groups ADD COLUMN verification_ai_enabled INTEGER DEFAULT 0")
+        if "verification_ai_model" not in group_columns:
+            cursor.execute("ALTER TABLE groups ADD COLUMN verification_ai_model TEXT DEFAULT ''")
+
+        # 回填策略字段默认值（幂等）
+        cursor.execute(
+            "UPDATE groups SET verification_code_length = '6-6' WHERE verification_code_length IS NULL OR TRIM(verification_code_length) = ''"
+        )
+        cursor.execute("UPDATE groups SET verification_code_regex = '' WHERE verification_code_regex IS NULL")
+        cursor.execute("UPDATE groups SET verification_ai_enabled = 0 WHERE verification_ai_enabled IS NULL")
+        cursor.execute("UPDATE groups SET verification_ai_model = '' WHERE verification_ai_model IS NULL")
 
         cursor.execute("PRAGMA table_info(account_refresh_logs)")
         refresh_log_columns = [col[1] for col in cursor.fetchall()]
@@ -666,6 +689,24 @@ def init_db(database_path: Optional[str] = None):
         cursor.execute("""
             INSERT OR IGNORE INTO settings (key, value)
             VALUES ('external_api_key', '')
+            """)
+
+        # 验证码 AI 增强（系统级配置）
+        cursor.execute("""
+            INSERT OR IGNORE INTO settings (key, value)
+            VALUES ('verification_ai_enabled', 'false')
+            """)
+        cursor.execute("""
+            INSERT OR IGNORE INTO settings (key, value)
+            VALUES ('verification_ai_base_url', '')
+            """)
+        cursor.execute("""
+            INSERT OR IGNORE INTO settings (key, value)
+            VALUES ('verification_ai_api_key', '')
+            """)
+        cursor.execute("""
+            INSERT OR IGNORE INTO settings (key, value)
+            VALUES ('verification_ai_model', '')
             """)
 
         # 初始化刷新配置
@@ -1028,6 +1069,12 @@ def init_db(database_path: Optional[str] = None):
         accounts_columns_v18 = [col[1] for col in cursor.fetchall()]
         if "temp_mail_meta" not in accounts_columns_v18:
             cursor.execute("ALTER TABLE accounts ADD COLUMN temp_mail_meta TEXT")
+
+        # v21: Outlook OAuth 验证码提取渠道记忆
+        cursor.execute("PRAGMA table_info(accounts)")
+        accounts_columns_v21 = [col[1] for col in cursor.fetchall()]
+        if "preferred_verification_channel" not in accounts_columns_v21:
+            cursor.execute("ALTER TABLE accounts ADD COLUMN preferred_verification_channel TEXT")
 
         # 迁移现有明文数据为加密数据
         migrate_sensitive_data(conn)
