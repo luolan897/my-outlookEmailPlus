@@ -1,5 +1,40 @@
 # DEVLOG
 
+## v1.15.0 - 验证码提取链路优化与设置页 i18n 补齐
+
+发布日期：2026-04-12
+
+### 新增功能
+
+- 新增验证码提取链路统一能力：Web 与 External API 走同一提取策略，减少双路径行为漂移。
+- 新增系统级验证码 AI 配置闭环：`verification_ai_enabled/base_url/api_key/model` 统一由 settings 管理，支持 API Key 加密存储与脱敏回显。
+- 新增验证码 AI 可用性探测接口：`POST /api/settings/verification-ai-test`，输出结构化诊断字段用于快速排障。
+- 新增固定 JSON 契约 `verification_ai_v1` 与结构校验，降低模型响应格式漂移。
+
+### 修复
+
+- 修复 `ACCOUNT_AUTH_EXPIRED` 误报场景，避免单通道失败导致整体误判。
+- 修复 `VERIFICATION_NOT_FOUND` 语义不一致问题，统一“可读但未提取到验证码”的错误表达。
+- 修复本地直启未加载 `.env` 时的凭据解密异常误判。
+- 修复 SMTP 测试链路 587/465 模式冲突（587 强制 STARTTLS，465 强制 SSL）。
+- 修复设置页 i18n 缺失映射，补齐“基础设置 / 验证码 AI 增强区 / 测试 AI 配置”等关键文案。
+
+### 重要变更
+
+- AI fallback 触发条件由“任一低置信触发”收紧为“code/link 均低置信才触发”，减少无效 AI 调用。
+- 分组级 AI 配置口径收敛：分组仅保留规则项（长度/正则），运行期 AI 配置统一迁移到系统设置。
+- 版本号从 `1.13.0` 升级至 `1.15.0`，由 `outlook_web.__version__` 统一驱动应用与接口版本展示。
+
+### 测试/验证
+
+- 全量回归（分片执行，等价覆盖全量）：
+  - `python -m pytest -q tests/test_[a-m]*.py` → `441 passed, 2 skipped`（188.91s）
+  - `python -m pytest -q tests/test_[n-z]*.py` → `597 passed, 7 skipped`（112.16s）
+  - 合计：`1038 passed, 9 skipped`（301.07s）
+- 版本更新回归：`python -m pytest -q tests/test_version_update.py` → `51 passed`
+- 设置页 i18n 完整性回归：`python -m pytest -q tests/test_i18n_settings_completeness.py` → `20 passed`
+- 验证码提取链路基准对比显示平均耗时下降，长尾场景已收敛并持续观察中。
+
 ## v1.13.0 - 热更新双模式端到端验证与合并
 
 发布日期：2026-04-09

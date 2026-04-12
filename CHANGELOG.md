@@ -4,28 +4,40 @@ All notable changes to OutlookMail Plus are documented in this file.
 
 ## [Unreleased]
 
-### 验证码提取策略与 AI 配置重构（Web + External + Temp Mail）
+（暂无）
 
-- **分层口径收敛（why）**：分组策略仅保留规则项（`verification_code_length`、`verification_code_regex`），运行期 AI 配置统一迁移到系统设置（settings Basic Tab），避免“分组配置与系统配置双口径”导致的运维混乱。
-- **系统级 AI 配置闭环（why）**：`GET/PUT /api/settings` 新增并承载 `verification_ai_enabled/base_url/api_key/model`；API Key 加密存储、脱敏回显；开启 AI 时执行保存期完整性校验。
-- **提取链路提速与稳定性（why）**：保持规则快路径优先，仅在低置信度场景触发 AI fallback；AI 输出异常/无效时快速回退规则结果，不阻塞主流程。
-- **AI fallback 触发条件收紧（方案 A）**：`enhance_verification_with_ai_fallback()` 由"code/link 任一低置信即触发 AI"调整为"code/link 任一高置信即跳过 AI"；仅在两者均为 low 时才调用 AI，避免"验证码已高置信命中却因链接低置信而白白调用 AI"的浪费。对外仍保留 `verification_code`/`verification_link` 双字段结构不变。
-- **固定 JSON 契约（why）**：新增 AI 输入/输出固定 JSON 契约（`verification_ai_v1`），并在服务端进行结构与类型校验，降低模型返回漂移风险。
-- **前端迁移策略（why）**：分组弹窗移除 AI 字段，历史 group AI payload 软兼容（忽略旧字段，不硬失败），实现平滑内部切换。
+## [v1.15.0] - 2026-04-12
 
-### 错误码与兼容性
+### 新增功能
 
-- 新增并统一错误码映射：`GROUP_VERIFICATION_LENGTH_INVALID`、`GROUP_VERIFICATION_REGEX_INVALID`、`VERIFICATION_AI_CONFIG_INCOMPLETE`。
-- 保持提取未命中语义稳定（如 `VERIFICATION_CODE_NOT_FOUND` / `VERIFICATION_LINK_NOT_FOUND`），避免影响既有调用方错误处理逻辑。
-- 修复本地直启环境一致性问题：`web_outlook_app.py` 现在会自动加载 `.env`，避免 `SECRET_KEY` 未注入导致的凭据解密失败与“看似功能回退”的误判。
-- 修复邮件通知测试链路在 `SMTP_PORT=587` 且环境残留 `EMAIL_NOTIFICATION_SMTP_USE_SSL=true` 时的模式冲突：新增端口驱动的传输模式规范化（587 强制 STARTTLS、465 强制 SSL），避免 `/api/settings/email-test` 在测试与运行时出现误报 502。
+- **验证码提取链路重构（Web + External）**：统一验证码提取路径，补齐 repository 层 token 持久化职责边界，减少渠道切换下的状态漂移。
+- **系统级验证码 AI 配置闭环**：`GET/PUT /api/settings` 承载 `verification_ai_enabled/base_url/api_key/model`，支持 API Key 加密存储与脱敏回显。
+- **验证码 AI 可用性探测接口**：新增 `POST /api/settings/verification-ai-test`，基于已保存配置返回结构化探测结果（`ok/error/message/latency_ms/http_status/parsed_output`）。
+- **固定 JSON 契约**：引入 `verification_ai_v1` 输入/输出契约与服务端结构校验，降低模型返回漂移风险。
 
-### 验证码 AI 配置可用性探测（settings）
+### 修复
 
-- 新增 `POST /api/settings/verification-ai-test`：基于**已保存**的系统级 AI 配置执行连通性与契约探测，返回结构化诊断结果（`ok/error/message/latency_ms/http_status/parsed_output`）。
-- 探测口径调整为“连通性优先”：上游返回 HTTP 2xx 即判定 `ok=true`；同时暴露 `connectivity_ok` 与 `contract_ok` 区分“可连通”与“契约完全通过”。
-- 前端“基础 -> 验证码 AI 增强”新增“🤖 测试 AI 配置”按钮与结果提示区，支持在页面内快速判断配置是否真正可用。
-- 探测逻辑复用 `probe_verification_ai_runtime(...)`，重点覆盖：配置缺项、HTTP 错误、响应格式错误、AI 输出不符合固定 JSON 契约、探测成功。
+- 修复 `ACCOUNT_AUTH_EXPIRED` 误报：仅在所有可用通道都无法认证/读取时返回该错误。
+- 修复验证码提取未命中语义：当有通道读取成功但未提取到验证码时统一返回 `VERIFICATION_NOT_FOUND`。
+- 修复本地直启环境一致性：`web_outlook_app.py` 自动加载 `.env`，避免 `SECRET_KEY` 缺失导致的凭据解密失败。
+- 修复邮件通知测试链路 587/465 传输模式冲突：端口驱动规范化（587 强制 STARTTLS、465 强制 SSL）。
+- 修复设置页 i18n 缺失映射：补齐“基础设置 / 验证码 AI 增强区 / 测试 AI 配置”等多处中英映射并新增回归测试。
+
+### 重要变更
+
+- **AI fallback 触发条件收紧（方案 A）**：由“code/link 任一低置信即触发 AI”调整为“仅当 code 与 link 均 low 时触发 AI”，减少不必要 AI 调用。
+- **分层配置口径收敛**：分组策略仅保留规则项（`verification_code_length`、`verification_code_regex`），运行期 AI 配置统一收敛到系统设置。
+- **版本升级**：应用版本由 `1.13.0` 升级为 `1.15.0`（由 `outlook_web.__version__` 统一驱动 UI 与 API 版本展示）。
+
+### 测试/验证
+
+- 全量回归（分片执行，等价覆盖全量）：
+  - `python -m pytest -q tests/test_[a-m]*.py` → `441 passed, 2 skipped`（188.91s）
+  - `python -m pytest -q tests/test_[n-z]*.py` → `597 passed, 7 skipped`（112.16s）
+  - 合计：`1038 passed, 9 skipped`（301.07s）
+- 版本更新回归：`python -m pytest -q tests/test_version_update.py` → `51 passed`
+- 设置页 i18n 完整性回归：`python -m pytest -q tests/test_i18n_settings_completeness.py` → `20 passed`
+- 验证码提取链路优化基准：对比历史基线平均耗时有稳定下降，长尾场景已收敛但仍持续观察。
 
 ## [v1.13.0] - 2026-04-09
 
