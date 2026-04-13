@@ -8,6 +8,48 @@
 
 ### 操作记录
 
+#### 33. v1.16.0 正式发布（GitHub Release + 产物上传）
+
+**时间**：2026-04-13
+
+**本次操作**：
+
+1. 按发布流程执行版本发布
+   - 创建并推送版本提交：`a7d1fb1 docs(release): prepare v1.16.0 version, changelog, and devlog`
+   - 创建并推送 tag：`v1.16.0`
+   - 推送分支：`git push origin main`（`8ae283f..a7d1fb1`）
+   - 推送标签：`git push origin v1.16.0`
+
+2. 发布门禁验证（测试）
+   - `python -m pytest tests/test_version_update.py -q` → `51 passed`
+   - `python -m pytest tests/test_oauth_tool.py -q` → `71 passed`
+   - `python -m pytest tests/ -q` → `1109 passed, 9 skipped`
+
+3. 发布产物构建
+   - Docker 镜像构建：
+     - `docker build -t outlook-email-plus:v1.16.0 .` ✅
+     - image id: `sha256:b53839622bf256e3d6d8bd06ad06372e39b253a5e0555288780b0a6845aaf00c`
+   - 产物导出：
+     - `dist/outlook-email-plus-v1.16.0-docker.tar` ✅
+     - `dist/outlookEmailPlus-v1.16.0-src.zip` ✅（最终通过 `git archive` 生成）
+   - 说明：首次 `Compress-Archive` 方案因运行中数据库文件占用失败，已改用 `git archive` 稳定导出源码包。
+
+4. GitHub Release 发布
+   - 发现 `v1.16.0` Release 已存在（tag push 后自动创建）
+   - 采用 `gh release edit` 更新完整发布日志
+   - 采用 `gh release upload --clobber` 上传产物
+   - 发布地址：
+     - `https://github.com/ZeroPointSix/outlookEmailPlus/releases/tag/v1.16.0`
+
+5. 发布内容结构
+   - 已同步四段式发布说明：
+     - 新增功能
+     - 修复
+     - 重要变更
+     - 测试/验证
+
+---
+
 #### 32. v1.16.0 发布准备（版本更新 + 日志同步）
 
 **时间**：2026-04-13
