@@ -8,6 +8,27 @@
 
 ### 操作记录
 
+#### 36. CI 修复结果复核（四项主工作流恢复全绿）
+
+**时间**：2026-04-13
+
+**本次操作**：
+
+1. 推送格式化修复提交
+   - commit: `5d1f424 chore(format): align release branch with black/isort quality gate`
+
+2. 核对 main 最新 CI 运行结果
+   - `Code Quality` ✅ success（run `24333634815`）
+   - `Python Tests` ✅ success（run `24333634834`）
+   - `Build and Push Docker Image` ✅ success（run `24333634813`）
+   - `SonarCloud Scan` ✅ success（run `24333634798`）
+
+3. 结论
+   - v1.16.0 发布后因格式化导致的 quality-gate 阻断已解除
+   - main 分支 CI/CD 主链路已恢复全绿
+
+---
+
 #### 35. 修复 v1.16.0 发布后的 CI 格式化门禁
 
 **时间**：2026-04-13
