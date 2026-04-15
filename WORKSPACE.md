@@ -8,6 +8,70 @@
 
 ### 操作记录
 
+#### 63. main 分支文档与 WORKSPACE 回填提交（本地未推送）
+
+**时间**：2026-04-15
+
+**本次操作**：
+
+1. 提交范围确认
+   - 提交对象仅包含本会话回填文档与操作记录：
+     - `WORKSPACE.md`
+     - `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`
+     - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`
+     - `docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`
+     - `docs/TODO/2026-04-14-通用Webhook通知与APIKey易用性增强TODO.md`
+     - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强-PRD-FD-TD-TDD联调检查.md`
+
+2. 提交目标
+   - 在 `main` 分支执行本地提交；
+   - 明确不执行 push（保持仅本地 ahead 状态）。
+
+3. 现场状态
+   - 当前后台服务仍由 `PID 41184` 运行（端口 5000）；
+   - 本次只处理文档与记录提交，不做功能代码变更。
+
+#### 62. main 分支本地启动与分批全量回归复核（未推送）
+
+**时间**：2026-04-15
+
+**本次操作**：
+
+1. 分支与现场处理
+   - `Buggithubissue` 已本地 fast-forward 合并到 `main`（未 push）。
+   - 按用户指定方案先停止 5000 端口旧进程：PID `37460`。
+   - 在 `main` 工作区后台启动 `python web_outlook_app.py`。
+   - 首次启动（PID `44204`）运行后退出；二次启动成功，当前 PID `41184`。
+
+2. 服务健康验证（main）
+   - 端口监听：`5000` 监听进程为 PID `41184`。
+   - 健康检查：`GET http://127.0.0.1:5000/healthz` 返回 `200`。
+   - 返回体：`{"boot_id":"1776240270869-41184","status":"ok","version":"1.16.0"}`。
+
+3. 分批全量回归（main）
+   - `python -m unittest discover -s tests -v -p "test_[a-f]*.py"` → `Ran 346, OK`
+   - `python -m unittest discover -s tests -v -p "test_[g-l]*.py"` → `Ran 89, OK`
+   - `python -m unittest discover -s tests -v -p "test_[m-r]*.py"` → `Ran 231, OK (skipped=7)`
+   - `python -m unittest discover -s tests -v -p "test_[s-z]*.py"` → `Ran 492, OK`
+   - 汇总：**1158 tests 通过，skipped=7**。
+
+4. 文档回填（按实际执行更新）
+   - `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`
+     - 升级至 v1.5，新增 main 分支启动与全量回归结果。
+   - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`
+     - 升级至 v1.5，新增 10.4（main 分支启动与回归复核）。
+   - `docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`
+     - 升级至 v1.4，新增 13.8（main 分支回归复核）。
+   - `docs/TODO/2026-04-14-通用Webhook通知与APIKey易用性增强TODO.md`
+     - 升级至 v1.7，新增“main 分支启动 + 全量回归”执行回填。
+   - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强-PRD-FD-TD-TDD联调检查.md`
+     - 新增 4.7（main 分支启动与全量回归回填）。
+
+5. 现场状态
+   - 当前 `main` 分支：`ahead 1`（仅本地，未 push）。
+   - 后台服务运行中：PID `41184`（端口 5000）。
+   - 说明：文档中 PRD 路径仍为会话链路引用，当前仓库未找到对应 PRD 实体文件，已标注“路径待补”。
+
 #### 60. Docker 环境恢复后完成镜像构建与容器健康验证
 
 **时间**：2026-04-15

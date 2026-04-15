@@ -2,10 +2,10 @@
 
 > 检查日期：2026-04-14  
 > 对照文档：
-> - PRD: `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`（v1.5）
-> - FD: `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`（v1.4）
-> - TD: `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`（v1.4）
-> - TDD: `docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`（v1.3）
+> - PRD: `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`（v1.5，路径待补）
+> - FD: `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`（v1.5）
+> - TD: `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`（v1.5）
+> - TDD: `docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`（v1.4）
 
 ---
 
@@ -107,6 +107,20 @@
 - 容器运行成功：`oep-regression-20260415`，端口映射 `18080->5000`；
 - 健康检查通过：`GET /healthz` 返回 `200`，容器状态 `healthy`。
 - 端口异常处理：首次 `5055` 端口绑定失败后已清理失败容器并切换至 `18080` 成功。
+
+### 4.7 main 分支启动与全量回归回填（2026-04-15）
+
+- 分支状态：`Buggithubissue` 已本地 fast-forward 合并到 `main`（未 push）。
+- 服务状态：
+  - 按会话要求先停止旧进程（PID `37460`）；
+  - 在 `main` 后台独立进程重新启动（PID `41184`）；
+  - `GET /healthz` 返回 `200`。
+- 分批全量回归（main）：
+  - `test_[a-f]*` → Ran 346, OK
+  - `test_[g-l]*` → Ran 89, OK
+  - `test_[m-r]*` → Ran 231, OK (skipped=7)
+  - `test_[s-z]*` → Ran 492, OK
+- 汇总：**1158 tests 通过，skipped=7**，与前序回归一致。
 
 ---
 

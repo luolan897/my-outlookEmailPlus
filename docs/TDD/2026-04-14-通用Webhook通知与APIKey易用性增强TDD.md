@@ -1,10 +1,10 @@
 # TDD: 通用 Webhook 通知与 API Key 易用性增强
 
-- 文档版本: v1.3
+- 文档版本: v1.4
 - 创建日期: 2026-04-14
-- 更新日期: 2026-04-15（v1.3 — 回填 Docker 构建与容器健康验证结果）
+- 更新日期: 2026-04-15（v1.4 — 回填 main 分支全量回归复核）
 - 文档类型: 测试设计文档（TDD）
-- 关联 PRD: `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`
+- 关联 PRD: `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`（路径待补）
 - 关联 FD: `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`
 - 关联 TD: `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`
 - 关联 TODO: `docs/TODO/2026-04-14-通用Webhook通知与APIKey易用性增强TODO.md`
@@ -336,3 +336,16 @@ python -m unittest discover -s tests -v
 - 端口：`18080->5000`
 - 状态：`Up ... (healthy)`
 - `docker inspect`：`Health=healthy`
+
+### 13.8 main 分支分批全量回归复核（2026-04-15）
+
+- 分支与运行态：
+  - `Buggithubissue` 已本地 fast-forward 合并到 `main`（未 push）；
+  - 按会话要求在 `main` 重启后台服务，当前 PID `41184`；
+  - `GET /healthz` 返回 `200`（`boot_id=1776240270869-41184`）。
+- main 再次执行分批全量回归：
+  - `python -m unittest discover -s tests -v -p "test_[a-f]*.py"` → **Ran 346, OK**
+  - `python -m unittest discover -s tests -v -p "test_[g-l]*.py"` → **Ran 89, OK**
+  - `python -m unittest discover -s tests -v -p "test_[m-r]*.py"` → **Ran 231, OK (skipped=7)**
+  - `python -m unittest discover -s tests -v -p "test_[s-z]*.py"` → **Ran 492, OK**
+- 汇总：**1158 tests 通过，skipped=7**（与前序两轮结果一致）。

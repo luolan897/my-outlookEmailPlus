@@ -1,9 +1,9 @@
 # FD: 通用 Webhook 通知与 API Key 易用性增强
 
-- 文档版本: v1.4
+- 文档版本: v1.5
 - 创建日期: 2026-04-14
-- 更新日期: 2026-04-15（v1.4 — 回填 Docker 构建与容器健康验证）
-- 关联 PRD: `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`
+- 更新日期: 2026-04-15（v1.5 — 回填 main 分支本地启动与分批全量回归）
+- 关联 PRD: `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`（路径待补）
 - 关联 TD: `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`
 - 关联 TDD: `docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`
 - 关联 TODO: `docs/TODO/2026-04-14-通用Webhook通知与APIKey易用性增强TODO.md`
@@ -252,6 +252,17 @@
 - 执行状态：已完成“保存 + 测试发送 + webhook.site 请求细节核对（POST/text/plain/body）”；失败链路待补
 - 回归状态：第二轮分批全量回归再次通过（1158 tests，skipped=7）
 - Docker 状态：镜像构建成功并已完成容器健康验证（`18080->5000`，`/healthz`=200，container healthy）
+
+会话进展回填（2026-04-15，main 分支）：
+
+- 分支状态：`Buggithubissue` 变更已本地合并到 `main`（fast-forward，未 push）
+- 服务状态：按后台独立进程重新在 `main` 启动 `web_outlook_app.py`（PID `41184`），`GET /healthz` 返回 `200`
+- 回归状态：在 `main` 再次执行分批全量回归并通过：
+  - `test_[a-f]*` → Ran 346, OK
+  - `test_[g-l]*` → Ran 89, OK
+  - `test_[m-r]*` → Ran 231, OK (skipped=7)
+  - `test_[s-z]*` → Ran 492, OK
+  - 汇总：**1158 tests 通过，skipped=7**
 
 ---
 

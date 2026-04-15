@@ -1,10 +1,10 @@
 # TD: 通用 Webhook 通知与 API Key 易用性增强
 
-- 文档版本: v1.4
+- 文档版本: v1.5
 - 创建日期: 2026-04-14
-- 更新日期: 2026-04-15（v1.4 — 回填 Docker 镜像构建与容器健康验证）
+- 更新日期: 2026-04-15（v1.5 — 回填 main 分支启动与分批全量回归）
 - 文档类型: 技术细节设计
-- 关联 PRD: `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`
+- 关联 PRD: `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`（路径待补）
 - 关联 FD: `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`
 - 关联 TDD: `docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`
 - 关联 TODO: `docs/TODO/2026-04-14-通用Webhook通知与APIKey易用性增强TODO.md`
@@ -516,5 +516,21 @@ const key = Array.from(bytes, b => ALPHABET[b % ALPHABET.length]).join('');
    - `docker build -t "outlook-email-plus:local-regression-20260415" .` 成功；
    - 首次 `docker run ... -p 5055:5000` 失败（端口占用/权限）；
    - 清理失败容器后，`docker run -d --name "oep-regression-20260415" -p 18080:5000 ...` 成功；
-   - 容器状态：`healthy`，端口映射 `18080->5000`；
-   - 容器内服务 `/healthz` 验证通过（HTTP 200）。
+    - 容器状态：`healthy`，端口映射 `18080->5000`；
+    - 容器内服务 `/healthz` 验证通过（HTTP 200）。
+
+### 10.4 main 分支本地启动与全量回归复核（2026-04-15）
+
+1. 分支与现场处理：
+   - `Buggithubissue` 已本地 fast-forward 合并到 `main`（未 push）；
+   - 按会话要求先停止原有 5000 端口进程（PID `37460`）；
+   - 在 `main` 重新后台启动 `web_outlook_app.py`（PID `41184`）。
+2. 健康检查：
+   - `GET http://127.0.0.1:5000/healthz` → `200`；
+   - 返回体：`{"boot_id":"1776240270869-41184","status":"ok","version":"1.16.0"}`。
+3. main 分支分批全量回归：
+   - `test_[a-f]*` → Ran 346, OK
+   - `test_[g-l]*` → Ran 89, OK
+   - `test_[m-r]*` → Ran 231, OK (skipped=7)
+   - `test_[s-z]*` → Ran 492, OK
+   - 汇总：**1158 tests 通过，skipped=7**。

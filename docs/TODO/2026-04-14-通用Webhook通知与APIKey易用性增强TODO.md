@@ -1,11 +1,11 @@
 # TODO: 通用 Webhook 通知与 API Key 易用性增强
 
 > 创建日期：2026-04-14  
-> 更新日期：2026-04-15（v1.6 — 回填 Docker 构建与容器验证成功）  
-> 基于 PRD v1.5：`docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`  
-> 基于 FD v1.4：`docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`  
-> 基于 TD v1.4：`docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`  
-> 基于 TDD v1.3：`docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`  
+> 更新日期：2026-04-15（v1.7 — 回填 main 分支启动与全量回归复核）  
+> 基于 PRD v1.5：`docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`（路径待补）  
+> 基于 FD v1.5：`docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`  
+> 基于 TD v1.5：`docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`  
+> 基于 TDD v1.4：`docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`  
 > 联调检查：`docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强-PRD-FD-TD-TDD联调检查.md`  
 > AI 执行提示词：按会话实时提供（不落库文档）  
 > 目标版本：v1.17.x（待排期）
@@ -75,6 +75,19 @@
 - `docker ps`：`oep-regression-20260415` 处于 `Up ... (healthy)`
 - `docker inspect`：`Health=healthy`
 - `docker images`：`outlook-email-plus:local-regression-20260415` 存在（image id `acc8f048a48e`）
+
+### 本次执行回填（2026-04-15，main 分支启动 + 全量回归）
+
+- 分支合并：`Buggithubissue` 已本地 fast-forward 合并到 `main`（未 push）。
+- 按会话要求先停旧服务：停止 5000 端口进程 PID `37460`。
+- 在 `main` 后台启动：`python web_outlook_app.py`（PID `41184`）。
+- 健康检查：`GET http://127.0.0.1:5000/healthz` → `200`。
+- 分批全量回归（main）：
+  - `test_[a-f]*` → **Ran 346, OK**
+  - `test_[g-l]*` → **Ran 89, OK**
+  - `test_[m-r]*` → **Ran 231, OK (skipped=7)**
+  - `test_[s-z]*` → **Ran 492, OK**
+- 汇总：**1158 tests 通过，skipped=7**。
 
 ---
 
