@@ -35,7 +35,8 @@ from outlook_web.security.crypto import (
 # v19：2026-04-10 提取器置信度门控（BUG-00017）
 # v20：2026-04-10 验证码提取提速与 AI 增强（groups 表新增提取策略字段）
 # v21：2026-04-11 Outlook OAuth 验证码提取渠道记忆（accounts.preferred_verification_channel）
-DB_SCHEMA_VERSION = 21
+# v22：2026-04-16 邮箱池项目维度成功复用（accounts.claimed_project_key + account_project_usage.success_*）
+DB_SCHEMA_VERSION = 22
 DB_SCHEMA_VERSION_KEY = "db_schema_version"
 DB_SCHEMA_LAST_UPGRADE_TRACE_ID_KEY = "db_schema_last_upgrade_trace_id"
 DB_SCHEMA_LAST_UPGRADE_ERROR_KEY = "db_schema_last_upgrade_error"
@@ -369,6 +370,12 @@ def init_db(database_path: Optional[str] = None):
         cursor.execute("PRAGMA table_info(accounts)")
         columns = [col[1] for col in cursor.fetchall()]
 
+        if "password" not in columns:
+            cursor.execute("ALTER TABLE accounts ADD COLUMN password TEXT")
+        if "client_id" not in columns:
+            cursor.execute("ALTER TABLE accounts ADD COLUMN client_id TEXT NOT NULL DEFAULT ''")
+        if "refresh_token" not in columns:
+            cursor.execute("ALTER TABLE accounts ADD COLUMN refresh_token TEXT NOT NULL DEFAULT ''")
         if "group_id" not in columns:
             cursor.execute("ALTER TABLE accounts ADD COLUMN group_id INTEGER DEFAULT 1")
         if "remark" not in columns:
@@ -1045,6 +1052,9 @@ def init_db(database_path: Optional[str] = None):
                 project_key TEXT NOT NULL,
                 first_claimed_at TEXT NOT NULL,
                 last_claimed_at TEXT NOT NULL,
+                first_success_at TEXT DEFAULT NULL,
+                last_success_at TEXT DEFAULT NULL,
+                success_count INTEGER NOT NULL DEFAULT 0,
                 UNIQUE(account_id, consumer_key, project_key),
                 FOREIGN KEY (account_id) REFERENCES accounts(id)
             )
@@ -1075,6 +1085,34 @@ def init_db(database_path: Optional[str] = None):
         accounts_columns_v21 = [col[1] for col in cursor.fetchall()]
         if "preferred_verification_channel" not in accounts_columns_v21:
             cursor.execute("ALTER TABLE accounts ADD COLUMN preferred_verification_channel TEXT")
+
+        # v22: 邮箱池项目维度成功复用
+        cursor.execute("PRAGMA table_info(accounts)")
+        accounts_columns_v22 = [col[1] for col in cursor.fetchall()]
+        if "claimed_project_key" not in accounts_columns_v22:
+            cursor.execute("ALTER TABLE accounts ADD COLUMN claimed_project_key TEXT DEFAULT NULL")
+
+        cursor.execute("PRAGMA table_info(account_project_usage)")
+        project_usage_columns_v22 = [col[1] for col in cursor.fetchall()]
+        if "first_success_at" not in project_usage_columns_v22:
+            cursor.execute("ALTER TABLE account_project_usage ADD COLUMN first_success_at TEXT DEFAULT NULL")
+        if "last_success_at" not in project_usage_columns_v22:
+            cursor.execute("ALTER TABLE account_project_usage ADD COLUMN last_success_at TEXT DEFAULT NULL")
+        if "success_count" not in project_usage_columns_v22:
+            cursor.execute(
+                "ALTER TABLE account_project_usage ADD COLUMN success_count INTEGER NOT NULL DEFAULT 0"
+            )
+
+        if current_version < 22:
+            cursor.execute(
+                """
+                UPDATE accounts
+                SET pool_status = 'available'
+                WHERE pool_status = 'used'
+                  AND COALESCE(provider, '') != 'cloudflare_temp_mail'
+                  AND COALESCE(account_type, '') != 'temp_mail'
+                """
+            )
 
         # 迁移现有明文数据为加密数据
         migrate_sensitive_data(conn)
@@ -1169,9 +1207,17 @@ def init_db(database_path: Optional[str] = None):
 def migrate_sensitive_data(conn: sqlite3.Connection):
     """迁移现有明文敏感数据为加密数据"""
     cursor = conn.cursor()
+    account_columns = {row[1] for row in cursor.execute("PRAGMA table_info(accounts)").fetchall()}
+    has_password = "password" in account_columns
+    has_refresh_token = "refresh_token" in account_columns
+    has_imap_password = "imap_password" in account_columns
 
     # 获取所有账号
-    cursor.execute("SELECT id, password, refresh_token, imap_password FROM accounts")
+    select_fields = ["id"]
+    select_fields.append("password" if has_password else "NULL AS password")
+    select_fields.append("refresh_token" if has_refresh_token else "NULL AS refresh_token")
+    select_fields.append("imap_password" if has_imap_password else "NULL AS imap_password")
+    cursor.execute(f"SELECT {', '.join(select_fields)} FROM accounts")
     accounts = cursor.fetchall()
 
     migrated_count = 0

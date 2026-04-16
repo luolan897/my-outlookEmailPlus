@@ -428,7 +428,8 @@ Request body:
 Current implementation notes:
 
 - `success` marks the mailbox as globally `used`
-- the current version does not support project-scoped reuse of the same mailbox
+- `project_key` only affects duplicate-prevention during `claim-random`; it does not change the global terminal state after `success`
+- the current version does not support project-scoped reuse of the same mailbox after success, so a successful mailbox cannot be claimed again across projects
 - for `provider=cloudflare_temp_mail`:
   - `result in ('success','credential_invalid')` triggers a best-effort remote mailbox deletion
   - deletion failure is non-blocking and does not break `claim-complete` success response

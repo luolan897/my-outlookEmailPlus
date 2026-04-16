@@ -8,226 +8,1220 @@
 
 ### 操作记录
 
-#### 75. OAuth Token 工具新手指引与 Graph 推荐改造 + 分批全量回归 + 启动自测现场记录
+#### 119. 本地合并 Buggithubissue 到 main 并准备主线复验
 
 **时间**：2026-04-16
 
 **本次操作**：
 
-1. 前端实现改造（仅 HTML/CSS/JS，未改后端）
-   - `templates/token_tool.html`
-     - 在 Header 与 OAuth 配置卡片之间新增 `details#guide-card` 折叠指引卡片（默认展开）。
-     - 新增 5 步 Azure 应用注册快速指引（含 Azure 门户直达链接，均为 `target="_blank" rel="noopener"`）。
-     - 新增 `guide-links` 教程链接占位区。
-     - Scope 提示文案改为“推荐优先 Graph 邮件预设（系统默认主链路）”。
-   - `static/css/token_tool.css`
-     - 新增 `.guide-body / .guide-step / .guide-step-num / .guide-step-content / .guide-links` 等样式。
-     - 样式复用现有主题变量，保持亮暗主题一致性。
-   - `static/js/features/token_tool.js`
-     - 新增 `GUIDE_TUTORIAL_LINKS` 常量（教程链接集中管理入口）。
-     - 新增 guide 折叠状态记忆（`localStorage: token_tool_guide_dismissed`）。
-     - 新增 `guide-links` 动态追加链接逻辑（仅当配置常量非空时追加）。
-     - 默认 scope 初始化切换为 Graph 预设；`DEFAULT_COMPAT_SCOPE` 同步改为 Graph。
-     - 保留 `loadOAuthConfig()` 的后端配置覆盖逻辑（后端未保存时，前端先展示 Graph）。
+1. 本地 main 合并
+   - 目标：仅合并到本地 `main`，不推远端
+   - 来源分支：`Buggithubissue`
+   - 当前现场：`main` worktree 原先已处于一次未完成 merge，本轮继续收口
 
-2. 分批全量测试执行（按 300000ms 上限拆分）
-   - `python -m unittest discover -s tests -v -p "test_[a-f]*.py"` → `Ran 346 tests`，`OK`
-   - `python -m unittest discover -s tests -v -p "test_[g-l]*.py"` → `Ran 89 tests`，`OK`
-   - `python -m unittest discover -s tests -v -p "test_[m-r]*.py"` → `Ran 231 tests`，`OK (skipped=7)`
-   - `python -m unittest discover -s tests -v -p "test_[s-z]*.py"` → `Ran 492 tests`，`OK`
-   - 汇总：**1158 tests 通过，skipped=7**。
+2. 冲突处理
+   - 冲突文件：`WORKSPACE.md`
+   - 处理方式：以本需求分支的最新会话记录为主线继续收口，并在主线侧追加本次 merge 记录
 
-3. 前端 Jest 执行现状（按会话要求补充）
-   - 直接执行 `npx jest tests/layout-system/ tests/compact-poll/`：失败（仓库根目录缺少 Jest 根配置）。
-   - 改为显式 config 执行：
-     - `npx jest --config tests/layout-system/jest.config.js`
-     - `npx jest --config tests/compact-poll/jest.config.js`
-   - 两者均失败：当前环境缺少 `jest-environment-jsdom`（Jest 28+ 需单独安装）。
+3. 复验准备
+   - 后续动作：完成 merge commit 后，在本地 `main` 上重新执行全量 `python -m unittest discover -v`
+   - 进程要求：继续使用 `Start-Process` 后台独立进程，不占用前台执行链路
 
-4. 启动自测现场（严格后台独立进程）
-   - 按会话要求使用 `Start-Process` 后台启动，不使用前台阻塞。
-   - 使用默认数据库 `data/outlook_accounts.db` 启动时，日志报错：`sqlite3.DatabaseError: database disk image is malformed`。
-   - 改为自测隔离库（设置 `DATABASE_PATH=data/selftest_*.db`）后可启动，日志显示 Flask 与调度器成功初始化。
-   - 自测日志中出现 `GET /token-tool`、`GET /static/js/features/token_tool.js`、`GET /api/token-tool/config` 等请求记录。
-   - 当前最终复核时端口 `5000` 无监听（自测进程已结束），未遗留前台阻塞链路。
-
-5. 现场状态
-   - 已完成：实现改造 + 分批全量 unittest + 启动自测尝试 + WORKSPACE 回填。
-   - 未修改后端业务逻辑文件（controllers/services/routes/config 均未变更本次需求范围）。
-
-#### 76. OAuth 会话文档按实际实现同步 + 教程规划口径梳理
+#### 118. 将专项审查提示词收口为单一汇总提示词
 
 **时间**：2026-04-16
 
 **本次操作**：
 
-1. 会话需求
-   - 用户确认当前改造方向无阻塞，下一阶段准备编写“使用教程”。
-   - 要求先把会话相关文档按实际实现回填，并持续记录 WORKSPACE。
+1. 用户反馈
+   - 不需要多条专项提示词
+   - 只保留一条可直接执行的汇总审查提示词
 
-2. 文档同步更新（按实现口径）
-   - `docs/PRD/2026-04-12-OAuth-Token获取工具PRD.md`
-     - 升级至 v1.4。
-     - 回填“快速指引卡片已落地（默认展开+可折叠）”。
-     - 回填“Scope UX 推荐 Graph 预设（后端 fallback 仍为 IMAP 兼容）”。
-     - Azure 注册步骤更新为 5 步（新增重定向 URI 步骤）。
-   - `docs/FD/2026-04-12-OAuth-Token获取工具FD.md`
-     - 升级至 v1.1。
-     - 收口说明更新为“前端默认 Graph，后端 fallback IMAP”。
-     - 模板示例中 `guide-card` 由 section 更新为 details 语义实现。
-     - 环境变量默认 Scope 描述修正为后端 IMAP 兼容默认值。
-   - `docs/TD/2026-04-12-OAuth-Token获取工具TD.md`
-     - 升级至 v1.4。
-     - 回填前端引导机制（guide 折叠记忆 + 教程链接扩展位）。
-     - 配置示例同步为后端 `OAUTH_SCOPE` IMAP 默认值。
-   - `docs/TDD/2026-04-12-OAuth-Token获取工具TDD.md`
-     - 升级至 v1.2。
-     - 口径修正为“后端默认 IMAP，前端首次展示默认 Graph”。
-   - `docs/TODO/2026-04-12-OAuth-Token获取工具TODO.md`
-     - 升级至 v1.2。
-     - 文档引用版本同步（FD/TD/TDD）。
-     - 新增 2026-04-16 会话回填说明（新手指引与 Scope UX 实施现状）。
-
-3. 运行态补充
-   - 按“后台独立进程”口径继续验证启动方式（`Start-Process` / 独立进程）。
-   - 发现默认主库 `data/outlook_accounts.db` 存在 `database disk image is malformed`。
-   - 使用隔离 DB (`DATABASE_PATH=data/selftest_bg_*.db`) 可成功启动并可访问 `/token-tool`（见对应 stdout/stderr 日志）。
-
-4. 教程规划口径（为下一步写教程准备）
-   - 教程内容应基于当前页面实际流程：
-     1) 先读快速指引 5 步 →
-     2) 填 OAuth 配置并优先 Graph 预设 →
-     3) 获取授权链接并完成授权 →
-     4) 粘贴回调 URL 换取 Token →
-     5) 写入已有账号或创建新账号。
-   - 教程外链可通过 `guide-links`（HTML 固定 + JS 常量扩展）双轨维护。
-
-5. 现场状态
-   - 本次已完成：文档回填 + WORKSPACE 记录 + 运行态口径补充。
-   - 未执行提交/推送。
-
-#### 77. 教程编写协作口径确认（用户自行截图成文）与文档细节修正
-
-**时间**：2026-04-16
-
-**本次操作**：
-
-1. 会话需求确认
-   - 用户明确：不需要 AI 代写教程正文，改为“AI 提供教学式流程指导，用户自行截图并写教程”。
-   - 执行口径保持：继续通过 MCP 回传结果，不仅写文档，还需在会话中同步说明。
-
-2. 会话文档细节修正
-   - 复核并修正 `docs/TODO/2026-04-12-OAuth-Token获取工具TODO.md` 头部版本引用：
-     - `PRD v1.3` → `PRD v1.4`
-   - 其余上一轮已回填文件维持不变（PRD v1.4 / FD v1.1 / TD v1.4 / TDD v1.2）。
+2. 调整内容
+   - 将原先按 Schema / Repository / Service / 文档 / 风险拆分的审查提示词，收口为一个总提示词
+   - 保留 TODO 对齐、代码实现、测试闭环、文档一致性、回归风险五个核心审查维度
 
 3. 现场状态
-   - 当前后台自测服务仍为独立进程运行（5000 监听，python 进程）。
-   - 本次仅为会话口径与文档引用精修，不涉及新增代码实现。
+   - 汇总提示词将继续通过 `寸止` MCP 输出
+   - 当前人工验收实例仍运行在 `http://127.0.0.1:5000`
 
-#### 78. AADSTS70000 现场答疑回填（Graph 最小权限口径）
+#### 117. 编写基于 TODO 的专项审查提示词套件
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 审查目标整理
+   - 基于 `docs/TODO/2026-04-16-邮箱池项目维度成功复用TODO.md` 的 Phase 2 ~ Phase 5 已完成项
+   - 聚焦 Schema / Repository / Service / 测试 / 文档回填 / 人工验收准备的结果审查
+
+2. 输出内容
+   - 产出一套可直接复制使用的审查提示词
+   - 覆盖总审查、Schema 迁移、Repository 生命周期、Service/Controller 契约、测试与文档一致性、回归风险六个视角
+
+3. 现场状态
+   - 当前服务实例仍运行在 `http://127.0.0.1:5000`
+   - 审查提示词将通过 `寸止` MCP 输出，不单独新建文档文件
+
+#### 116. 启动人工验收实例并完成健康检查
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 启动验收服务
+   - 入口：`python start.py`
+   - 方式：使用 `Start-Process` 独立后台进程启动，不占用前台执行链路
+   - 运行参数：`HOST=127.0.0.1`、`PORT=5000`、`FLASK_ENV=production`
+   - 进程 PID：`4256`
+
+2. 就绪验证
+   - 检查：`GET http://127.0.0.1:5000/healthz`
+   - 结果：HTTP `200`
+   - 返回：`{\"boot_id\":\"1776326763483-4256\",\"status\":\"ok\",\"version\":\"1.17.0\"}`
+
+3. 现场状态
+   - 当前人工验收地址：`http://127.0.0.1:5000`
+   - 服务进程仍在运行，可直接进入页面验收
+
+#### 115. 对齐 CF 旧骨架并完成全量 unittest 绿灯验证
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 失败收敛
+   - 更新：`tests/test_pool_cf_integration_tdd_skeleton.py`
+   - 根因：全量测试中的旧骨架用例仍要求 `release()` 删除 `account_project_usage` 行，与当前“保留 usage、仅 success 阻断”的项目复用语义冲突
+   - 修复：将用例调整为断言 usage 行保留，且 `success_count=0`、`first_success_at/last_success_at` 为空
+
+2. 定向验证
+   - 执行：`python -m unittest tests.test_pool_cf_integration_tdd_skeleton -v`
+   - 方式：使用 `Start-Process` 独立后台进程启动
+   - 结果：`Ran 18 tests in 1.651s`，`OK (skipped=1)`
+
+3. 全量验证
+   - 执行：`python -m unittest discover -v`
+   - 方式：使用 `Start-Process` 独立后台进程启动，不占用前台执行链路
+   - 结果：`Ran 1187 tests in 518.251s`，`OK (skipped=7)`
+
+4. 文档同步
+   - 更新：`docs/TODO/2026-04-16-邮箱池项目维度成功复用TODO.md`
+   - 更新：`docs/TDD/2026-04-16-邮箱池项目维度成功复用TDD.md`
+   - 已将“全量 unittest 通过”回填到本需求相关文档
+
+#### 114. 回填会话执行约束：如需启动进程，只允许后台独立进程
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 会话文档同步
+   - 更新：`docs/TODO/2026-04-16-邮箱池项目维度成功复用TODO.md`
+
+2. 本轮回填内容
+   - 在 TODO 的“会话约束（必须保持）”中新增：
+     - 如果必须启动进程，只能使用新进程后台启动（如 `Start-Process` / 独立进程）
+     - 不再使用前台长命令占住执行链路
+
+3. 现场状态
+   - 当前会话文档已经把“后台独立进程启动”这一最新执行约束显式写明。
+   - 后续如果需要启动服务或长时进程，将遵循该约束执行。
+
+#### 113. 修补 v22 迁移兼容并完成邮箱池相关自动化验证
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 失败收敛
+   - 更新：`outlook_web/db.py`
+   - 根因：遗留 v21 测试库缺少 `password` 等列，`migrate_sensitive_data()` 直接读取时报错
+   - 修复：补齐旧 schema 缺失列，并让 `migrate_sensitive_data()` 按实际列集合做兼容读取
+
+2. 自动化验证
+   - 执行：
+     - `python -m unittest tests.test_db_schema_v22_pool_project_reuse tests.test_pool_repository_project_reuse tests.test_pool_service_project_reuse tests.test_pool_flow_suite tests.test_pool -v`
+   - 首轮结果：`errors=7`，全部来自 v21 迁移兼容缺失
+   - 修复后复跑结果：`Ran 78 tests in 6.379s`，`OK`
+
+3. 文档同步
+   - 更新：`docs/TODO/2026-04-16-邮箱池项目维度成功复用TODO.md`
+   - 更新：`docs/TDD/2026-04-16-邮箱池项目维度成功复用TDD.md`
+   - 已将 Phase 1 / Phase 5 与自动化执行状态回填为最新真实结果
+
+4. 现场状态
+   - 本需求相关主测试集合当前已通过。
+   - 会话侧剩余动作主要是收尾反馈。
+
+#### 112. 对齐旧 pool 回归用例到项目复用新语义
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 更新旧回归测试
+   - 更新：`tests/test_pool.py`
+
+2. 本轮修正点
+   - 将旧的 “release 必须删除 `account_project_usage` 行” 断言改为新语义
+   - 保留“release 后同一 `project_key` 仍可再次领取”的回归目标
+   - 将旧注释中 `complete(success) -> used` 的描述收口为“success 记录继续保留并参与同项目防重”
+
+3. 现场状态
+   - 旧回归测试口径已与当前项目复用实现保持一致。
+   - 自动化测试本轮仍未执行。
+
+#### 111. 落地邮箱池项目维度成功复用实现（Schema v22 + Repository + Service）
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 代码实现推进
+   - 更新：`outlook_web/db.py`
+   - 更新：`outlook_web/repositories/pool.py`
+   - 更新：`outlook_web/services/pool.py`
+
+2. 本轮实现内容
+   - Schema 升级到 `v22`
+   - `accounts` 新增 `claimed_project_key`
+   - `account_project_usage` 新增 `first_success_at / last_success_at / success_count`
+   - 仅在升级到 v22 时，把历史长期邮箱 `used -> available`，且排除 `cloudflare_temp_mail` / `temp_mail`
+   - `claim_atomic()` 改为只拦截同项目 success 记录，并写入当前 claim 的 `claimed_project_key`
+   - `complete()` 支持基于 claim 上下文走项目复用分支：长期邮箱覆盖路径 `success -> available`，旧路径仍保持 `success -> used`
+   - `release()` / `expire_stale_claims()` 改为只清理 claim 上下文，不再删除 `account_project_usage`
+   - `complete_claim()` 在 Service 层读取 `provider / account_type / claimed_project_key` 后判断是否启用项目复用
+
+3. 文档同步
+   - 更新：`docs/TODO/2026-04-16-邮箱池项目维度成功复用TODO.md`
+   - 更新：`docs/TDD/2026-04-16-邮箱池项目维度成功复用TDD.md`
+   - 已回填“实现已落地、自动化验证未执行”的当前真实状态
+
+4. 现场状态
+   - 当前代码已完成本需求 Phase 2 / 3 / 4 的主实现。
+   - 自动化测试本轮未执行，保持为显式保留项。
+
+#### 110. 按会话口径删除落库提示词文档，改为只通过 MCP 输出执行提示词
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 删除落库提示词文档
+   - 删除：`docs/DEV/2026-04-16-邮箱池项目维度成功复用-AI执行提示词.md`
+
+2. 回退 TODO 文档中的落库引用
+   - 更新：`docs/TODO/2026-04-16-邮箱池项目维度成功复用TODO.md`
+
+3. 本轮口径调整
+   - 按用户最新要求，不再把“给其他 AI 的执行提示词”保存在仓库文档中
+   - 后续如需此类提示词，仅通过 `寸止` MCP 直接输出给用户复制使用
+   - TODO 继续只保留需求 / 测试 / 实现阶段拆解，不再挂执行提示词文件路径
+
+4. 现场状态
+   - 当前仓库仍保留 `PRD / FD / TD / TDD / TODO` 五层文档闭环。
+   - “其他 AI 执行提示词”现在改为会话态输出，不再作为仓库文档资产持久保留。
+
+#### 109. 新增本需求 AI 执行提示词并挂回 TODO 文档
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 新增执行提示词文档
+   - 新增：`docs/DEV/2026-04-16-邮箱池项目维度成功复用-AI执行提示词.md`
+
+2. 回填 TODO 文档引用
+   - 更新：`docs/TODO/2026-04-16-邮箱池项目维度成功复用TODO.md`
+
+3. 本轮提示词内容
+   - 明确要求其他 AI 先阅读 `PRD / FD / TD / TDD / TODO / WORKSPACE`
+   - 明确当前真实现状：
+     - 当前并非完全不支持多项目
+     - 真正缺口是 success 后进入全局 `used`
+     - `claim-complete` 缺少 `project_key` 上下文，必须补 `claimed_project_key`
+     - 当前测试已写、实现未做
+   - 明确实现顺序：
+     - Schema v22
+     - Repository 状态机
+     - Service / Controller
+     - 文档与 `WORKSPACE` 收尾
+   - 明确禁止项：
+     - 不新增新 API 字段
+     - 不新增新错误码
+     - 不让临时邮箱误进新语义
+     - 不通过弱化测试掩盖实现缺口
+
+4. 现场状态
+   - 现在这条需求不仅有 TODO，而且还有可以直接交给其他 AI 执行的正式提示词文档。
+   - TODO 与执行提示词已经互相关联，后续可以直接按文档链路推进实现。
+
+#### 108. 新建 TODO 文档并回填本需求文档引用与实际推进状态
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 新建会话 TODO 文档
+   - 新增：`docs/TODO/2026-04-16-邮箱池项目维度成功复用TODO.md`
+
+2. 回填关联文档引用
+   - 更新：`docs/PRD/2026-04-16-邮箱池项目维度成功复用PRD.md`
+   - 更新：`docs/FD/2026-04-16-邮箱池项目维度成功复用FD.md`
+   - 更新：`docs/TD/2026-04-16-邮箱池项目维度成功复用TD.md`
+   - 更新：`docs/TDD/2026-04-16-邮箱池项目维度成功复用TDD.md`
+
+3. 本轮文档修正内容
+   - 为本需求补齐 `PRD / FD / TD / TDD / TODO` 五层文档闭环
+   - 在 PRD / FD / TD / TDD 头部补入 `关联 TODO`
+   - 将 TD 当前状态更新为“测试已开始落地，待进入实现阶段”
+   - 将 TDD 的“交付物清单（测试侧）”从“已开始落地”更新为“已实际落地并持续补强”
+   - 在 TODO 中按真实状态明确：
+     - 文档已收敛完成
+     - 测试代码已先行落地
+     - 业务实现尚未开始
+     - 自动化执行仍是后续阶段保留项
+
+4. 现场状态
+   - 当前本需求的会话文档体系已经从 `PRD / FD / TD / TDD` 扩展为 `PRD / FD / TD / TDD / TODO` 完整链路。
+   - 文档中的推进状态现在与仓库真实状态保持一致，不再只有设计层，也明确标出了“测试先行、实现未开始”的当前阶段。
+
+#### 107. 补强测试断言：Repository 成功计数与 Service 显式 token_mismatch 校验
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 测试代码继续补强
+   - 更新：`tests/test_pool_repository_project_reuse.py`
+   - 更新：`tests/test_pool_service_project_reuse.py`
+
+2. 本轮补强点
+   - Repository 测试补入：
+     - reuse 路径 success 后 `accounts.success_count` 增长断言
+   - Service 测试补入：
+     - 显式 `token_mismatch` 校验测试
+
+3. 现场状态
+   - 当前这批测试的断言粒度又向 TDD 的函数级清单进一步靠近。
+   - 关键路径不再只断主状态，也开始覆盖计数与错误码层的细节。
+
+#### 106. 继续根据 TDD 扩写迁移后可领取行为与 Repository 级剩余状态机测试
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 测试代码继续落地
+   - 更新：`tests/test_db_schema_v22_pool_project_reuse.py`
+   - 更新：`tests/test_pool_repository_project_reuse.py`
+
+2. 本轮新增 / 改造内容
+   - 迁移测试继续补充：
+     - 历史长期邮箱迁移后可以被再次 claim
+     - 原项目在迁移后可以再次拿到一次该邮箱
+   - Repository 级测试继续补充：
+     - 未传 `project_key` 时 `claimed_project_key` 为空
+     - 不同项目 success 历史不阻断再次 claim
+     - 旧路径 success 继续返回 `used`
+     - reuse 路径非 success 不写项目 success 字段
+     - `expire_stale_claims()` 清理 `claimed_project_key` 但不制造 success 记录
+     - `get_stats()` 在 reuse 路径 success 后按 `available` 而不是 `used` 统计
+
+3. 现场状态
+   - 迁移 / Repository 两层的测试覆盖面已经继续向 TDD 文档靠拢。
+   - 当前这批测试已不只是“少量试探性 case”，而是在逐步把 TDD 的核心测试面真实铺开。
+
+#### 105. 继续根据 TDD 补齐 Repository 级测试与更多接口/Service 用例
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 测试代码继续落地
+   - 新增：`tests/test_pool_repository_project_reuse.py`
+   - 更新：`tests/test_pool_service_project_reuse.py`
+   - 更新：`tests/test_pool_flow_suite.py`
+
+2. 本轮新增 / 改造内容
+   - Repository 级测试：
+     - 覆盖 `claim_atomic` 写 `claimed_project_key`
+     - 覆盖“只有 success 记录才阻断同项目 claim”
+     - 覆盖 reuse 路径 success 后回 `available`
+     - 覆盖 release 不再删除 project usage 行
+   - Service 级补充测试：
+     - 覆盖空白 `project_key` 继续按旧路径处理
+     - 覆盖 `invalid_result` 校验仍然存在
+   - 接口主流程补充测试：
+     - 覆盖 `verification_timeout` 后在恢复可领状态下同项目可重试
+     - 覆盖 `claim-release` 后同项目可重试
+     - `test_pool_flow_suite.py` 的 `setUp()` 补入未来 v22 字段预留，避免后续实现接入时先被缺列卡住
+
+3. 文档同步
+   - 更新：`docs/TDD/2026-04-16-邮箱池项目维度成功复用TDD.md`
+   - 已把 `tests/test_pool_repository_project_reuse.py` 标记为当前会话已实际落地
+
+4. 现场状态
+   - 当前迁移 / Repository / Service / Flow Suite 四层测试代码都已开始落地。
+   - 距离“把 TDD 文档列出的核心测试面全部写进仓库”已经又往前推进了一步。
+
+#### 104. 根据 TDD 开始实际编写测试用例
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 会话推进
+   - 用户明确要求：直接根据当前 TDD 文档开始编写具体测试用例。
+
+2. 测试代码落地
+   - 新增：`tests/test_db_schema_v22_pool_project_reuse.py`
+   - 新增：`tests/test_pool_service_project_reuse.py`
+   - 更新：`tests/test_pool_flow_suite.py`
+
+3. 本轮新增 / 改造内容
+   - 迁移测试：
+     - 覆盖 v22 新字段存在性
+     - 覆盖历史长期邮箱 `used -> available`
+     - 覆盖 `cloudflare_temp_mail` 不进入长期邮箱迁移语义
+     - 覆盖旧 `account_project_usage` claim 痕迹不被伪回填成 success
+   - Service 测试：
+     - 覆盖 `claimed_project_key` 驱动 success 后回 `available`
+     - 覆盖缺少 `claimed_project_key` 时回退旧语义
+     - 覆盖 `cloudflare_temp_mail` 继续走旧语义
+   - 接口主流程测试：
+     - 将旧的 success→used 测试明确收口为“未传 `project_key` 时仍为旧行为”
+     - 新增“长期邮箱 + `project_key` + success → 返回 available”
+     - 新增“不再依赖手工 SQL 恢复 available”的同项目/跨项目复用用例
+     - 新增 stats 对 `available/used` 语义的断言
+     - 新增 `cloudflare_temp_mail` 传 `project_key` 仍走旧语义的断言
+
+4. 文档同步
+   - 更新：`docs/TDD/2026-04-16-邮箱池项目维度成功复用TDD.md`
+   - 已补充“当前会话已开始落地”的测试文件状态
+
+5. 现场状态
+   - 当前已从纯文档阶段进入测试代码落地阶段。
+   - 由于业务实现尚未同步改造，这批测试中包含面向目标语义的用例，后续需要配合实现一起收敛。
+
+#### 103. 第二波联调修正：统一术语与边界定义口径
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 联调范围
+   - 本轮按用户要求，重点检查：
+     - 术语一致性
+     - 测试命名一致性
+     - 边界一致性
+
+2. 联调发现
+   - 存在三类需要继续收口的点：
+     - “未传 `project_key` / 不传 `project_key`”混用
+     - `覆盖路径 / 旧路径` 在 TD / TDD 中频繁使用，但未集中定义
+     - 临时邮箱的技术边界（`cloudflare_temp_mail` / `account_type='temp_mail'`）需要在多份文档里用同一口径表达
+
+3. 文档修正
+   - 更新：`docs/TD/2026-04-16-邮箱池项目维度成功复用TD.md`
+   - 更新：`docs/TDD/2026-04-16-邮箱池项目维度成功复用TDD.md`
+   - 已补充：
+     - TD 新增“术语约定”，统一 `覆盖路径 / 旧路径 / 第一阶段排除的临时邮箱`
+     - TDD 新增同样的术语约定，保证测试文档与 TD 使用同一套定义
+     - 若干“未传 / 不传 `project_key`”表述已继续向统一口径收敛
+
+4. 联调结果
+   - 现在 TD / TDD 在这几个关键表达上已经进一步统一：
+     - 何为覆盖路径
+     - 何为旧路径
+     - 第一阶段排除哪些临时邮箱
+     - `project_key` 缺省时的统一描述
+
+5. 现场状态
+   - 第二波联调已完成一轮实质性术语收口。
+   - 后续若继续联调，可再查更细的测试函数命名与章节间引用是否还存在小漂移。
+
+#### 102. 文档联调修正：补齐“稳定态 success 防重”与“历史 `used` 迁移例外”的区分
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 联调发现
+   - 在 PRD / FD 的前文规则里，“同项目 success 后不再分配”写得过于绝对。
+   - 但后文又已经明确接受：历史 `used` 长期邮箱迁回 `available` 后，原项目可能再次拿到一次。
+   - 这会造成“稳定态规则”与“迁移例外”之间的文档冲突。
+
+2. 文档修正
+   - 更新：`docs/PRD/2026-04-16-邮箱池项目维度成功复用PRD.md`
+   - 更新：`docs/FD/2026-04-16-邮箱池项目维度成功复用FD.md`
+   - 已补充：
+     - PRD 同项目规则改为“形成可被新语义可靠识别的 success 记录后才阻断”
+     - PRD 验收标准补入“稳定态 success 防重”和“历史迁移一次性例外”要明确区分
+     - FD 同项目规则与验收口径同步补入上述区分
+
+3. 联调结果
+   - 现在文档口径已经统一为：
+     - 稳定态：同项目 success 记录继续阻断再次领取
+     - 迁移态：历史 `used` 长期邮箱回池后，允许原项目再拿到一次
+
+4. 现场状态
+   - 本轮联调已发现并修掉一处实质性口径冲突。
+   - 后续仍可继续做第二轮联调，检查术语、测试函数命名、文档边界是否还有细小漂移。
+
+#### 101. TDD 继续下沉到函数级 case 清单
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 会话推进
+   - 用户选择继续细化 TDD 的函数级 case 清单。
+
+2. 文档修正
+   - 更新：`docs/TDD/2026-04-16-邮箱池项目维度成功复用TDD.md`
+   - 已新增：
+     - `14. 函数级 case 清单（按建议测试文件）`
+
+3. 本轮细化结果
+   - 已把 TDD 从“测试矩阵层”继续拆到“测试函数命名层”：
+     - `tests/test_db_schema_v22_pool_project_reuse.py` 要包含哪些迁移测试函数
+     - `tests/test_pool_repository_project_reuse.py` 要包含哪些 Repository 级状态机测试函数
+     - `tests/test_pool_service_project_reuse.py` 要包含哪些 Service 级覆盖范围与校验测试函数
+     - `tests/test_pool_flow_suite.py` 应该如何拆旧 case、补新 case
+   - 同时给出了测试文件级的建议落地顺序
+
+4. 现场状态
+   - 当前 TDD 已经基本具备直接进入测试实现的粒度。
+   - 后续如果继续推进，可以开始整理“实现准备清单”，或者直接进入代码改造阶段的任务拆分。
+
+#### 100. 创建 TDD：邮箱池项目维度成功复用
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 会话推进
+   - 用户选择从 TD 继续推进到 TDD。
+
+2. 新建文档
+   - 新增：`docs/TDD/2026-04-16-邮箱池项目维度成功复用TDD.md`
+
+3. TDD 核心落点
+   - 将测试分成五层：
+     - Schema / 迁移
+     - Repository
+     - Service
+     - Controller / API 集成
+     - 回归 / 手工确认
+   - 明确新语义主路径、旧语义兼容路径、历史迁移路径、stats / error / 契约路径的测试矩阵
+   - 明确现有 `tests/test_pool_flow_suite.py` 需要拆分哪些旧 case、补哪些新 case
+   - 明确第一阶段迁移口径也要进入测试：历史长期邮箱迁回后，允许原项目再次拿到一次
+
+4. 关联文档更新
+   - 更新：`docs/PRD/2026-04-16-邮箱池项目维度成功复用PRD.md`
+   - 更新：`docs/FD/2026-04-16-邮箱池项目维度成功复用FD.md`
+   - 更新：`docs/TD/2026-04-16-邮箱池项目维度成功复用TD.md`
+   - 已补充 `关联 TDD` 字段，统一指向新建 TDD 文档
+
+5. 现场状态
+   - 当前 PRD / FD / TD / TDD 四层文档已全部建立并对齐。
+   - 后续若继续推进，最自然的下一步就是把 TDD 再细化成具体的测试文件改造清单，或者进入代码实现准备。
+
+#### 99. TD 继续下沉到实现拆解层：按 DB / Repository / Service / Controller / 测试拆清改造项
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 会话推进
+   - 用户选择继续细化 TD 的实现拆解清单。
+
+2. 文档修正
+   - 更新：`docs/TD/2026-04-16-邮箱池项目维度成功复用TD.md`
+   - 已新增：
+     - `11. 实现拆解清单（按模块）`
+     - `12. 建议的落地顺序`
+
+3. 本轮细化结果
+   - 已把 TD 从“技术方案层”继续拆到“文件 / 函数 / 迁移步骤层”：
+     - `outlook_web/db.py`：Schema v22、字段迁移、历史 `used` 长期邮箱回 `available`
+     - `outlook_web/repositories/pool.py`：claim 过滤只看 success、补 `claimed_project_key`、complete/release/expire 语义改造
+     - `outlook_web/services/pool.py`：覆盖范围 helper、complete_claim 主判断改造
+     - `outlook_web/controllers/external_pool.py`：保持外部契约不变，仅让返回 `pool_status` 自然切换
+     - `tests/test_pool_flow_suite.py`：现有测试需要如何拆分与新增
+
+4. 现场状态
+   - 当前 TD 已经不只是“方向正确”，而是已经具备进入 TDD 的拆解基础。
+   - 后续最顺的下一步是开始编写 TDD，把这些改造点转成测试矩阵与案例。 
+
+#### 98. 确认 TD 迁移口径：历史是否给同项目用过不重要，优先释放长期邮箱资产复用
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 会话确认
+   - 用户明确确认：对于历史 `used` 长期邮箱，“以前是不是已经给同项目用过”并不重要。
+   - 第一阶段优先目标是把这些长期邮箱从旧的全局 `used` 锁死模型中释放出来，允许重新复用。
+
+2. 文档修正
+   - 更新：`docs/TD/2026-04-16-邮箱池项目维度成功复用TD.md`
+   - 更新：`docs/FD/2026-04-16-邮箱池项目维度成功复用FD.md`
+   - 更新：`docs/PRD/2026-04-16-邮箱池项目维度成功复用PRD.md`
+   - 已补充：
+     - TD 将历史迁移策略从“待确认”收敛为“已确认”
+     - TD 明确接受“历史 `used` 迁回后，原项目可能再拿到一次”的迁移代价
+     - FD / PRD 同步写明：第一阶段释放历史资产复用优先于精确保留历史同项目 success 防重
+
+3. 需求 / 设计收敛结果
+   - 当前第一阶段迁移口径已经明确为：
+     - 历史长期邮箱先脱离旧的全局 `used` 模型
+     - 不追求伪精确回填历史项目 success 事实
+     - 历史同项目防重允许在迁移期出现一次性弱化
+
+4. 现场状态
+   - TD 首版的关键待确认项已关闭。
+   - 当前可继续往下推进到更细的实现拆解，例如 Repository / Service 改造点清单或 TDD。
+
+#### 97. 创建 TD 首版：邮箱池项目维度成功复用
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 会话推进
+   - 用户确认开始进入 TD 阶段，并要求结合既有 PRD/FD 的真实边界，全面细化技术方案。
+
+2. 代码基线回看
+   - 回看：`outlook_web/repositories/pool.py`
+   - 回看：`outlook_web/services/pool.py`
+   - 回看：`outlook_web/controllers/external_pool.py`
+   - 回看：`outlook_web/db.py`
+   - 回看：`tests/test_pool_flow_suite.py`
+   - 核心发现：
+     - 当前 `success` 仍硬编码写成全局 `used`
+     - `account_project_usage` 当前记录的是 claim 痕迹，不是 success 事实
+     - `claim-complete` 当前接口不带 `project_key`
+     - `accounts` 表当前也没有保存活跃 claim 对应的 `project_key`
+
+3. 新建文档
+   - 新增：`docs/TD/2026-04-16-邮箱池项目维度成功复用TD.md`
+
+4. TD 首版核心结论
+   - 建议 Schema 升级到 v22
+   - 建议给 `accounts` 新增 `claimed_project_key`，补齐当前 claim 的项目上下文
+   - 建议继续沿用 `account_project_usage`，但新增 success 字段，将其从“claim 痕迹表”收敛为“success 记录主载体”
+   - 建议 `claim-random` 过滤只看 success 字段，不再看 claim 痕迹
+   - 建议长期邮箱覆盖路径下 `success` 直接回 `available`
+   - 建议 `release / expire / 非success complete` 不再删除项目 usage 行
+   - 建议历史 `used` 长期邮箱先迁回 `available`，但不做伪精确 success 回填
+
+5. 关联文档更新
+   - 更新：`docs/PRD/2026-04-16-邮箱池项目维度成功复用PRD.md`
+   - 更新：`docs/FD/2026-04-16-邮箱池项目维度成功复用FD.md`
+   - 已补充 `关联 TD` 字段，指向新建 TD 文档
+
+6. 当前待确认点
+   - 历史 `used` 长期邮箱迁回后，原成功项目可能还会再拿到一次；该迁移代价是否接受，仍需会话确认。
+
+#### 96. FD 再补迁移与展示边界：历史 `used` 纳入新语义、后台先不展示成功历史、错误继续通用返回
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 会话确认
+   - 用户按推荐一次性确认：
+     - 第一阶段覆盖范围内的历史 `used` 长期邮箱，产品目标上也要纳入新语义
+     - 第一阶段后台/UI 先不额外展示项目成功历史
+     - 当不可分配原因来自同项目成功历史命中时，错误继续沿用现有通用返回
+
+2. 文档修正
+   - 更新：`docs/FD/2026-04-16-邮箱池项目维度成功复用FD.md`
+   - 更新：`docs/PRD/2026-04-16-邮箱池项目维度成功复用PRD.md`
+   - 已补充：
+     - FD 增加“历史数据边界”，明确历史 `used` 长期邮箱目标上也应进入新语义
+     - FD 增加“后台展示边界”，明确第一阶段不新增成功历史展示位
+     - FD 错误反馈补充“同项目成功历史命中时继续沿用通用失败返回”
+     - FD 验收口径同步补入以上三项
+     - PRD 兼容性需求与验收标准同步补入以上产品边界
+
+3. 需求收敛结果
+   - 当前第一阶段产品 / 设计边界已进一步明确为：
+     - 新语义不只针对未来新数据，也面向历史长期邮箱
+     - 成功历史第一阶段先偏内部判断语义，不强制立即做展示层透出
+     - “同项目已成功导致不可分配”先不扩展新错误面
+
+4. 现场状态
+   - FD 现已覆盖：主流程、返回值、统计语义、历史数据边界、后台展示边界、错误反馈边界。
+   - 后续可以顺势进入 TD，讨论迁移策略、数据模型与接口/仓储层改造细节。
+
+#### 95. FD 再补返回值与统计语义：success 返回 `available`、不再计入全局 `used`、第一阶段不加项目成功统计面
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 会话确认
+   - 用户同意继续打包推进更多 FD 细节。
+   - 本轮按推荐收敛三点：
+     - 第一阶段覆盖路径下，`claim-complete(result=success)` 的返回 `pool_status` 直接体现为 `available`
+     - 这类长期邮箱不再按全局 `used` 语义解释
+     - 第一阶段先不新增“项目成功次数 / 项目成功明细”的统计接口或管理面板
+
+2. 文档修正
+   - 更新：`docs/FD/2026-04-16-邮箱池项目维度成功复用FD.md`
+   - 更新：`docs/PRD/2026-04-16-邮箱池项目维度成功复用PRD.md`
+   - 已补充：
+     - FD 新增 `claim-complete(success)` 覆盖路径下的返回值语义，明确 `pool_status` 直接返回 `available`
+     - FD 新增统计语义，明确不再将该路径账号解释为全局 `used`
+     - FD 验收口径补入“返回值一致 / 统计不再算 `used` / 第一阶段不加项目成功统计面”
+     - PRD 非目标、兼容性需求、验收标准同步补入上述产品边界
+
+3. 需求收敛结果
+   - 当前第一阶段语义已进一步闭环：
+     - 落库状态与对外返回口径一致
+     - 生命周期语义与全局池状态统计一致
+     - 项目成功事实先只承担分配判断职责，不在第一阶段扩展新统计产品面
+
+4. 现场状态
+   - FD 已从“核心行为”继续补到了“返回值与统计语义”层。
+   - 后续如继续细化，可再往错误码、历史数据兼容、后台列表展示口径等细节推进。
+
+#### 94. 创建 FD：邮箱池项目维度成功复用
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 会话结论
+   - 基于已澄清的 PRD 规则，开始进入 FD 阶段。
+   - 关键设计位已确认：第一阶段长期邮箱在显式传入 `project_key` 且 `claim-complete(result=success)` 后，直接回到 `available`，不新增新池状态。
+
+2. 新建文档
+   - 新增：`docs/FD/2026-04-16-邮箱池项目维度成功复用FD.md`
+
+3. FD 核心落点
+   - 定义第一阶段功能范围与排除项
+   - 明确 success 后直接回 `available`
+   - 明确项目维度记录只认 `claim-complete(result=success)`
+   - 明确同项目防重、跨项目立即复用、失败可重试、并发 claim 仍排他
+   - 明确 `project_key` 继续由调用方自定义传入，不新增平台内管理
+   - 明确错误信息继续正常返回
+
+4. 关联文档更新
+   - 更新：`docs/PRD/2026-04-16-邮箱池项目维度成功复用PRD.md`
+   - 增加 `关联 FD` 字段，指向新建 FD 文档
+
+5. 现场状态
+   - 当前已完成：PRD 持续澄清 + FD 首版建立 + WORKSPACE 同步。
+   - 后续如继续推进，可在此基础上进入 TD / TDD。
+
+#### 93. PRD 再补成功历史规则：长期有效、手动改回可用也不失效、仅 complete(success) 记成功
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 会话结论
+   - 用户一次性确认：
+     - 成功记录默认长期有效，不自动过期
+     - 管理员后续手动把邮箱改回可用，也不应抹掉同项目成功历史
+     - 只有显式 `claim-complete(result=success)` 才算真正成功记录
+
+2. 文档修正
+   - 更新：`docs/PRD/2026-04-16-邮箱池项目维度成功复用PRD.md`
+   - 已补充：
+     - 成功语义规则增加“仅 complete(success) 记成功”
+     - 成功语义规则增加“成功历史长期有效”
+     - 成功语义规则增加“后台手动改回可用也不抹掉成功历史”
+     - 验收标准同步增加对应条目
+
+3. 需求收敛结果
+   - 当前 PRD 对“成功历史”已经明确成完整规则：
+     - 成功判定来源固定
+     - 成功历史默认长期保留
+     - 后台状态修改不自动绕过同项目成功限制
+
+4. 现场状态
+   - 本轮已把成功历史规则写入 PRD 与 WORKSPACE。
+
+#### 92. PRD 打包收敛：失败类型补齐、不新增 UI、错误信息正常返回
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 会话结论
+   - 用户确认：
+     - `release / lease_expired / verification_timeout` 等都按“未成功”处理
+     - 第一阶段不新增额外 UI
+     - 错误信息继续正常返回，不做静默吞掉
+
+2. 文档修正
+   - 更新：`docs/PRD/2026-04-16-邮箱池项目维度成功复用PRD.md`
+   - 已补充：
+     - 同项目规则与验收标准补入“过期回收/释放/超时”仍可重试
+     - 范围边界明确排除额外项目使用记录可视化 / 管理 UI
+     - 新增“错误反馈规则”，明确错误信息正常返回
+
+3. 需求收敛结果
+   - 当前第一阶段需求进一步明确为：
+     - 失败链路继续可重试
+     - 先不做额外管理 UI
+     - 错误信息按正常方式透出
+
+4. 现场状态
+   - 本轮已把这组打包结论写入 PRD 与 WORKSPACE。
+
+#### 91. PRD 再补任务参数边界：`task_id` 继续保留且不能省
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 会话确认
+   - 用户确认：第一阶段 `task_id` 继续保留为必填，不因为项目维度复用语义而改成可选。
+
+2. 文档修正
+   - 更新：`docs/PRD/2026-04-16-邮箱池项目维度成功复用PRD.md`
+   - 已补充：
+     - 新增“`task_id` 保留规则”
+     - 兼容性需求增加“`task_id` 仍为必填任务参数”
+     - 验收标准增加“项目维度复用语义不替代 `task_id`”
+
+3. 需求收敛结果
+   - 当前第一阶段输入语义进一步固定为：
+     - API Key：调用方身份
+     - `caller_id`：显式调用方标识
+     - `project_key`：业务方向标识
+     - `task_id`：具体任务实例标识
+
+4. 现场状态
+   - 本轮已把 `task_id` 保留规则写入 PRD 与 WORKSPACE。
+
+#### 90. PRD 再补调用方参数边界：`caller_id` 继续保留且不能省
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 会话确认
+   - 用户确认：即使项目已有多 API Key / 多调用方能力，第一阶段仍然继续要求外部显式传入 `caller_id`。
+
+2. 文档修正
+   - 更新：`docs/PRD/2026-04-16-邮箱池项目维度成功复用PRD.md`
+   - 已补充：
+     - 新增“`caller_id` 保留规则”
+     - 兼容性需求增加“`caller_id` 仍为必填业务参数”
+     - 验收标准增加“多 API Key 不替代 `caller_id`”
+
+3. 需求收敛结果
+   - 当前第一阶段产品语义继续保留三层输入角色：
+     - API Key：识别调用方身份
+     - `caller_id`：业务请求中的显式调用方标识
+     - `project_key`：业务方向标识
+
+4. 现场状态
+   - 本轮已把 `caller_id` 保留规则写入 PRD 与 WORKSPACE。
+
+#### 89. PRD 再补缺省行为：不传 `project_key` 就回到旧行为
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 会话确认
+   - 用户确认：只有显式传入 `project_key` 时，才启用项目维度复用语义。
+   - 未传 `project_key` 的调用方继续按旧行为工作，不自动享受新语义。
+
+2. 文档修正
+   - 更新：`docs/PRD/2026-04-16-邮箱池项目维度成功复用PRD.md`
+   - 已补充：
+     - 新增“缺省行为规则”
+     - 兼容性需求增加“未传 `project_key` 继续保证旧行为”
+     - 验收标准增加“未传 `project_key` 不自动进入新语义”
+
+3. 需求收敛结果
+   - 当前新语义不是强制覆盖所有接入方。
+   - 而是：**显式传入 `project_key` 才进入项目维度复用；不传则回退旧行为。**
+
+4. 现场状态
+   - 本轮已把缺省行为写入 PRD 与 WORKSPACE。
+
+#### 88. PRD 再补失败语义：同项目只有成功过才禁止再次领取
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 会话确认
+   - 用户确认：同一 `caller_id + project_key` 组合下，只有邮箱真正成功过，才应禁止再次领取。
+   - 如果只是失败、超时或释放，没有成功，则后续仍允许重试并再次拿到该邮箱。
+
+2. 文档修正
+   - 更新：`docs/PRD/2026-04-16-邮箱池项目维度成功复用PRD.md`
+   - 已补充：
+     - 新增 `US-05：同项目失败后可重试`
+     - 同项目规则补充“失败/超时/释放但未成功时，后续仍允许再次领取”
+     - 验收标准增加“未成功时可再次拿到同一邮箱”
+
+3. 需求收敛结果
+   - 当前“同项目防重”的真实语义已经明确为：**只防成功，不防失败。**
+
+4. 现场状态
+   - 本轮已把失败语义写入 PRD 与 WORKSPACE。
+
+#### 87. PRD 再补并发边界：同一邮箱同一时刻只允许一个活跃 claim
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 会话确认
+   - 用户确认：即使 `project_key` 不同，同一邮箱在同一时刻也不能被两个业务方向同时占用。
+
+2. 文档修正
+   - 更新：`docs/PRD/2026-04-16-邮箱池项目维度成功复用PRD.md`
+   - 已补充：
+     - 新增“并发占用规则”
+     - 明确一个邮箱任意时刻只允许一个活跃 claim
+     - 验收标准增加“不同 `project_key` 不允许并发占用”
+
+3. 需求收敛结果
+   - 当前 PRD 已明确区分两类规则：
+     - 生命周期：success 后跨 `project_key` 立即复用
+     - 并发占用：同一时刻仍只允许一个活跃 claim
+
+4. 现场状态
+   - 本轮已把并发边界写入 PRD 与 WORKSPACE。
+
+#### 86. PRD 最终封口：`project_key` 由调用方自定义传入，平台不规定命名规范
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 会话确认
+   - 用户确认：第一阶段不需要为 `project_key` 设计额外命名规范；只要由调用方自己传入即可。
+
+2. 文档修正
+   - 更新：`docs/PRD/2026-04-16-邮箱池项目维度成功复用PRD.md`
+   - 已补充：
+     - `project_key` 继续由调用方自行约定并传入
+     - 第一阶段平台不额外规定命名规范或格式模板
+
+3. 需求收敛结果
+   - `project_key` 这条需求链路现在已经收口为：
+     - 用现有字段
+     - 保留 `caller_id + project_key` 联合语义
+     - 调用方自己传入
+     - 平台不内建创建
+     - 平台不规定命名规范
+
+4. 现场状态
+   - 本轮已把 `project_key` 的创建与命名边界彻底写入 PRD 与 WORKSPACE。
+
+#### 85. PRD 再收敛：第一阶段不提供平台内 `project_key` 创建能力
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 会话结论
+   - 结合现有系统能力核对后确认：项目当前已有多 API Key / 多调用方能力，但没有平台内的 `project_key` 创建/管理能力。
+   - 本轮决定：第一阶段不额外产品化 `project_key` 创建能力。
+
+2. 文档修正
+   - 更新：`docs/PRD/2026-04-16-邮箱池项目维度成功复用PRD.md`
+   - 已补充：
+     - 新增“`project_key` 创建边界规则”
+     - 范围边界中明确排除“平台内建 `project_key` / 项目管理能力”
+     - 验收标准增加“`project_key` 由调用方自行定义并传入”的要求
+
+3. 需求收敛结果
+   - 第一阶段平台职责：
+     - 识别调用方（多 API Key / 多调用方）
+     - 按 `caller_id + project_key` 判断复用边界
+   - 第一阶段平台不承担：
+     - 创建 `project_key`
+     - 维护项目对象
+     - 管理业务方向目录
+
+4. 现场状态
+   - 本轮已把“`project_key` 由调用方自定义传入、平台不内建创建能力”写入 PRD 与 WORKSPACE。
+
+#### 84. PRD 兼容性收敛：继续保留 `caller_id + project_key` 联合语义
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 会话确认
+   - 用户确认：虽然 `project_key` 作为业务方向标识被保留，但防重边界继续沿用现有 `caller_id + project_key` 联合语义。
+
+2. 文档修正
+   - 更新：`docs/PRD/2026-04-16-邮箱池项目维度成功复用PRD.md`
+   - 已收口：
+     - 主目标增加“继续保留现有 `caller_id + project_key` 联合判断”
+     - 默认语义表把同项目防重和方向数量判断改成联合语义
+     - `US-01`、同项目规则、判断规则、验收标准同步改为 `caller_id + project_key`
+
+3. 需求收敛结果
+   - 当前真实需求不是单纯按 `project_key` 全局去重。
+   - 而是：**沿用现有 `caller_id + project_key` 作为防重边界，同时把 success 后的跨 `project_key` 立即复用补齐。**
+
+4. 现场状态
+   - 本轮已完成兼容性语义收口，并同步写入 PRD 与 WORKSPACE。
+
+#### 83. PRD 字段语义收口：直接绑定现有 `project_key`
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 会话确认
+   - 用户确认：这轮需求不新造 `business_id` 等新概念，直接使用现有 `project_key` 作为业务方向标识。
+
+2. 文档修正
+   - 更新：`docs/PRD/2026-04-16-邮箱池项目维度成功复用PRD.md`
+   - 已收口：
+     - 主目标中明确 `project_key` 在产品层代表业务方向
+     - 默认语义表改为“只看传入的 `project_key` 是否相同”
+     - “传入标识判断规则”改名为“`project_key` 判断规则”
+     - 范围边界与验收标准统一绑定到现有 `project_key`
+
+3. 需求收敛结果
+   - 当前 PRD 不再保留“字段待定”或“后续新增业务 ID”的口径。
+   - 真实需求改为直接基于现有 `project_key` 定义：
+     - 同 `project_key` 不重复
+     - 不同 `project_key` 立即复用
+
+4. 现场状态
+   - 本轮已完成字段语义收口，并同步写入 PRD 与 WORKSPACE。
+
+#### 82. PRD 继续收敛：默认不限制业务方向数量，只看传入标识是否相同
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 会话确认
+   - 用户确认：重点只看本次传入的项目/业务标识是否与历史记录相同；只要不是相同标识，就不重要，不需要再限制可复用方向数量。
+
+2. 文档修正
+   - 更新：`docs/PRD/2026-04-16-邮箱池项目维度成功复用PRD.md`
+   - 已补充：
+     - 默认语义表新增“可复用业务方向数量”一行
+     - 跨项目规则补充“默认不限制业务方向数量”
+     - 新增“传入标识判断规则”
+     - 验收标准增加“只看传入标识，不额外校验数量上限”
+
+3. 需求收敛结果
+   - 当前真实需求进一步明确为：
+     - 第一阶段只覆盖长期邮箱
+     - 同项目防重
+     - 跨项目 success 后立即复用
+     - 默认不限制可复用业务方向数量
+     - 判断核心只看本次传入标识是否与历史成功记录相同
+
+4. 现场状态
+   - 本轮已把“只看传入标识、默认不限方向数量”的规则写入 PRD 与 WORKSPACE。
+
+#### 81. PRD 覆盖范围收敛：第一阶段只覆盖长期邮箱
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 会话确认
+   - 用户确认：`success` 后“立即复用”这条规则，第一阶段先只覆盖 Outlook / IMAP 这类长期邮箱。
+
+2. 文档修正
+   - 更新：`docs/PRD/2026-04-16-邮箱池项目维度成功复用PRD.md`
+   - 已补充：
+     - 产品目标中增加“第一阶段仅覆盖长期邮箱”
+     - `US-02` 明确限定为长期邮箱
+     - 特例邮箱规则中排除一次性临时邮箱
+     - 范围边界改为“第一阶段默认优先覆盖 / 默认不覆盖”
+     - 验收标准改成以长期邮箱为核心对象
+
+3. 需求收敛结果
+   - 当前真实需求不是“一刀切让所有邮箱 success 后立即复用”。
+   - 而是：**先在长期邮箱上建立“同项目防重、跨项目立即复用”的产品语义。**
+
+4. 现场状态
+   - 本轮已把覆盖范围进一步收敛并写入 PRD 与 WORKSPACE。
+
+#### 80. PRD 进一步收敛：success 后应立即允许其他业务方向复用
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 会话确认
+   - 用户明确需求：邮箱在某业务方向 `success` 后，不需要再经过统一冷却，应该立即允许被其他业务方向再次领取。
+
+2. 文档修正
+   - 更新：`docs/PRD/2026-04-16-邮箱池项目维度成功复用PRD.md`
+   - 已将“立即复用”写入：
+     - 产品目标
+     - 默认语义对比表
+     - 用户故事 US-02
+     - 业务规则
+     - 正向/反向验收标准
+
+3. 需求收敛结果
+   - 当前产品需求不只是“成功后可跨项目复用”。
+   - 而是更强的一条规则：**成功后应立即允许其他业务方向复用，不附加统一冷却。**
+
+4. 现场状态
+   - 本轮已把“立即复用”固化进 PRD 与 WORKSPACE。
+
+#### 79. PRD 增补因果链说明：为何已有 project_key 仍挡不住 success 后退出候选池
 
 **时间**：2026-04-16
 
 **本次操作**：
 
 1. 会话问题
-   - 用户反馈真实报错：`AADSTS70000`（scope 未授权/已失效）并询问 Graph 至少需要哪些权限。
+   - 用户继续追问：既然 PR#27 已支持 `project_key` 多项目场景，为什么后续其它项目仍可能无法复用同一邮箱。
 
-2. 文档回填
-   - `docs/PRD/2026-04-12-OAuth-Token获取工具PRD.md`
-     - 在“常见错误与用户引导”新增 `AADSTS70000` 行：
-       - 原因：scope 未授权/已失效（含授权与验证 scope 不一致）
-       - 引导：确认 Graph 最小权限并强制 Consent 重新授权
-   - `docs/FD/2026-04-12-OAuth-Token获取工具FD.md`
-     - 在 `ERROR_GUIDANCE_MAP` 示例中补充 `aadsts70000` 引导映射。
+2. 需求澄清结论
+   - 问题不在 `project_key` 机制本身。
+   - 当前阻断点在生命周期：
+     - `claim-random` 只从 `pool_status='available'` 中挑选候选
+     - `claim-complete(result=success)` 会把账号写成全局 `used`
+     - 账号一旦进入 `used`，后续项目就没有机会再命中它
 
-3. 口径结论（用于教程写作）
-   - Graph 场景最小推荐权限：`offline_access`、`Mail.Read`、`User.Read`。
-   - 若命中 `AADSTS70000`，优先排查 scope 一致性与 consent 是否重新完成。
+3. 文档修正
+   - 更新：`docs/PRD/2026-04-16-邮箱池项目维度成功复用PRD.md`
+   - 新增一段显式因果链说明，避免后续把问题误判成“project_key 没有支持多项目”
 
 4. 现场状态
-   - 本次仅文档与口径回填，不涉及新增代码实现与服务启停动作。
+   - 本轮已将“claim 侧已支持、多项目复用败在 complete 侧生命周期”这一点写入 PRD 和 WORKSPACE。
 
-#### 79. Token 工具教程链接替换为用户正式教程地址
-
-**时间**：2026-04-16
-
-**本次操作**：
-
-1. 会话需求
-   - 用户提供已完成的正式教程链接，并要求替换 Token 工具页面指引区教程入口。
-
-2. 页面更新
-   - 文件：`templates/token_tool.html`
-   - 位置：`guide-links` 区域默认教程链接
-   - 变更：
-     - 旧链接：Microsoft OAuth 官方文档
-     - 新链接：`https://real-caption-6d1.notion.site/OutlooKMailplus-token-344463aed7e680099380dc324ecdf1c9?source=copy_link`
-     - 文案更新为：`OutlookMailPlus Token 教程`
-
-3. 现场状态
-   - 本次仅替换前端静态教程入口链接，不影响后端与业务逻辑。
-
-#### 80. README 中 OAuth Token 工具口径同步（Graph 推荐 + 教程链接）
+#### 78. PRD 口径补正：当前已支持多项目领取，但未补齐 success 后生命周期
 
 **时间**：2026-04-16
 
 **本次操作**：
 
-1. 会话需求
-   - 用户要求基于本轮改造内容更新 README / README.en，并准备后续推送。
+1. 会话纠偏
+   - 用户指出：`claim-random` + `project_key` 的现有能力本身已经支持多项目场景，不能简单表述为“当前不支持多项目”。
 
-2. 文档更新（README）
+2. 文档修正
+   - 更新：`docs/PRD/2026-04-16-邮箱池项目维度成功复用PRD.md`
+   - 修正后的口径：
+     - 当前系统已经支持不同 `project_key` 间的再次领取
+     - 但前提是账号必须重新回到可候选状态
+     - 当前真正缺失的是 `claim-complete(result=success)` 之后的持续跨项目复用能力
+
+3. 需求理解收敛
+   - 本轮不再把问题表述为“有没有多项目能力”。
+   - 改为更准确的需求表述：**现有多项目领取能力已存在，但 success 后的生命周期语义仍是全局终态，尚未补齐。**
+
+4. 现场状态
+   - 本轮仅做 PRD 需求口径纠偏与 WORKSPACE 同步，不涉及实现改动。
+
+#### 77. 新建“邮箱池项目维度成功复用”PRD 并补充旧 PRD 范围边界
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 会话决策
+   - 经过会话确认，不把“成功后跨项目复用邮箱”继续混在既有 CF 邮箱池 PRD 中讨论。
+   - 改为新建独立 PRD，单独承接该需求。
+
+2. 新建文档
+   - 新增：`docs/PRD/2026-04-16-邮箱池项目维度成功复用PRD.md`
+   - 文档立场：
+     - 基于当前真实实现先说明现状：`project_key` 只解决同项目防重，`success` 仍是全局 `used`
+     - 从需求层面把“成功后按项目复用邮箱”定义为未来默认语义
+     - 把“一次性消耗”降为特例需求，而非继续作为全局默认
+
+3. 相关文档修正
+   - 更新：`docs/PRD/2026-04-09-CF临时邮箱接入邮箱池PRD.md`
+   - 补充范围边界说明：
+     - 该文档只讨论 CF 临时邮箱接入邮箱池
+     - 涉及“成功后按项目维度复用邮箱”的新需求时，以新 PRD 为准
+
+4. 需求判断记录
+   - 从产品需求角度看，Issue #39 不是文档误解，而是现有产品语义不完整所暴露出来的真实需求。
+   - 新 PRD 采用“未来默认语义改为项目维度成功复用”的方向，后续再进入 FD / TD / TDD 讨论时，需要继续围绕这一立场展开。
+
+5. 现场状态
+   - 本轮已完成：新 PRD 建立 + 旧 PRD 范围边界补充 + WORKSPACE 记录。
+   - 尚未进入实现设计与代码改造阶段。
+
+#### 76. Issue #39 相关文档口径修正与会话记录同步
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 文档修正目标
+   - 目的：将 Issue #39 涉及的邮箱池语义按当前真实实现对齐到对外文档，避免把“项目隔离领取”误读为“成功后可跨项目复用”。
+
+2. 已更新文件
    - `README.md`
-     - OAuth Token 工具章节同步如下口径：
-       - 前端默认推荐 Graph 预设（后端 fallback 仍为 IMAP）。
-       - 新增 `AADSTS70000` 排查要点（scope 一致性 + 强制 Consent）。
-       - 新增 Graph 最小权限建议：`offline_access + Mail.Read + User.Read`。
-       - 补充页面教程链接（Notion 正式教程）。
-     - 环境变量段 `OAUTH_SCOPE` 描述改为“后端环境默认 fallback，前端首次展示为 Graph”。
    - `README.en.md`
-     - 同步英文口径：Graph default recommendation、`AADSTS70000` guidance、minimum Graph permissions、tutorial link。
-     - `OAUTH_SCOPE` 描述同步为 backend fallback vs frontend first-render default。
+   - `注册与邮箱池接口文档.md`
+   - `registration-mail-pool-api.en.md`
+   - `WORKSPACE.md`
 
-3. 现场状态
-   - 本次仅更新文档与记录，不涉及新增后端实现。
-   - 当前工作区保留前序会话中的代码与文档改动，待统一确认后提交。
+3. 修正后的统一口径
+   - `claim-random` 支持 `project_key`，其作用是同 `caller_id + project_key` 维度下的防重复领取。
+   - `claim-complete(result=success)` 后，账号仍会进入全局 `pool_status='used'`。
+   - 因此当前版本并不支持“成功后跨项目继续复用同一邮箱”。
 
-#### 81. 清理 5000 端口后台进程 + OAuth 会话文档按实际实现再同步
+4. 产品判断记录
+   - 从用户视角看，该能力有实际价值：对于一个邮箱可服务多个站点注册的场景，现有“成功即全局消耗”会明显加快邮箱池消耗。
+   - 但该需求触及状态模型与接入方预期，适合作为独立能力点单独讨论，不应在未定策略时直接修改现有行为。
+
+5. 现场状态
+   - 本轮已完成文档口径修正与 WORKSPACE 同步。
+   - 尚未展开业务实现讨论或代码改造。
+
+#### 75. Issue #39 现状核对与范围收敛记录
 
 **时间**：2026-04-16
 
 **本次操作**：
 
-1. 按会话选择先清理后台 5000 进程
-   - 复核分支：`main...origin/main [ahead 1]`（最新提交 `1fb4564`）。
-   - 端口核对：`5000` 监听进程 PID `36352`。
-   - 已执行停止：`Stop-Process -Id 36352 -Force`。
-   - 停止后复核：`5000` 无监听。
+1. Issue 现状核对
+   - 对象：`https://github.com/ZeroPointSix/outlookEmailPlus/issues/39`
+   - 核对结论：
+     - issue 中“`claim-random` 已支持 `project_key`，但 `claim-complete(result=success)` 之后账号会进入全局 `used`，导致跨 `project_key` 无法再次领取”的描述属实。
+     - 当前实现里，`project_key` 仅用于同 `caller_id + project_key` 维度的防重复领取，并不改变 `success` 后的全局终态语义。
 
-2. 会话文档按“当前代码实现”再同步
-   - 更新 `docs/PRD/2026-04-12-OAuth-Token获取工具PRD.md` → **v1.5**
-     - 明确兼容模式：`tenant=consumers` 固定、`client_secret` 固定空值并拒绝不兼容输入。
-     - 校正 `OAUTH_SCOPE` 口径：后端 fallback 为 IMAP，前端首次展示 Graph 预设。
-     - 将验收项 A-08 从“多租户”改为“兼容模式约束”。
-   - 更新 `docs/FD/2026-04-12-OAuth-Token获取工具FD.md` → **v1.2**
-     - 明确 `client_secret` 不落库（固定空值）、`tenant` 固定 `consumers`。
-     - 配置保存说明改为兼容模式实际行为（固定写空/固定租户）。
-   - 更新 `docs/TD/2026-04-12-OAuth-Token获取工具TD.md` → **v1.5**
-     - 增加“以当前代码文件为准”的收口说明。
-     - 将可变 tenant 相关历史描述进一步标注为非当前实现。
-   - 更新 `docs/TDD/2026-04-12-OAuth-Token获取工具TDD.md` → **v1.3**
-     - 回填本会话测试现状：unittest 分批累计 `1158 passed / 7 skipped`。
-     - 回填 Jest 环境依赖阻塞（缺少 `jest-environment-jsdom`）。
-   - 更新 `docs/TODO/2026-04-12-OAuth-Token获取工具TODO.md` → **v1.3**
-     - 同步引用版本（PRD/FD/TD/TDD）。
-     - 标注该 TODO 作为历史拆解清单，当前会话实施状态已收口完成。
+2. 代码与文档依据
+   - `outlook_web/repositories/pool.py`
+     - `RESULT_TO_POOL_STATUS["success"] = "used"`
+     - `complete(...)` 会直接把账号更新为全局 `pool_status='used'`
+   - `outlook_web/repositories/pool.py`
+     - `claim_atomic(...)` 仅从 `pool_status='available'` 的账号中选择候选
+     - `account_project_usage` 仅负责排除同项目已领取记录
+   - `tests/test_pool_flow_suite.py`
+     - “不同 `project_key` 可复用同一账号”的用例，是在第一次 `success` 后手动把账号改回 `available` 再验证，说明当前能力并未原生支持“成功后跨项目继续复用”
+   - `注册与邮箱池接口文档.md`
+     - 已明确写明：`success` 会把邮箱全局标记为 `used`
+     - 已明确写明：当前版本没有按项目维度复用同一邮箱的状态模型
 
-3. 现场状态
-   - 当前无后台 5000 监听进程。
-   - 文档与 WORKSPACE 已同步到本轮会话实际状态。
-   - 后续动作按会话要求继续通过 MCP `寸止` 回传结果。
+3. 判断与范围结论
+   - 该问题不是“已经完成但被误解”，而是一个尚未支持的独立能力点。
+   - 当前行为属于已有设计：代码、测试、文档口径一致，不能直接按 bug 归类为实现偏差。
+   - 若后续要支持“同项目防重、跨项目可复用”，需要单独讨论状态模型与适用范围，不宜在本轮直接改动业务逻辑。
+
+4. 本轮会话决策
+   - 按当前会话要求，本轮仅更新 `WORKSPACE.md` 记录分析结论。
+   - 其他 README / 接口文档 / 设计文档暂不修改。
+
+5. 现场状态
+   - 本次仅完成 issue 研判与工作区记录，不涉及代码实现、测试或发布动作。
 
 ## 2026-04-15
 

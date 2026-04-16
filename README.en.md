@@ -11,7 +11,7 @@ Unlike general-purpose email clients, it focuses on **registration and verificat
 - **Built for registration workflows**: it removes unnecessary steps as much as possible. You can copy mailbox addresses with one click; after sending a verification email on a signup page, you can return to the manager, click "Verification Code", fetch the latest email, and quickly extract the code or verification link with regex.
 - **Lighter and more focused**: non-core features such as sending mail are intentionally left out, so the interface stays cleaner and every design choice is centered on completing registration tasks.
 - **Broader import compatibility**: it supports mainstream mailbox providers such as Gmail, QQ, and 163, as well as custom IMAP servers. Self-hosted mailboxes also work. Built-in CF Worker temp mailboxes support multi-domain configuration and Admin Key encryption, significantly reducing privacy exposure in registration workflows.
-- **Automation-friendly**: it exposes APIs for batch registration workflows; the mail pool supports project-scoped isolation via `project_key`, so already-used accounts are never re-claimed within the same project. Mailbox claiming, verification-code retrieval, and release are all covered.
+- **Automation-friendly**: it exposes APIs for batch registration workflows; the mail pool supports project-scoped claiming via `project_key`, so a mailbox that can re-enter the candidate pool is not re-claimed within the same project, but `claim-complete(result=success)` still marks the account as globally `used`, so cross-project reuse after success is not supported yet. Mailbox claiming, verification-code retrieval, and release are all covered.
 - **Third-party notifications**: third-party notification channels are supported. Telegram is already integrated, and important mailboxes can push alerts automatically.
 
 In short, OutlookMail Plus is a mailbox manager designed specifically for registration workflows.
@@ -60,7 +60,7 @@ Highlights include:
 - Fixed browser caching stale JS files
 
 **Mail Pool Enhancements**
-- Project-scoped claim isolation (PR#27): `claim-random` now accepts a `project_key` parameter; accounts already used under the same `caller_id + project_key` combination are not re-claimed (DB v17)
+- Project-scoped claim isolation (PR#27): `claim-random` now accepts a `project_key` parameter to prevent re-claiming under the same `caller_id + project_key` combination; this does not change the current `claim-complete(result=success) => globally used` behavior (DB v17)
 
 **CF Worker Temp Mail**
 - Multi-domain support: multiple CF Worker domains can now be configured in the Settings page; a new "Sync Domains" button refreshes the domain list in one click
@@ -91,7 +91,7 @@ Highlights include:
 - Mail reading and extraction
   Supports verification-code extraction, link extraction, and raw message viewing
 - Mail pool orchestration
-  Supports claiming, releasing, completing, cooldown recovery, and stale-claim recycling; supports `project_key` project-scoped isolation so already-used accounts are not re-claimed within the same project
+  Supports claiming, releasing, completing, cooldown recovery, and stale-claim recycling; supports `project_key` project-scoped isolation to avoid re-claiming within the same project while the account can still return to the pool; after `success`, the account is still moved to globally `used`, so cross-project reuse after success is not supported yet
 - Controlled external APIs
   Supports `X-API-Key` authentication, multiple consumer keys, mailbox scope restrictions, IP allowlists, and rate limits
 - Notification delivery

@@ -21,6 +21,19 @@ class PoolFlowSuiteTests(unittest.TestCase):
             from outlook_web.repositories import settings as settings_repo
 
             db = get_db()
+            account_columns = [row[1] for row in db.execute("PRAGMA table_info(accounts)").fetchall()]
+            if "claimed_project_key" not in account_columns:
+                db.execute("ALTER TABLE accounts ADD COLUMN claimed_project_key TEXT DEFAULT NULL")
+            usage_columns = [row[1] for row in db.execute("PRAGMA table_info(account_project_usage)").fetchall()]
+            if "first_success_at" not in usage_columns:
+                db.execute("ALTER TABLE account_project_usage ADD COLUMN first_success_at TEXT DEFAULT NULL")
+            if "last_success_at" not in usage_columns:
+                db.execute("ALTER TABLE account_project_usage ADD COLUMN last_success_at TEXT DEFAULT NULL")
+            if "success_count" not in usage_columns:
+                db.execute("ALTER TABLE account_project_usage ADD COLUMN success_count INTEGER NOT NULL DEFAULT 0")
+            db.execute("DELETE FROM account_claim_logs")
+            db.execute("DELETE FROM account_project_usage")
+            db.execute("DELETE FROM accounts")
             db.execute("DELETE FROM external_api_keys")
             db.execute("DELETE FROM external_api_rate_limits")
             db.commit()
@@ -42,6 +55,7 @@ class PoolFlowSuiteTests(unittest.TestCase):
         self,
         *,
         provider: str = "outlook",
+        account_type: str = "outlook",
         pool_status: str = "available",
         email_domain: str = "poolflow.test",
     ) -> dict:
@@ -54,20 +68,20 @@ class PoolFlowSuiteTests(unittest.TestCase):
                     email, client_id, refresh_token, status,
                     account_type, provider, group_id, pool_status, email_domain
                 )
-                VALUES (?, 'test_client', 'test_token', 'active', 'outlook', ?, 1, ?, ?)
+                VALUES (?, 'test_client', 'test_token', 'active', ?, ?, 1, ?, ?)
                 """,
-                (email_addr, provider, pool_status, email_domain),
+                (email_addr, account_type, provider, pool_status, email_domain),
             )
             conn.commit()
             row = conn.execute(
-                "SELECT id, email, pool_status, provider, email_domain FROM accounts WHERE email = ?",
+                "SELECT id, email, pool_status, provider, account_type, email_domain FROM accounts WHERE email = ?",
                 (email_addr,),
             ).fetchone()
             return dict(row)
         finally:
             conn.close()
 
-    def test_claim_complete_success_changes_status_to_used(self):
+    def test_claim_complete_success_without_project_key_still_changes_status_to_used(self):
         self._make_pool_account()
 
         claim_resp = self.client.post(
@@ -94,7 +108,7 @@ class PoolFlowSuiteTests(unittest.TestCase):
         self.assertEqual(complete_resp.status_code, 200)
         complete_data = json.loads(complete_resp.data)
         self.assertTrue(complete_data["success"])
-        # success → used（新版行为）
+        # 未传 project_key 时，旧行为仍为 success → used
         self.assertEqual(complete_data["data"]["pool_status"], "used")
 
         conn = self.create_conn()
@@ -106,6 +120,55 @@ class PoolFlowSuiteTests(unittest.TestCase):
             self.assertEqual(row["pool_status"], "used")
             self.assertEqual(row["success_count"], 1)
             self.assertEqual(row["fail_count"], 0)
+        finally:
+            conn.close()
+
+    def test_claim_complete_success_with_project_key_on_long_lived_account_returns_available(self):
+        account = self._make_pool_account(email_domain=f"reuse_{uuid.uuid4().hex[:8]}.test")
+
+        claim_resp = self.client.post(
+            "/api/external/pool/claim-random",
+            headers=self._auth_headers(),
+            json={
+                "caller_id": "reuse_bot",
+                "task_id": "reuse_success_1",
+                "project_key": "project_alpha",
+                "email_domain": account["email_domain"],
+            },
+        )
+        self.assertEqual(claim_resp.status_code, 200)
+        claim_data = json.loads(claim_resp.data)
+        self.assertTrue(claim_data["success"])
+
+        complete_resp = self.client.post(
+            "/api/external/pool/claim-complete",
+            headers=self._auth_headers(),
+            json={
+                "account_id": claim_data["data"]["account_id"],
+                "claim_token": claim_data["data"]["claim_token"],
+                "caller_id": "reuse_bot",
+                "task_id": "reuse_success_1",
+                "result": "success",
+            },
+        )
+        self.assertEqual(complete_resp.status_code, 200)
+        complete_data = json.loads(complete_resp.data)
+        self.assertTrue(complete_data["success"])
+        self.assertEqual(complete_data["data"]["pool_status"], "available")
+
+        conn = self.create_conn()
+        try:
+            row = conn.execute(
+                """
+                SELECT pool_status, claimed_by, claim_token
+                FROM accounts
+                WHERE id = ?
+                """,
+                (claim_data["data"]["account_id"],),
+            ).fetchone()
+            self.assertEqual(row["pool_status"], "available")
+            self.assertIsNone(row["claimed_by"])
+            self.assertIsNone(row["claim_token"])
         finally:
             conn.close()
 
@@ -232,8 +295,8 @@ class PoolFlowSuiteTests(unittest.TestCase):
         self.assertIn("claimed_at", data["data"])
         self.assertIsNotNone(data["data"]["claimed_at"])
 
-    def test_claim_with_project_key_prevents_same_project_reuse(self):
-        """PR#27: 同 caller_id + project_key 下，同一账号不应被再次领取。"""
+    def test_claim_with_project_key_prevents_same_project_reuse_without_manual_status_reset(self):
+        """同 caller_id + project_key 下，新语义应原生阻止再次领取，无需手工改状态。"""
         # 使用唯一的 email_domain 隔离测试数据
         email_domain = f"proj_{uuid.uuid4().hex[:8]}.test"
         acct = self._make_pool_account(email_domain=email_domain)
@@ -255,8 +318,8 @@ class PoolFlowSuiteTests(unittest.TestCase):
         self.assertTrue(data1["success"])
         self.assertEqual(data1["data"]["account_id"], account_id)
 
-        # 标记完成（让账号回到 cooldown 状态）
-        self.client.post(
+        # 标记完成后，应直接按新语义回到 available，无需手工 SQL 介入
+        complete_resp = self.client.post(
             "/api/external/pool/claim-complete",
             headers=self._auth_headers(),
             json={
@@ -267,17 +330,10 @@ class PoolFlowSuiteTests(unittest.TestCase):
                 "result": "success",
             },
         )
-
-        # 手动把账号调回 available（绕过 cooldown，模拟恢复）
-        conn = self.create_conn()
-        try:
-            conn.execute(
-                "UPDATE accounts SET pool_status = 'available' WHERE id = ?",
-                (account_id,),
-            )
-            conn.commit()
-        finally:
-            conn.close()
+        self.assertEqual(complete_resp.status_code, 200)
+        complete_data = json.loads(complete_resp.data)
+        self.assertTrue(complete_data["success"])
+        self.assertEqual(complete_data["data"]["pool_status"], "available")
 
         # 同 project_key 再次领取 → 应该拿不到（同 caller+project 的账号已被排除）
         resp2 = self.client.post(
@@ -296,8 +352,8 @@ class PoolFlowSuiteTests(unittest.TestCase):
         self.assertFalse(data2["success"])
         self.assertEqual(data2["code"], "NO_AVAILABLE_ACCOUNT")
 
-    def test_claim_with_different_project_key_allows_reuse(self):
-        """PR#27: 不同 project_key 下，同一账号可以被再次领取。"""
+    def test_claim_with_different_project_key_allows_immediate_reuse_after_success(self):
+        """不同 project_key 下，同一账号在 success 后应立即可再次领取。"""
         # 使用唯一的 email_domain 隔离测试数据
         email_domain = f"proj2_{uuid.uuid4().hex[:8]}.test"
         acct = self._make_pool_account(email_domain=email_domain)
@@ -318,8 +374,8 @@ class PoolFlowSuiteTests(unittest.TestCase):
         data1 = json.loads(resp1.data)
         self.assertTrue(data1["success"])
 
-        # 完成 + 恢复 available
-        self.client.post(
+        # 完成后按新语义应直接恢复 available
+        complete_resp = self.client.post(
             "/api/external/pool/claim-complete",
             headers=self._auth_headers(),
             json={
@@ -330,15 +386,10 @@ class PoolFlowSuiteTests(unittest.TestCase):
                 "result": "success",
             },
         )
-        conn = self.create_conn()
-        try:
-            conn.execute(
-                "UPDATE accounts SET pool_status = 'available' WHERE id = ?",
-                (account_id,),
-            )
-            conn.commit()
-        finally:
-            conn.close()
+        self.assertEqual(complete_resp.status_code, 200)
+        complete_data = json.loads(complete_resp.data)
+        self.assertTrue(complete_data["success"])
+        self.assertEqual(complete_data["data"]["pool_status"], "available")
 
         # 第二次领取（project_gamma，不同 project_key）→ 应该能拿到
         resp2 = self.client.post(
@@ -367,6 +418,196 @@ class PoolFlowSuiteTests(unittest.TestCase):
                 "task_id": "pg_task_1",
             },
         )
+
+    def test_claim_complete_success_updates_stats_to_available_not_used(self):
+        email_domain = f"stats_{uuid.uuid4().hex[:8]}.test"
+        self._make_pool_account(email_domain=email_domain)
+
+        claim_resp = self.client.post(
+            "/api/external/pool/claim-random",
+            headers=self._auth_headers(),
+            json={
+                "caller_id": "stats_bot",
+                "task_id": "stats_task_1",
+                "project_key": "project_stats",
+                "email_domain": email_domain,
+            },
+        )
+        self.assertEqual(claim_resp.status_code, 200)
+        claim_data = json.loads(claim_resp.data)
+        self.assertTrue(claim_data["success"])
+
+        complete_resp = self.client.post(
+            "/api/external/pool/claim-complete",
+            headers=self._auth_headers(),
+            json={
+                "account_id": claim_data["data"]["account_id"],
+                "claim_token": claim_data["data"]["claim_token"],
+                "caller_id": "stats_bot",
+                "task_id": "stats_task_1",
+                "result": "success",
+            },
+        )
+        self.assertEqual(complete_resp.status_code, 200)
+        complete_data = json.loads(complete_resp.data)
+        self.assertTrue(complete_data["success"])
+        self.assertEqual(complete_data["data"]["pool_status"], "available")
+
+        stats_resp = self.client.get(
+            "/api/external/pool/stats",
+            headers=self._auth_headers(),
+        )
+        self.assertEqual(stats_resp.status_code, 200)
+        stats_data = json.loads(stats_resp.data)
+        self.assertTrue(stats_data["success"])
+        pool_counts = stats_data["data"]["pool_counts"]
+        self.assertGreaterEqual(pool_counts["available"], 1)
+        self.assertEqual(pool_counts["used"], 0)
+
+    def test_same_project_verification_timeout_does_not_block_retry_after_recovery(self):
+        email_domain = f"timeout_{uuid.uuid4().hex[:8]}.test"
+        acct = self._make_pool_account(email_domain=email_domain)
+        account_id = acct["id"]
+
+        claim_resp = self.client.post(
+            "/api/external/pool/claim-random",
+            headers=self._auth_headers(),
+            json={
+                "caller_id": "timeout_bot",
+                "task_id": "timeout_task_1",
+                "project_key": "project_timeout",
+                "email_domain": email_domain,
+            },
+        )
+        self.assertEqual(claim_resp.status_code, 200)
+        claim_data = json.loads(claim_resp.data)
+        self.assertTrue(claim_data["success"])
+
+        complete_resp = self.client.post(
+            "/api/external/pool/claim-complete",
+            headers=self._auth_headers(),
+            json={
+                "account_id": account_id,
+                "claim_token": claim_data["data"]["claim_token"],
+                "caller_id": "timeout_bot",
+                "task_id": "timeout_task_1",
+                "result": "verification_timeout",
+            },
+        )
+        self.assertEqual(complete_resp.status_code, 200)
+        complete_data = json.loads(complete_resp.data)
+        self.assertTrue(complete_data["success"])
+        self.assertEqual(complete_data["data"]["pool_status"], "cooldown")
+
+        conn = self.create_conn()
+        try:
+            conn.execute("UPDATE accounts SET pool_status = 'available' WHERE id = ?", (account_id,))
+            conn.commit()
+        finally:
+            conn.close()
+
+        retry_resp = self.client.post(
+            "/api/external/pool/claim-random",
+            headers=self._auth_headers(),
+            json={
+                "caller_id": "timeout_bot",
+                "task_id": "timeout_task_2",
+                "project_key": "project_timeout",
+                "email_domain": email_domain,
+            },
+        )
+        self.assertEqual(retry_resp.status_code, 200)
+        retry_data = json.loads(retry_resp.data)
+        self.assertTrue(retry_data["success"])
+        self.assertEqual(retry_data["data"]["account_id"], account_id)
+
+    def test_same_project_manual_release_does_not_block_retry(self):
+        email_domain = f"release_{uuid.uuid4().hex[:8]}.test"
+        acct = self._make_pool_account(email_domain=email_domain)
+        account_id = acct["id"]
+
+        claim_resp = self.client.post(
+            "/api/external/pool/claim-random",
+            headers=self._auth_headers(),
+            json={
+                "caller_id": "release_bot",
+                "task_id": "release_task_1",
+                "project_key": "project_release",
+                "email_domain": email_domain,
+            },
+        )
+        self.assertEqual(claim_resp.status_code, 200)
+        claim_data = json.loads(claim_resp.data)
+        self.assertTrue(claim_data["success"])
+
+        release_resp = self.client.post(
+            "/api/external/pool/claim-release",
+            headers=self._auth_headers(),
+            json={
+                "account_id": account_id,
+                "claim_token": claim_data["data"]["claim_token"],
+                "caller_id": "release_bot",
+                "task_id": "release_task_1",
+            },
+        )
+        self.assertEqual(release_resp.status_code, 200)
+        release_data = json.loads(release_resp.data)
+        self.assertTrue(release_data["success"])
+        self.assertEqual(release_data["data"]["pool_status"], "available")
+
+        retry_resp = self.client.post(
+            "/api/external/pool/claim-random",
+            headers=self._auth_headers(),
+            json={
+                "caller_id": "release_bot",
+                "task_id": "release_task_2",
+                "project_key": "project_release",
+                "email_domain": email_domain,
+            },
+        )
+        self.assertEqual(retry_resp.status_code, 200)
+        retry_data = json.loads(retry_resp.data)
+        self.assertTrue(retry_data["success"])
+        self.assertEqual(retry_data["data"]["account_id"], account_id)
+
+    def test_cloudflare_temp_mail_success_with_project_key_still_returns_old_status_semantics(self):
+        email_domain = f"cf_{uuid.uuid4().hex[:8]}.test"
+        self._make_pool_account(
+            provider="cloudflare_temp_mail",
+            account_type="temp_mail",
+            email_domain=email_domain,
+        )
+
+        claim_resp = self.client.post(
+            "/api/external/pool/claim-random",
+            headers=self._auth_headers(),
+            json={
+                "caller_id": "cf_bot",
+                "task_id": "cf_task_1",
+                "provider": "cloudflare_temp_mail",
+                "project_key": "project_cf",
+                "email_domain": email_domain,
+            },
+        )
+        self.assertEqual(claim_resp.status_code, 200)
+        claim_data = json.loads(claim_resp.data)
+        self.assertTrue(claim_data["success"])
+
+        complete_resp = self.client.post(
+            "/api/external/pool/claim-complete",
+            headers=self._auth_headers(),
+            json={
+                "account_id": claim_data["data"]["account_id"],
+                "claim_token": claim_data["data"]["claim_token"],
+                "caller_id": "cf_bot",
+                "task_id": "cf_task_1",
+                "result": "success",
+            },
+        )
+        self.assertEqual(complete_resp.status_code, 200)
+        complete_data = json.loads(complete_resp.data)
+        self.assertTrue(complete_data["success"])
+        self.assertEqual(complete_data["data"]["pool_status"], "used")
 
 
 if __name__ == "__main__":

@@ -87,12 +87,12 @@ def insert_claimed_account(
                 email, password, client_id, refresh_token,
                 account_type, provider, status,
                 pool_status, claimed_by, claimed_at, lease_expires_at, claim_token,
-                last_claimed_at, temp_mail_meta, email_domain,
+                claimed_project_key, last_claimed_at, temp_mail_meta, email_domain,
                 created_at, updated_at
             ) VALUES (?, '', '', '',
                       ?, ?, 'active',
                       'claimed', ?, ?, ?, ?,
-                      ?, ?, ?,
+                      ?, ?, ?, ?,
                       ?, ?)
             """,
             (
@@ -103,6 +103,7 @@ def insert_claimed_account(
                 now_str,
                 lease_expires_at_str,
                 token,
+                project_key,
                 now_str,
                 temp_mail_meta_json,
                 extracted_domain,
@@ -225,6 +226,7 @@ def claim_atomic(
                 WHERE apu.account_id = a.id
                   AND apu.consumer_key = ?
                   AND apu.project_key = ?
+                  AND apu.success_count > 0
             )
         """
         params.append(caller_id)
@@ -251,6 +253,7 @@ def claim_atomic(
             claimed_at = ?,
             lease_expires_at = ?,
             claim_token = ?,
+            claimed_project_key = ?,
             last_claimed_at = ?,
             updated_at = ?
         WHERE id = ?
@@ -260,6 +263,7 @@ def claim_atomic(
             now_str,
             lease_expires_at_str,
             token,
+            project_key,
             now_str,
             now_str,
             account["id"],
@@ -365,20 +369,11 @@ def release(
             claimed_at = NULL,
             lease_expires_at = NULL,
             claim_token = NULL,
+            claimed_project_key = NULL,
             updated_at = ?
         WHERE id = ?
         """,
         (now_str, account_id),
-    )
-    # Bug #28 fix: release 意味着本次领取被放弃（未成功注册），
-    # 需要同步清理 account_project_usage 里该账号由此 caller 产生的记录，
-    # 否则下次使用相同 project_key 的 claim-random 会被 NOT EXISTS 子查询错误排除。
-    conn.execute(
-        """
-        DELETE FROM account_project_usage
-        WHERE account_id = ? AND consumer_key = ?
-        """,
-        (account_id, caller_id),
     )
     conn.execute(
         """
@@ -399,9 +394,28 @@ def complete(
     task_id: str,
     result: str,
     detail: Optional[str],
+    *,
+    claimed_project_key: Optional[str] = None,
+    enable_project_reuse: Optional[bool] = None,
 ) -> str:
-    new_pool_status = RESULT_TO_POOL_STATUS[result]
+    current_row = conn.execute(
+        "SELECT claimed_project_key FROM accounts WHERE id = ?",
+        (account_id,),
+    ).fetchone()
+    if current_row is None:
+        raise PoolRepositoryError("账号不存在", "account_not_found")
+
+    effective_claimed_project_key = claimed_project_key
+    if effective_claimed_project_key is None:
+        effective_claimed_project_key = current_row["claimed_project_key"]
+    effective_claimed_project_key = str(effective_claimed_project_key or "").strip() or None
+    effective_enable_project_reuse = (
+        bool(effective_claimed_project_key) if enable_project_reuse is None else enable_project_reuse
+    )
+
     is_success = result == "success"
+    reuse_success = bool(effective_enable_project_reuse and effective_claimed_project_key and is_success)
+    new_pool_status = "available" if reuse_success else RESULT_TO_POOL_STATUS[result]
     now_str = _utcnow().isoformat() + "Z"
 
     conn.execute("BEGIN IMMEDIATE")
@@ -413,6 +427,7 @@ def complete(
             claimed_at = NULL,
             lease_expires_at = NULL,
             claim_token = NULL,
+            claimed_project_key = NULL,
             last_result = ?,
             last_result_detail = ?,
             success_count = success_count + ?,
@@ -430,6 +445,31 @@ def complete(
             account_id,
         ),
     )
+    if reuse_success:
+        conn.execute(
+            """
+            INSERT INTO account_project_usage (
+                account_id, consumer_key, project_key,
+                first_claimed_at, last_claimed_at,
+                first_success_at, last_success_at, success_count
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+            ON CONFLICT(account_id, consumer_key, project_key)
+            DO UPDATE SET
+                last_success_at = excluded.last_success_at,
+                success_count = account_project_usage.success_count + 1,
+                first_success_at = COALESCE(account_project_usage.first_success_at, excluded.first_success_at)
+            """,
+            (
+                account_id,
+                caller_id,
+                effective_claimed_project_key,
+                now_str,
+                now_str,
+                now_str,
+                now_str,
+            ),
+        )
     conn.execute(
         """
         INSERT INTO account_claim_logs
@@ -464,6 +504,7 @@ def expire_stale_claims(conn: sqlite3.Connection) -> int:
                 claimed_at = NULL,
                 lease_expires_at = NULL,
                 claim_token = NULL,
+                claimed_project_key = NULL,
                 fail_count = fail_count + 1,
                 last_result = 'lease_expired',
                 updated_at = ?

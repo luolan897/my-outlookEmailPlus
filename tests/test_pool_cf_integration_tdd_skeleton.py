@@ -373,8 +373,8 @@ class PoolCFTddSkeletonTests(unittest.TestCase):
             self.assertTrue(len(rows) >= 1)
             self.assertIn("id", account)
 
-    def test_release_clears_project_usage(self):
-        """R-CF-PROJ-02: release 时 project usage 应清理逻辑不被破坏"""
+    def test_release_keeps_project_usage_without_success(self):
+        """R-CF-PROJ-02: release 后保留 usage 行，但不应形成 success 阻断"""
         with self.app.app_context():
             from outlook_web.db import get_db
             from outlook_web.services import pool as pool_service
@@ -407,10 +407,17 @@ class PoolCFTddSkeletonTests(unittest.TestCase):
 
             db = get_db()
             rows = db.execute(
-                "SELECT * FROM account_project_usage WHERE project_key = ?",
+                """
+                SELECT success_count, first_success_at, last_success_at
+                FROM account_project_usage
+                WHERE project_key = ?
+                """,
                 ("project_A",),
             ).fetchall()
-            self.assertEqual(len(rows), 0)
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["success_count"], 0)
+            self.assertIsNone(rows[0]["first_success_at"])
+            self.assertIsNone(rows[0]["last_success_at"])
 
 
 class PoolServiceProviderValidationTddSkeletonTests(unittest.TestCase):

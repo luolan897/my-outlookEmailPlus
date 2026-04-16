@@ -123,6 +123,21 @@ def _read_settings_via_conn(conn) -> dict:
     return result
 
 
+def _is_project_reuse_eligible_account(
+    *,
+    provider: Optional[str],
+    account_type: Optional[str],
+    claimed_project_key: Optional[str],
+) -> bool:
+    if not claimed_project_key:
+        return False
+    if (provider or "").strip() == "cloudflare_temp_mail":
+        return False
+    if (account_type or "").strip() == "temp_mail":
+        return False
+    return True
+
+
 def claim_random(
     *,
     caller_id: str,
@@ -266,7 +281,8 @@ def complete_claim(
     try:
         row = conn.execute(
             """
-            SELECT id, email, provider, temp_mail_meta,
+            SELECT id, email, provider, account_type, temp_mail_meta,
+                   claimed_project_key,
                    claim_token, claimed_by, pool_status
             FROM accounts
             WHERE id = ?
@@ -291,8 +307,25 @@ def complete_claim(
                 http_status=403,
             )
 
+        claimed_project_key = str(row["claimed_project_key"] or "").strip() or None
+        enable_project_reuse = _is_project_reuse_eligible_account(
+            provider=row["provider"],
+            account_type=row["account_type"],
+            claimed_project_key=claimed_project_key,
+        )
+
         # complete 先更新本地状态（事务内），再做 CF 删除（非阻塞）
-        new_status = pool_repo.complete(conn, account_id, claim_token, caller_id, task_id, result, detail)
+        new_status = pool_repo.complete(
+            conn,
+            account_id,
+            claim_token,
+            caller_id,
+            task_id,
+            result,
+            detail,
+            claimed_project_key=claimed_project_key,
+            enable_project_reuse=enable_project_reuse,
+        )
 
         if (row["provider"] or "").strip() == "cloudflare_temp_mail" and result in CF_DELETE_ON_RESULTS:
             meta_str = row["temp_mail_meta"]

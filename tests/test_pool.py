@@ -421,13 +421,8 @@ class PoolRepositoryTests(unittest.TestCase):
         finally:
             conn.close()
 
-    def test_release_clears_project_usage_for_reclaim(self):
-        """Bug #28 回归测试：release 后，同一 project_key 应能再次领取该账号。
-
-        背景：v17 引入 account_project_usage 防止同项目复用已用账号，
-        但 release 操作忘记清理该表，导致放弃的账号被 NOT EXISTS 永远排除，
-        使得 release 后下次 claim-random 拿不到任何可用邮箱。
-        """
+    def test_release_keeps_project_usage_for_reclaim(self):
+        """release 后保留 usage 行，但同一 project_key 仍应能再次领取该账号。"""
         conn = self.create_conn()
         try:
             import secrets
@@ -473,15 +468,17 @@ class PoolRepositoryTests(unittest.TestCase):
                 reason="任务放弃",
             )
 
-            # 确认 account_project_usage 里的记录已被清除（Bug #28 fix 核心验证）
+            # 新语义下 release 不再删除 usage 行，但未成功的记录不应阻断再次领取
             usage_after = conn.execute(
-                "SELECT * FROM account_project_usage WHERE account_id = ? AND consumer_key = 'bot'",
+                """
+                SELECT success_count
+                FROM account_project_usage
+                WHERE account_id = ? AND consumer_key = 'bot' AND project_key = 'proj_x'
+                """,
                 (claimed_id,),
             ).fetchone()
-            self.assertIsNone(
-                usage_after,
-                "release 后应清除 account_project_usage 里的记录，否则下次 claim 会被 NOT EXISTS 排除",
-            )
+            self.assertIsNotNone(usage_after)
+            self.assertEqual(usage_after["success_count"], 0)
 
             # 确认账号状态恢复为 available
             row = conn.execute("SELECT pool_status FROM accounts WHERE id = ?", (claimed_id,)).fetchone()
@@ -498,7 +495,7 @@ class PoolRepositoryTests(unittest.TestCase):
             )
             self.assertIsNotNone(
                 r2,
-                "Bug #28：release 后用相同 project_key 应能再次领取账号，而不是 NO_AVAILABLE_ACCOUNT",
+                "release 后即使保留 usage 行，同一 project_key 仍应能再次领取账号",
             )
             self.assertEqual(r2["id"], claimed_id, "领取到的应是同一个账号")
         finally:
@@ -568,7 +565,7 @@ class PoolRepositoryTests(unittest.TestCase):
                 detail=None,
             )
 
-            # complete(success) 后 pool_status = 'used'，account_project_usage 保留
+            # complete(success) 后 account_project_usage 仍保留，由 success 记录承担同项目防重
             usage_row = conn.execute(
                 "SELECT * FROM account_project_usage WHERE account_id = ? AND project_key = 'proj_y'",
                 (r["id"],),
