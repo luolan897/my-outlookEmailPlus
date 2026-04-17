@@ -53,6 +53,40 @@
 6. 当前状态
    - 版本准备、测试、构建均已完成，下一步为打 tag 并创建 GitHub Release。
 
+#### 156. 发布收口（v1.19.0）：tag 推送、Release 页面更新与附件校验完成
+
+**时间**：2026-04-17
+
+**本次操作**：
+
+1. 主线同步
+   - 提交：`45a00d4 docs(release): record v1.19.0 verification and artifacts`
+   - 推送：`git push origin main`（`8f578da..45a00d4`）
+
+2. tag 发布
+   - 创建：`git tag -a v1.19.0 -m "v1.19.0"`
+   - 推送：`git push origin v1.19.0`
+
+3. GitHub Release 操作
+   - 首次执行 `gh release create v1.19.0 ...` 返回 `HTTP 422 Release.tag_name already exists`
+   - 处理：改为对已有 release 执行覆盖更新
+     - `gh release upload v1.19.0 ... --clobber`
+     - `gh release edit v1.19.0 --notes-file dist/release-notes-v1.19.0.md`
+
+4. Release 结果校验
+   - 发布页：`https://github.com/ZeroPointSix/outlookEmailPlus/releases/tag/v1.19.0`
+   - 附件：
+     - `outlook-email-plus-v1.19.0-docker.tar`
+       - size=`205110784`
+       - digest=`sha256:2192206c35b53baffb30d669f01f3712682518a94c07057e5efc716d5d296410`
+     - `outlookEmailPlus-v1.19.0-src.zip`
+       - size=`4153423`
+       - digest=`sha256:c6e03de9b5e6c36f980544464bcfea152bd1e28c4557cc097ae99333bbea6778`
+
+5. 当前状态
+   - `v1.19.0` 发布日志已同步到 GitHub Release 页面
+   - 两个发布产物已上传并完成 digest 校验
+
 #### 154. 人工验收结论回填：本轮本地 Docker 验收通过
 
 **时间**：2026-04-17
