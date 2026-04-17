@@ -8,6 +8,36 @@
 
 ### 操作记录
 
+#### 128. 其它本地分支及对应远端已直接对齐到 main 目标提交 772d540
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 目标确认
+   - 按用户确认方案，采用“**直接移动分支指针**”而非 merge / cherry-pick
+   - 覆盖范围：除 `main` 外的全部本地分支
+   - 实际目标提交：`772d540` `docs(workspace): record docs push`
+
+2. 本地分支对齐
+   - 已对齐本地分支：
+     - `Buggithubissue`
+     - `dev`
+     - `feature`
+   - 处理方式：分别在对应 worktree 执行 `git reset --hard 772d540`
+
+3. 远端分支对齐
+   - 已执行：`git push --force-with-lease origin Buggithubissue dev feature`
+   - 对应远端分支已同步到相同提交：`772d540`
+
+4. 现场说明
+   - `Buggithubissue` worktree 中存在未跟踪文件：`test_output.txt`
+   - 本次仅移动分支提交指针，未删除该未跟踪文件
+
+5. 当前状态
+   - 当前 `Buggithubissue` / `dev` / `feature` 的本地分支与远端分支，均已对齐到用户指定目标提交 `772d540`
+   - 为保持“其它分支对齐到 `772d540`”这一结果，本条 `WORKSPACE.md` 记录暂未单独提交到 `main`
+
 #### 127. 文档同步提交已推送到 origin/main
 
 **时间**：2026-04-16
