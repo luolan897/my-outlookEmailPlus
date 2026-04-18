@@ -615,6 +615,24 @@ CORS(app, resources={
 - 设计讨论已完成，方案定稿，**尚未决定是否开始实施**
 
 
+#### 165. CI/CD 全绿 - v2.0.0 发布验证
+
+**时间**：2026-04-18
+
+**触发**：black 格式化修复 commit `b58ec73`（`style: black格式化 v2.0.0 版本文件`）
+
+**结果**：
+| Workflow | 状态 |
+|---------|------|
+| Code Quality | ✅ success |
+| Python Tests | ✅ success |
+| Build and Push Docker Image | ✅ success |
+| SonarCloud Scan | ✅ success |
+
+**v2.0.0 发布完整链路验证完毕** ✅
+
+---
+
 #### 164. 发布 v2.0.0 GitHub Release
 
 **时间**：2026-04-18
