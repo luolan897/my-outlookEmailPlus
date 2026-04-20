@@ -871,8 +871,10 @@
 
 - 当前 `main` / `dev` 同步提交 `31b68d2` 仍然是全量绿
 - 随后在核对 `main` 工作树状态时，观察到其本地仍有以下未提交内容：
+  - `outlook_web/controllers/emails.py`
   - `outlook_web/repositories/overview.py`
   - `outlook_web/services/external_api.py`
+  - `outlook_web/services/temp_mail_service.py`
   - `outlook_web/services/verification_extract_log.py`
   - `browser-extension.zip`（未跟踪）
 - 这些内容不是这次“再次全量测试”产生的测试结果文件；本次未修改它们
