@@ -1145,6 +1145,37 @@
 - `v2.1.0` Release 保持原状，不改 tag、不改 Release 页面
 - `main` 分支 post-release 修复已完成，相关文档与 `WORKSPACE.md` 已同步到真实状态
 
+#### 207. 强制将其它分支全部对齐到 main
+
+**时间**：2026-04-20
+
+**本次前置判断**：
+
+- `dev` 与 `origin/dev`：无独有提交，可直接对齐
+- `alias-email-merge`：无独有提交，可直接对齐
+- `Buggithubissue`：落后 `main` 且仍有 3 个独有提交
+- `feature`：落后 `main` 且仍有 3 个独有提交
+- 用户已明确选择：**强制所有分支直接对齐 `main`**
+
+**本次执行结果**：
+
+1. 本地分支/工作树：
+   - `Buggithubissue` 工作树已 `reset --hard main`
+   - `feature` 工作树已 `reset --hard main`
+   - 本地 `alias-email-merge` 分支已创建并直接指向 `main`
+   - 本地 `dev / main / Buggithubissue / feature / alias-email-merge` 当前均为 `e4f73f5`
+
+2. 远端分支：
+   - `origin/dev`：`d384879` → `e4f73f5`
+   - `origin/alias-email-merge`：`a82c61e` → `e4f73f5`
+   - `origin/Buggithubissue`：`0daed1d` → `e4f73f5`（forced update）
+   - `origin/feature`：`eabeb03` → `e4f73f5`（forced update）
+
+**当前状态**：
+
+- 当前仓库可见的主线分支已全部统一到 `main@e4f73f5`
+- 下一步仅需将这条 `WORKSPACE.md` 记录本身也同步到所有分支，保证“分支状态”和“文档记录”再次一致
+
 ---
 
 ## 2026-04-18
