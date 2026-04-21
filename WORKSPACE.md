@@ -1004,6 +1004,57 @@ fix: 修复标准模式小窗 UI 排版错乱（Issue #50）- 响应式断点适
 
 ---
 
+#### 254. 管理未跟踪插件夹具文件 — 本地排除工具文件并确认新增测试可提交
+
+**时间**：2026-04-21
+
+**背景**：
+在完成 `main` 合并与 merge commit 后，当前工作树仍残留 4 个未跟踪文件/目录：
+- `.github/copilot-instructions.md`
+- `plugins/temp_mail_providers/test_plugin/`
+- `tests/test_temp_mail_provider_cf_test_plugin.py`
+- `tests/test_temp_mail_provider_moemail.py`
+
+用户要求“同步提交管理我们的未提交文件然后全量的测试一波”，因此需要先判断它们是否属于仓库交付内容。
+
+**本次判断**：
+1. `.github/copilot-instructions.md`
+   - 属于本地工具指令文件，不应纳入仓库
+   - 已通过 `git rev-parse --git-path info/exclude` 写入本地 `info/exclude`，仅本地排除，不改动仓库规则
+2. `plugins/temp_mail_providers/test_plugin/` 与两份 `tests/test_temp_mail_provider_*.py`
+   - 属于一组真实插件夹具 + 对应回归测试
+   - 当前 TD 文档已在描述中引用 `test_plugin/moemail.py` 与 `cloudflare_temp_mail_test_plugin.py`
+   - 因此应纳入版本管理，而不是继续悬空为本地未跟踪文件
+
+**本次验证**：
+1. 单独执行新增两组测试：
+   - 命令：`python -m unittest tests.test_temp_mail_provider_cf_test_plugin tests.test_temp_mail_provider_moemail -v`
+   - 结果：`Ran 10 tests in 1.048s`
+   - 结论：`OK`
+2. 在当前工作树再次执行完整全量：
+   - 命令：`python -m unittest discover -s tests -v`
+   - 结果：`Ran 1357 tests in 409.925s`
+   - 结论：`OK (skipped=7)`
+
+**本次文档同步**：
+1. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
+   - 补记真实插件夹具及其回归测试已确认应纳入版本管理
+2. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 将最新完整回归基线更新为 `409.925s`
+3. `docs/TODO/2026-04-21-插件Provider域名选择泛化与设置入口解耦TODO.md`
+   - 补记该最新回归来自梳理未跟踪插件夹具测试之后的当前工作树
+4. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
+   - 更新顶部当前实施状态中的完整回归结果
+5. `docs/BUG/2026-04-21-插件Provider域名选择未泛化与设置入口耦合BUG.md`
+   - 更新当前状态中的最新完整回归结果
+
+**当前状态**：
+1. 本地工具指令文件已只在本地排除，不再干扰工作树。
+2. 真实插件夹具与对应测试已确认可进入下一步版本管理提交。
+3. 当前完整全量基线为 `Ran 1357 tests in 409.925s`、`OK (skipped=7)`。
+
+---
+
 #### 220. 临时邮箱 Provider 插件化 — 记录浏览器 unittest 延后修复决策
 
 **时间**：2026-04-21
