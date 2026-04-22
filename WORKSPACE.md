@@ -8,6 +8,118 @@
 
 ### 操作记录
 
+#### 265. PR #48 合并后 UX 修复：消息栏布局跳动 + 字段复制色反馈去除
+
+**时间**：2026-04-22
+
+**背景**：
+PR #48 合并后，用户在手工验收浏览器扩展「点击字段复制」功能时发现两处体验问题：
+1. 点击字段复制时，顶部消息栏从 `display:none` 切换为 `display:block`，导致整页内容被向下推动，产生「跳动」感。
+2. 字段被点击后会添加 `.copied` 类，触发绿色背景/边框/文字色变化，用户认为视觉噪点过多、不好看，希望仅保留顶部消息栏的「已复制」提示。
+
+**本次修改**：
+
+| 文件 | 改动 |
+|------|------|
+| `browser-extension/popup.js` | `showMessage()` / `hideMessage()`：移除 `display:none/block` 直接操作，改为通过 `classList.add/remove('show')` 控制显隐 |
+| `browser-extension/popup.js` | `handleCopyField()`：移除 `input.classList.add('copied')` 及对应的 `setTimeout` 自动清除逻辑 |
+| `browser-extension/popup.html` | `.message-bar`：由 `display:none` 改为 `opacity:0`，增加 `transition`；新增 `.message-bar.show { opacity:1 }` |
+| `browser-extension/popup.html` | 移除 `.form-input.copy-on-click.copied` 全部 CSS 规则（绿色背景、边框、文字色、transition） |
+
+**修复效果**：
+1. 消息栏始终占据布局空间，仅通过 `opacity` 淡入淡出，彻底消除页面跳动。
+2. 字段复制后不再有任何颜色变化，仅顶部消息栏显示「已复制」3 秒后自动消失。
+
+**文档同步**：
+1. 更新：`我们的文档/开放文档/CN/CN-00003-pr48-review-and-merge-recommendation.md`
+   - 追加「合并后 UX 修复」章节。
+2. 更新：`WORKSPACE.md`
+   - 新增本条目（Entry #265）。
+
+**当前状态**：
+1. UX 修复代码已写入工作树，尚未提交。
+2. 等待用户确认修复效果后，可继续推进 push / dev→main 合并。
+
+---
+
+#### 264. PR #48 合并到 dev + 全量等价分批回归通过
+
+**时间**：2026-04-22
+
+**背景**：
+在完成 PR #48 只读审查后，用户要求“尝试合并到当前分支并跑全量测试”，同时要求把会话文档与 `WORKSPACE.md` 按实际同步。
+
+**执行前上下文核对**：
+1. 当前分支为 `dev`，工作树存在既有未跟踪文件（非本轮新增业务改动）。
+2. PR 头分支本地镜像：`pr-48-analysis`（SHA: `ff155ef`）。
+3. `pr-48-analysis` 与 `dev` 的差异确认后，执行合并。
+
+**合并结果**：
+1. 命令：`git merge --no-edit pr-48-analysis`
+2. 结果：合并成功，生成 merge commit：`461da01`
+3. 合并引入文件：
+   - `browser-extension/popup.html`
+   - `browser-extension/popup.js`
+   - `tests/browser-extension/popup.integration.test.js`
+
+**测试执行过程**：
+1. 先执行整仓全量：
+   - `python -m unittest discover -s tests -v`
+   - `python -m unittest discover -s tests`
+2. 两次均因工具级 300000ms 上限超时中断（并非断言失败）。
+3. 按用户确认的方案 A，改为“全量等价分批”跑法（按 `test*.py` 前缀分组 discover）。
+4. 分批总计：`Ran 1369 tests`，整体 `OK`（包含预期 `skipped=7`）。
+
+**本次文档同步**：
+1. 更新：`我们的文档/开放文档/CN/CN-00003-pr48-review-and-merge-recommendation.md`
+   - 追加“合并尝试与全量等价分批回归”章节。
+2. 更新：`我们的文档/开放文档/CN/CN-00002-browser-extension-v2.0.0-release-and-branch-sync.md`
+   - 追加本轮合并与分批回归摘要。
+3. 更新：`WORKSPACE.md`
+   - 新增本条目（Entry #264）。
+
+**当前状态**：
+1. PR #48 已并入当前 `dev`。
+2. 分批全量等价回归已通过。
+3. 本轮未执行 push。
+
+---
+
+#### 263. PR #48 读取审查与文档回填（浏览器扩展信息生成 UX 收口）
+
+**时间**：2026-04-22
+
+**背景**：
+用户提供 `https://github.com/ZeroPointSix/outlookEmailPlus/pull/48`，要求先读取并分析；随后要求把会话相关文档按实际更新，并将本次操作及时记录到 `WORKSPACE.md`。
+
+**本次上下文获取（只读）**：
+1. 使用 GitHub API / gh CLI 读取 PR 元数据、提交列表、文件改动、review 与评论。
+2. 本地创建只读分析分支 `pr-48-analysis`，用于对比当前 `main` 与 PR 有效增量。
+3. 进一步核对确认：PR 页面显示的大 diff 含历史基线差异，真正相对当前 `main` 的有效增量集中在 3 个文件。
+
+**审查结论（技术层面）**：
+1. PR #48 目标是将信息生成页从“可编辑+按钮复制”收口为“只读+点击字段复制+复制反馈”，与 Owner review 要求一致。
+2. 有效改动核心文件：
+   - `browser-extension/popup.html`
+   - `browser-extension/popup.js`
+   - `tests/browser-extension/popup.integration.test.js`
+3. 未发现阻塞性问题（blocking issue），风险评估为低，结论可合并（若仓库策略要求，可在合并前补确认 browser-extension CI 状态）。
+
+**本次文档同步**：
+1. 新增：`我们的文档/开放文档/CN/CN-00003-pr48-review-and-merge-recommendation.md`
+   - 记录 PR #48 审查过程、关键发现、风险评估与合并建议。
+2. 更新：`我们的文档/开放文档/CN/CN-00002-browser-extension-v2.0.0-release-and-branch-sync.md`
+   - 追加“2026-04-22 会话补充：PR #48 审查摘要”。
+3. 更新：`WORKSPACE.md`
+   - 新增本条目（Entry #263）。
+
+**当前状态**：
+1. 本轮仅完成读取分析与文档回填，未修改业务代码。
+2. 未执行提交、未推送。
+3. 可在后续按用户决策进入 PR 审批/合并动作。
+
+---
+
 #### 260. Issue #49 失效账号检测与清理（方案 C）— Phase A~D 全部实现完成
 
 **时间**：2026-04-22
@@ -100,6 +212,92 @@
 **当前状态**：
 1. Issue #49 方案 C 的 Phase A~D 已全部完成并通过自动化测试和前端结构验证
 2. 剩余 Task 4.4 人工验收：需在浏览器中实际导入含失效 token 的账号并走完全链路
+
+---
+
+#### 262. Issue #49 — 全量测试 + 提交 + 端到端模拟验证
+
+**时间**：2026-04-22
+
+**背景**：
+用户要求提交代码、跑全量测试、并模拟完整验证链路。
+
+**本地提交**：
+- Commit: `53b4e50`
+- Message: `feat: 失效账号检测与治理闭环（Issue #49 方案 C）`
+- 12 files changed, 1849 insertions(+), 2 deletions(-)
+
+**全量测试结果**：
+- 命令：`python -m unittest discover -s tests -v`（排除 2 个浏览器测试，120 文件）
+- 结果：`Ran 1367 tests in 375.057s`
+- 状态：`FAILED (failures=2, errors=1, skipped=7)`
+- **3 个失败全部来自 `tests/test_pool_cf_real_e2e.py`（CF Worker 真实 E2E），与 Issue #49 改动无关**
+- Issue #49 新增的 12 条测试全部通过
+
+**端到端模拟验证**（`e2e_simulate_issue49.py`）：
+
+验证数据：
+- `invalid_token_test_01@outlook.com` — 刷新日志含 `invalid_grant`
+- `invalid_token_test_02@outlook.com` — 刷新日志含 `AADSTS70000`
+- `normal_error_test@outlook.com` — 刷新日志含 `ConnectionTimeout`（对照组）
+
+验证结果：
+1. ✅ `invalid_grant` 账号被识别为候选
+2. ✅ `AADSTS70000` 账号被识别为候选
+3. ✅ 普通网络错误账号被正确排除
+4. ✅ `POST /api/accounts/batch-update-status` 批量停用成功（`updated_count: 2`）
+5. ✅ 两个失效账号状态正确更新为 `inactive`
+6. ✅ 正常账号状态保持 `active` 未被影响
+7. ✅ 再次查询候选列表时，状态标签已更新为 `inactive`
+8. 额外发现：`PatrickHowell5358@outlook.jp`（之前存在的真实账号）也被识别为候选，说明判定逻辑对历史数据也生效
+
+**当前状态**：
+1. Issue #49 方案 C 全链路（Phase A~D + 模拟 E2E）已完成
+2. 验收服务仍在 `http://127.0.0.1:5097` 运行中（密码 `admin12345`）
+3. 用户可在浏览器中查看治理面板效果
+
+---
+
+#### 263. Issue #49 — 补充上下文确认与 UI 截图
+
+**时间**：2026-04-22
+
+**背景**：
+用户询问了几个关键问题：
+1. `inactive`（停用）状态是否是项目中已有的？→ **是的**，`accounts.js:602` 已有 `toggleAccountStatus()` 函数
+2. 新增的 `batch-update-status` 是否应该复用现有的 `PUT /api/accounts/{id}`？→ **用户确认保留批量接口**（效率更高）
+3. HTML 预览是否是真实 UI？→ **之前是手写模拟**，已补充 Playwright 真实 UI 截图
+
+**本次操作**：
+1. 核实项目中 `inactive` 状态的完整链路：
+   - 前端：`toggleAccountStatus(accountId, currentStatus)`（`accounts.js:602`）
+   - 后端：`PUT /api/accounts/{id}` 接受 `{ status: 'inactive' }`
+   - 刷新链路：`WHERE a.status = 'active'` 条件自动跳过 `inactive` 账号
+2. 使用 Playwright 在真实运行服务（端口 5097）上截取刷新模态框和治理面板截图
+3. 截图保存到 `screenshots/real_refresh_modal.png` 和 `screenshots/real_governance_panel.png`
+
+**当前状态**：
+1. Issue #49 全部实现已完成并提交（`53b4e50`）
+2. 等待用户查看真实 UI 截图后反馈
+
+---
+
+#### 264. Issue #49 — 用户确认验收通过，准备手动测试
+
+**时间**：2026-04-22
+
+**背景**：
+用户确认验收通过，并选择使用场景 A（有真实失效 token 账号）进行手动测试。用户要求使用之前启动的验收服务实例（端口 5097）来测试。
+
+**讨论要点**：
+1. 用户质疑 `inactive` 状态是否是项目已有的 → 确认 `accounts.js:602` 已有 `toggleAccountStatus()` 函数
+2. 用户质疑是否应复用现有 `PUT /api/accounts/{id}` 而非新增 `batch-update-status` → 用户最终确认保留批量接口
+3. 用户要求提供实际可操作的测试步骤 → 已提供完整 6 步测试流程
+4. 用户要求手写 HTML 预览 → 已补充 Playwright 真实 UI 截图
+
+**当前状态**：
+1. 验收服务运行中：`http://127.0.0.1:5097`（密码 `admin12345`）
+2. 等待用户手动测试完成后反馈
 
 ---
 

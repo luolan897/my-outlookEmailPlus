@@ -137,8 +137,14 @@
       padding: 8px 12px;
       text-align: center;
       font-size: 12px;
-      border-bottom: 1px solid var(--border-light);
-      display: none;
+      border-bottom: 1px solid transparent;
+      opacity: 0;
+      transition: opacity 0.2s ease, border-color 0.2s ease;
+    }
+
+    .message-bar.show {
+      opacity: 1;
+      border-bottom-color: var(--border-light);
     }
 
     .message-error { background: rgba(192, 57, 43, 0.1); color: var(--clr-danger); }
@@ -523,13 +529,6 @@
 
     .form-input.copy-on-click {
       cursor: pointer;
-    }
-
-    .form-input.copy-on-click.copied {
-      background: rgba(58, 125, 68, 0.16);
-      border-color: rgba(58, 125, 68, 0.38);
-      color: var(--clr-jade-dark);
-      transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
     }
 
     .form-grid {

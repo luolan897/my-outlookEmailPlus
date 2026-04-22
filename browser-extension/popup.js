@@ -68,8 +68,7 @@
   function showMessage(message, type) {
     const bar = getEl('message-bar');
     bar.textContent = message;
-    bar.className = `message-bar message-${type || 'success'}`;
-    bar.style.display = 'block';
+    bar.className = `message-bar show message-${type || 'success'}`;
     if (type === 'success') {
       setTimeout(hideMessage, 3000);
     }
@@ -80,7 +79,7 @@
   }
 
   function hideMessage() {
-    getEl('message-bar').style.display = 'none';
+    getEl('message-bar').classList.remove('show');
   }
 
   function resetClaimButton() {
@@ -458,11 +457,7 @@
 
     try {
       await navigator.clipboard.writeText(value);
-      input.classList.add('copied');
       showMessage('已复制', 'success');
-      setTimeout(() => {
-        input.classList.remove('copied');
-      }, 700);
     } catch {
       showError('复制失败，请手动复制');
     }
