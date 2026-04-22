@@ -4,6 +4,105 @@
 
 ---
 
+## 2026-04-22
+
+### 操作记录
+
+#### 260. Issue #49 失效账号检测与清理（方案 C）— Phase A~D 全部实现完成
+
+**时间**：2026-04-22
+
+**背景**：
+基于已完成的文档基线（BUG 评估、TODO、实施提示词），本轮会话在保留现有刷新/重试链路的前提下，补齐了"失效账号识别 + 批量治理"闭环。方案 C 的核心思路是：全量检测主入口自动识别失效账号，同时提供独立治理入口供后续手动处置。
+
+**Phase A - 后端失效判定与聚合**：
+
+| 文件 | 改动 |
+|------|------|
+| `outlook_web/services/refresh.py` | 新增 `INVALID_TOKEN_ERROR_KEYWORDS = ("invalid_grant", "aadsts70000")` |
+| `outlook_web/services/refresh.py` | 新增 `_classify_refresh_failure(error_message)` — 统一判定是否属于失效 token |
+| `outlook_web/services/refresh.py` | 新增 `_record_invalid_token_failure(...)` — 辅助收集鉴定结果（含 200 条上限） |
+| `outlook_web/services/refresh.py` | `stream_refresh_all_accounts` — 扩展 SSE complete 事件返回 `invalid_token_failed_count` + `invalid_token_failed_list` |
+| `outlook_web/services/refresh.py` | `stream_trigger_scheduled_refresh` — 同上扩展 |
+| `outlook_web/services/refresh.py` | `stream_refresh_selected_accounts` — 同上扩展 |
+| `outlook_web/services/refresh.py` | `refresh_failed_accounts` — 同上扩展（JSON 响应） |
+
+**Phase B - 独立治理接口**：
+
+| 文件 | 改动 |
+|------|------|
+| `outlook_web/controllers/accounts.py` | 新增 `_normalize_account_status()` — 状态值白名单校验 |
+| `outlook_web/controllers/accounts.py` | 新增 `api_batch_update_status()` — `POST /api/accounts/batch-update-status`，含去重、存在性校验、审计日志 |
+| `outlook_web/controllers/accounts.py` | 新增 `api_get_invalid_token_candidates()` — `GET /api/accounts/invalid-token-candidates`，查询最近一次刷新失败且命中失效判定的候选 |
+| `outlook_web/routes/accounts.py` | 注册两个新路由 |
+
+**Phase C - 前端闭环**：
+
+| 文件 | 改动 |
+|------|------|
+| `templates/partials/modals.html` | 刷新模态框新增"失效 Token 治理面板"HTML 区域（检测摘要横幅 + 候选列表 + 批量动作按钮） |
+| `templates/partials/modals.html` | 操作栏新增"🔍 失效治理"手动入口按钮 |
+| `static/js/main.js` | 新增全局状态变量 `latestInvalidTokenDetectedCount`、`invalidTokenGovernanceCandidates` |
+| `static/js/main.js` | `showRefreshModal()` — 新增 `resetInvalidTokenGovernanceState()` + `loadInvalidTokenGovernanceCandidates()` 调用 |
+| `static/js/main.js` | `hideRefreshModal()` — 新增 `resetInvalidTokenGovernanceState()` 调用 |
+| `static/js/main.js` | `refreshAllAccounts()` SSE complete — 新增 `invalid_token_failed_count > 0` 时自动触发治理面板 |
+| `static/js/main.js` | `retryFailedAccounts()` — 新增 `invalid_token_failed_count > 0` 时自动触发治理面板 |
+| `static/js/main.js` | 新增 6 个治理函数：`resetInvalidTokenGovernanceState`、`showInvalidTokenDetectionSummary`、`loadInvalidTokenGovernanceCandidates`、`hideInvalidTokenGovernance`、`batchSetInvalidTokenInactive`（一键停用）、`batchDeleteInvalidTokenCandidates`（二次确认删除） |
+
+**Phase D - 测试**：
+
+| 文件 | 改动 |
+|------|------|
+| `tests/test_invalid_token_governance.py` | 新增 12 个测试用例 |
+
+**自动化测试结果**：
+- 针对性回归 7 个模块 56 条用例 → `Ran 56 tests in 26.344s`、`OK` ✅
+
+**前端验收结果**（`verify_issue49_governance.py`，端口 5097）：
+- ✅ 登录成功
+- ✅ 治理面板容器 `#invalidTokenGovernanceContainer` 存在
+- ✅ 检测摘要区 `#invalidTokenSummary` 存在
+- ✅ 候选列表区 `#invalidTokenCandidateListWrap` 存在
+- ✅ 批量置为停用 / 批量删除 / 忽略 按钮存在
+- ✅ "🔍 失效治理"入口按钮存在
+- ✅ 6 个 JS 治理函数均存在于 `main.js`
+- ✅ `GET /api/accounts/invalid-token-candidates` 返回 `success=True`
+- ✅ `POST /api/accounts/batch-update-status` (空 ids) 正确拒绝
+- ✅ 治理面板正确嵌入在刷新模态框内
+
+**文档同步**：
+
+| 文件 | 操作 |
+|------|------|
+| `docs/DEVLOG.md` | 新增"代码实现"条目 |
+| `docs/TODO/2026-04-22-失效账号检测与清理（方案C）TODO.md` | Phase 1-4 状态更新 |
+| `WORKSPACE.md` | 本条目 + Entry #261 |
+
+---
+
+#### 261. Issue #49 失效账号检测与清理 — 前端验收服务与 HTML 结构验证通过
+
+**时间**：2026-04-22
+
+**背景**：
+在 Phase A~D 代码实现和自动化测试完成后，启动人工验收实例进行前端结构验证。
+
+**本次操作**：
+1. 在端口 5097 启动后台验收实例（临时 DB，调度器关闭，密码 `admin12345`）
+2. 编写 `verify_issue49_governance.py` 验收脚本，通过 HTTP 请求检查：
+   - HTML 结构（6 个关键 DOM 元素全部存在）
+   - 操作按钮（3 个按钮全部存在）
+   - JS 函数（6 个治理函数全部存在于 main.js）
+   - API 端点（`invalid-token-candidates` 返回正常、`batch-update-status` 空值正确拒绝）
+   - 治理面板位置（嵌入在刷新模态框内）
+3. 全部 7 步检查通过
+
+**当前状态**：
+1. Issue #49 方案 C 的 Phase A~D 已全部完成并通过自动化测试和前端结构验证
+2. 剩余 Task 4.4 人工验收：需在浏览器中实际导入含失效 token 的账号并走完全链路
+
+---
+
 ## 2026-04-21
 
 ### 操作记录
@@ -8854,3 +8953,213 @@ docker rm -f oep-e2e-test
 
 **当前状态**：
 - 进入“待用户下一步指令”阶段，保持寸止 MCP 沟通链路持续。
+
+#### 17. Issue #49 功能评估与方案 C 文档落盘（失效账号检测与清理）
+
+**时间**：2026-04-22
+
+**背景**：
+- 用户要求读取并分析 Issue #49：`https://github.com/ZeroPointSix/outlookEmailPlus/issues/49`，判断“批量检测失效邮箱并删除”是否需要实现；
+- 随后用户明确选择 **方案 C（混合方案）**：
+  - 全量检测主入口纳入失效识别；
+  - 保留独立治理入口用于批量处置。
+- 用户进一步要求：按实际更新会话文档，并将本次操作及时记录到 `WORKSPACE.md`。
+
+**本次上下文核对（先获取后行动）**：
+1. 读取 Issue #49 全量内容与日志样例（`invalid_grant / AADSTS70000`）；
+2. 核对现有代码能力：
+   - `POST /api/accounts/refresh-failed`
+   - `GET /api/accounts/refresh-logs/failed`
+   - `POST /api/accounts/batch-delete`
+   - 账号列表中的 `last_refresh_status / last_refresh_error`
+3. 核对文档结构与落盘位置，确定新增 BUG 评估文档 + TODO 执行文档，并同步写入 `WORKSPACE.md`。
+
+**本次实际修改**：
+1. 新增 `docs/BUG/2026-04-22-批量导入后失效账号检测与清理需求评估BUG.md`
+   - 记录 Issue #49 现象、现有能力、真实缺口与方案 C 决策；
+   - 明确本轮为文档阶段，不改业务代码。
+2. 新增 `docs/TODO/2026-04-22-失效账号检测与清理（方案C）TODO.md`
+   - 按 Phase 0~4 拆分后续实现任务；
+   - 明确默认安全路径（优先置 inactive，删除需二次确认）；
+   - 明确审计与回归要求。
+3. 更新 `WORKSPACE.md`（本条 17）
+   - 同步记录本次分析、决策与文档落盘动作。
+
+**当前状态**：
+1. Issue #49 已完成可执行级别的方案收敛：采用方案 C；
+2. 相关会话文档与 TODO 已落盘；
+3. 本轮未进行代码实现与测试执行（仅文档同步）。
+
+#### 18. Issue #49 文档收口补充（仅 DEVLOG 版本记录）
+
+**时间**：2026-04-22
+
+**背景**：
+- 在用户确认“继续：只补充 DEVLOG 版本记录，不动 FD/TD/TDD”后，继续按该范围推进；
+- 用户额外提出“这些内容放在哪里更好”的问题，需要给出可长期维护的放置建议。
+
+**本次上下文核对（先获取后行动）**：
+1. 读取 `docs/DEVLOG.md` 当前结构，确认存在发布版本分段与顶部追加记录模式；
+2. 读取 `outlook_web/__init__.py`，确认当前版本号为 `2.1.1`，避免错误写入正式版本段；
+3. 复核本轮已落盘文档：
+   - `docs/BUG/2026-04-22-批量导入后失效账号检测与清理需求评估BUG.md`
+   - `docs/TODO/2026-04-22-失效账号检测与清理（方案C）TODO.md`
+
+**本次实际修改**：
+1. 更新 `docs/DEVLOG.md`
+   - 顶部新增 `Unreleased - Issue #49 失效账号检测与清理（方案 C）文档基线` 章节；
+   - 明确本轮为文档收口，不含代码实现与测试执行；
+   - 记录方案 C 决策与两份新文档路径。
+2. 更新 `WORKSPACE.md`（本条 18）
+   - 同步记录本次仅补充 DEVLOG 的操作与范围约束。
+
+**关于“这些内容放哪里比较好”的结论**：
+1. **需求分析与问题定义**：放 `docs/BUG/...`（即本次 BUG 评估文档）；
+2. **执行计划与分阶段任务**：放 `docs/TODO/...`（即本次方案 C TODO）；
+3. **版本线变更摘要**：放 `docs/DEVLOG.md` 的 `Unreleased` 段；
+4. **会话操作轨迹**：放 `WORKSPACE.md`（当前文档）。
+
+**当前状态**：
+1. 已按用户限定范围完成 DEVLOG 补充；
+2. FD/TD/TDD 未改动；
+3. 本轮仍未进行代码实现与测试执行。
+
+#### 19. Issue #49 深度可解决性分析与文档同步
+
+**时间**：2026-04-22
+
+**背景**：
+- 用户要求“继续深度分析判断，具体这个 issue 是否好解决并介绍”；
+- 同时要求继续把会话文档按实际更新，并同步记录到 `WORKSPACE.md`。
+
+**本次上下文核对（先获取后行动）**：
+1. 复读实现代码（非猜测）：
+   - `outlook_web/services/refresh.py`：`stream_refresh_all_accounts` / `stream_refresh_selected_accounts` / `refresh_failed_accounts` 的失败输出结构与 `failed_list`；
+   - `outlook_web/services/graph.py`：`test_refresh_token_with_rotation()` 的错误返回形态；
+   - `outlook_web/controllers/accounts.py`：状态更新能力（`active/inactive/disabled`）与批量删除保护；
+   - `static/js/main.js`：失败列表加载、重试失败入口、批量删除入口。
+2. 复读已落盘文档：
+   - `docs/BUG/2026-04-22-批量导入后失效账号检测与清理需求评估BUG.md`
+   - `docs/TODO/2026-04-22-失效账号检测与清理（方案C）TODO.md`
+
+**本次实际修改**：
+1. 更新 `docs/BUG/2026-04-22-批量导入后失效账号检测与清理需求评估BUG.md`
+   - 新增“可解决性深度判断”章节（结论：好解决，属中低复杂度整合改造）；
+   - 明确“为什么好解决”“真实难点”“投入预估（1~2 迭代日）”。
+2. 更新 `docs/TODO/2026-04-22-失效账号检测与清理（方案C）TODO.md`
+   - 新增“可解决性评估”小节，明确前提、风险与工期预估。
+3. 更新 `docs/DEVLOG.md`
+   - 在 Unreleased 段补充“可解决性深度评估”摘要记录。
+4. 更新 `WORKSPACE.md`（本条 19）
+   - 同步记录本次深度分析与文档修改。
+
+**深度分析结论（给用户的最终判断）**：
+1. Issue #49 **值得做且好解决**；
+2. 核心不是“技术做不到”，而是“把现有能力串成闭环”；
+3. 风险主要在误判/误删，可通过统一判定 + 默认置 inactive + 二次确认删除 + 审计日志控制。
+
+**当前状态**：
+1. 本轮完成了深度评估与三份文档同步；
+2. 仍未进入代码实现与测试执行阶段（保持文档阶段）。
+
+#### 20. Issue #49 方案细化说明（回答“你打算如何解决”）
+
+**时间**：2026-04-22
+
+**背景**：
+- 用户要求我明确说明“修改方案是什么、打算如何解决这个问题”；
+- 同时要求继续更新会话文档并把操作记录进 `WORKSPACE.md`。
+
+**本次上下文核对（先获取后行动）**：
+1. 复读 refresh/graph/accounts/main.js 的现有实现能力，确认不是从零开发；
+2. 复读本次新增 BUG/TODO 文档，确保新方案补充与现有口径一致；
+3. 继续遵守当前范围：文档阶段，不做代码实现。
+
+**本次实际修改**：
+1. 更新 `docs/BUG/2026-04-22-批量导入后失效账号检测与清理需求评估BUG.md`
+   - 新增第 9 节“拟实施方案（V1 技术草案）”；
+   - 明确后端、前端、测试、风险控制四部分具体改法。
+2. 更新 `docs/TODO/2026-04-22-失效账号检测与清理（方案C）TODO.md`
+   - 新增“实施路径”章节（Step A~D）；
+   - 将“你打算如何解决”转成可执行步骤。
+3. 更新 `docs/DEVLOG.md`
+   - Unreleased 补充“V1 拟实施方案”摘要。
+4. 更新 `WORKSPACE.md`（本条 20）
+   - 记录本次“方案细化答复 + 文档同步”动作。
+
+**对用户问题的直接答复（方案摘要）**：
+1. 先做后端统一判定 helper（只判 `invalid_grant/AADSTS70000`）；
+2. 再扩展刷新返回字段，直接给出失效账号计数与摘要；
+3. 增加独立治理接口（候选列表 + 批量置 inactive）；
+4. 删除继续复用现有 `batch-delete`（加二次确认，不改保护）；
+5. 前端补“刷新结果→治理面板”闭环；
+6. 最后补契约测试与人工验收收口。
+
+**当前状态**：
+1. 已把“怎么改”明确到可执行步骤；
+2. 文档同步完成；
+3. 仍处文档阶段，尚未实施代码。
+
+#### 21. Issue #49 — 生成详细 TODO 实施提示词（供他人执行）
+
+**时间**：2026-04-22
+
+**背景**：
+- 用户要求“编写一份详细的 TODO 提示词来指导其他人如何开展工作”；
+- 并要求继续同步会话文档与 `WORKSPACE.md`。
+
+**本次上下文核对（先获取后行动）**：
+1. 读取现有提示词模板：
+   - `docs/DEV/2026-04-21-插件Provider域名选择泛化与设置入口解耦-实施提示词.md`
+   - `docs/DEV/2026-04-21-临时邮箱插件化-实施提示词.md`
+2. 读取当前 Issue #49 基线文档：
+   - `docs/BUG/2026-04-22-批量导入后失效账号检测与清理需求评估BUG.md`
+   - `docs/TODO/2026-04-22-失效账号检测与清理（方案C）TODO.md`
+   - `docs/DEVLOG.md`
+3. 复核 `WORKSPACE.md` 最近条目，确保口径连续。
+
+**本次实际修改**：
+1. 新增 `docs/DEV/2026-04-22-Issue49-失效账号检测与清理-实施提示词.md`
+   - 提供可直接交给其他 AI 的完整执行提示词；
+   - 明确角色、必读上下文、约束、DoD、分阶段实施（Phase A~D）、禁止事项与交付要求。
+2. 更新 `docs/TODO/2026-04-22-失效账号检测与清理（方案C）TODO.md`
+   - 顶部新增“执行提示词”引用。
+3. 更新 `docs/BUG/2026-04-22-批量导入后失效账号检测与清理需求评估BUG.md`
+   - 在“下一步”处补充实施提示词链接。
+4. 更新 `docs/DEVLOG.md`
+   - Unreleased 段补记“执行提示词已新增”。
+5. 更新 `WORKSPACE.md`（本条 21）
+   - 同步记录本轮“提示词生成 + 文档联动更新”。
+
+**当前状态**：
+1. 已有可直接分发给其他执行者的高细节实施提示词；
+2. TODO/BUG/DEVLOG 均已联动引用；
+3. 仍处文档阶段，尚未进入代码实现。
+
+#### 22. Issue #49 — 按用户要求改为“会话直接交付提示词正文”
+
+**时间**：2026-04-22
+
+**背景**：
+- 用户明确要求“直接给我就好，不要写成文档”；
+- 同时要求继续同步会话文档与 `WORKSPACE.md`。
+
+**本次上下文核对（先获取后行动）**：
+1. 复读当前 TODO 顶部“执行提示词”描述；
+2. 复读 BUG 文档中“实施可参考”段落；
+3. 复读 DEVLOG Unreleased 记录，确认需补“交付策略偏好”口径。
+
+**本次实际修改**：
+1. 更新 `docs/TODO/2026-04-22-失效账号检测与清理（方案C）TODO.md`
+   - 将“执行提示词”说明改为：优先会话内直接交付正文，文档版仅归档备份。
+2. 更新 `docs/BUG/2026-04-22-批量导入后失效账号检测与清理需求评估BUG.md`
+   - 补充备注：用户偏好会话直接交付，文件仅作备份。
+3. 更新 `docs/DEVLOG.md`
+   - Unreleased 补记交付策略已调整（会话直给优先）。
+4. 更新 `WORKSPACE.md`（本条 22）
+   - 记录本轮口径调整。
+
+**当前状态**：
+1. 后续将优先在会话直接给出提示词正文；
+2. 文档文件继续保留为归档，不作为唯一交付渠道；
+3. 仍为文档阶段，未开始代码实施。

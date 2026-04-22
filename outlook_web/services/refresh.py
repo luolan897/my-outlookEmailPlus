@@ -51,6 +51,52 @@ def is_refreshable_outlook_account(
     return isinstance(account_type, str) and account_type.strip().lower() == "outlook"
 
 
+INVALID_TOKEN_FAILED_LIST_LIMIT = 200
+INVALID_TOKEN_ERROR_KEYWORDS = ("invalid_grant", "aadsts70000")
+
+
+def _classify_refresh_failure(error_message: Optional[str]) -> Dict[str, Any]:
+    """统一判定刷新失败是否属于失效 token（方案 C 首版口径）。"""
+    normalized = str(error_message or "").strip().lower()
+    is_invalid_token = any(keyword in normalized for keyword in INVALID_TOKEN_ERROR_KEYWORDS)
+    if not is_invalid_token:
+        return {
+            "is_invalid_token": False,
+            "reason_code": None,
+            "reason_label": None,
+        }
+
+    return {
+        "is_invalid_token": True,
+        "reason_code": "INVALID_GRANT_OR_AADSTS70000",
+        "reason_label": "refresh_token_invalid_or_expired",
+    }
+
+
+def _record_invalid_token_failure(
+    *,
+    invalid_token_failed_list: List[Dict[str, Any]],
+    account_id: int,
+    account_email: str,
+    error_message: Optional[str],
+) -> bool:
+    classified = _classify_refresh_failure(error_message)
+    if not classified.get("is_invalid_token"):
+        return False
+
+    if len(invalid_token_failed_list) < INVALID_TOKEN_FAILED_LIST_LIMIT:
+        invalid_token_failed_list.append(
+            {
+                "id": account_id,
+                "email": account_email,
+                "error": error_message,
+                "reason_code": classified.get("reason_code"),
+                "reason_label": classified.get("reason_label"),
+            }
+        )
+    return True
+
+
 def utcnow() -> datetime:
     """返回 naive UTC 时间（等价于旧的 datetime.utcnow()）"""
     return datetime.now(timezone.utc).replace(tzinfo=None)
@@ -129,6 +175,8 @@ def stream_refresh_all_accounts(
         success_count = 0
         failed_count = 0
         failed_list: List[Dict[str, Any]] = []
+        invalid_token_failed_count = 0
+        invalid_token_failed_list: List[Dict[str, Any]] = []
 
         yield (
             "data: "
@@ -158,6 +206,13 @@ def stream_refresh_all_accounts(
                 failed_count += 1
                 error_msg = f"解密 token 失败: {str(e)}"
                 failed_list.append({"id": account_id, "email": account_email, "error": error_msg})
+                if _record_invalid_token_failure(
+                    invalid_token_failed_list=invalid_token_failed_list,
+                    account_id=account_id,
+                    account_email=account_email,
+                    error_message=error_msg,
+                ):
+                    invalid_token_failed_count += 1
                 try:
                     conn.execute(
                         """
@@ -249,6 +304,13 @@ def stream_refresh_all_accounts(
             else:
                 failed_count += 1
                 failed_list.append({"id": account_id, "email": account_email, "error": error_msg})
+                if _record_invalid_token_failure(
+                    invalid_token_failed_list=invalid_token_failed_list,
+                    account_id=account_id,
+                    account_email=account_email,
+                    error_message=error_msg,
+                ):
+                    invalid_token_failed_count += 1
 
             if index < total and delay_seconds > 0:
                 yield f"data: {json.dumps({'type': 'delay', 'seconds': delay_seconds}, ensure_ascii=False)}\n\n"
@@ -273,6 +335,8 @@ def stream_refresh_all_accounts(
                     "success_count": success_count,
                     "failed_count": failed_count,
                     "failed_list": failed_list,
+                    "invalid_token_failed_count": invalid_token_failed_count,
+                    "invalid_token_failed_list": invalid_token_failed_list,
                     "run_id": run_id,
                 },
                 ensure_ascii=False,
@@ -413,6 +477,8 @@ def stream_trigger_scheduled_refresh(
         success_count = 0
         failed_count = 0
         failed_list: List[Dict[str, Any]] = []
+        invalid_token_failed_count = 0
+        invalid_token_failed_list: List[Dict[str, Any]] = []
 
         yield (
             "data: "
@@ -442,6 +508,13 @@ def stream_trigger_scheduled_refresh(
                 failed_count += 1
                 error_msg = f"解密 token 失败: {str(e)}"
                 failed_list.append({"id": account_id, "email": account_email, "error": error_msg})
+                if _record_invalid_token_failure(
+                    invalid_token_failed_list=invalid_token_failed_list,
+                    account_id=account_id,
+                    account_email=account_email,
+                    error_message=error_msg,
+                ):
+                    invalid_token_failed_count += 1
                 try:
                     conn.execute(
                         """
@@ -531,6 +604,13 @@ def stream_trigger_scheduled_refresh(
             else:
                 failed_count += 1
                 failed_list.append({"id": account_id, "email": account_email, "error": error_msg})
+                if _record_invalid_token_failure(
+                    invalid_token_failed_list=invalid_token_failed_list,
+                    account_id=account_id,
+                    account_email=account_email,
+                    error_message=error_msg,
+                ):
+                    invalid_token_failed_count += 1
 
             if index < total and delay_seconds > 0:
                 yield f"data: {json.dumps({'type': 'delay', 'seconds': delay_seconds}, ensure_ascii=False)}\n\n"
@@ -555,6 +635,8 @@ def stream_trigger_scheduled_refresh(
                     "success_count": success_count,
                     "failed_count": failed_count,
                     "failed_list": failed_list,
+                    "invalid_token_failed_count": invalid_token_failed_count,
+                    "invalid_token_failed_list": invalid_token_failed_list,
                     "run_id": run_id,
                 },
                 ensure_ascii=False,
@@ -657,6 +739,8 @@ def stream_refresh_selected_accounts(
         success_count = 0
         failed_count = 0
         failed_list: List[Dict[str, Any]] = []
+        invalid_token_failed_count = 0
+        invalid_token_failed_list: List[Dict[str, Any]] = []
 
         yield (
             "data: "
@@ -687,6 +771,13 @@ def stream_refresh_selected_accounts(
                 failed_count += 1
                 error_msg = f"解密 token 失败: {str(e)}"
                 failed_list.append({"id": account_id, "email": account_email, "error": error_msg})
+                if _record_invalid_token_failure(
+                    invalid_token_failed_list=invalid_token_failed_list,
+                    account_id=account_id,
+                    account_email=account_email,
+                    error_message=error_msg,
+                ):
+                    invalid_token_failed_count += 1
                 try:
                     conn.execute(
                         """
@@ -809,6 +900,13 @@ def stream_refresh_selected_accounts(
             else:
                 failed_count += 1
                 failed_list.append({"id": account_id, "email": account_email, "error": error_msg})
+                if _record_invalid_token_failure(
+                    invalid_token_failed_list=invalid_token_failed_list,
+                    account_id=account_id,
+                    account_email=account_email,
+                    error_message=error_msg,
+                ):
+                    invalid_token_failed_count += 1
 
             # 发送带 account_id 和 result 的完整 progress 事件
             yield (
@@ -854,6 +952,8 @@ def stream_refresh_selected_accounts(
                     "success_count": success_count,
                     "failed_count": failed_count,
                     "failed_list": failed_list,
+                    "invalid_token_failed_count": invalid_token_failed_count,
+                    "invalid_token_failed_list": invalid_token_failed_list,
                     "run_id": run_id,
                 },
                 ensure_ascii=False,
@@ -939,6 +1039,8 @@ def refresh_failed_accounts(
     success_count = 0
     failed_count = 0
     failed_list: List[Dict[str, Any]] = []
+    invalid_token_failed_count = 0
+    invalid_token_failed_list: List[Dict[str, Any]] = []
 
     try:
         for account in accounts:
@@ -963,6 +1065,13 @@ def refresh_failed_accounts(
                 failed_count += 1
                 error_msg = f"解密 token 失败: {str(e)}"
                 failed_list.append({"id": account_id, "email": account_email, "error": error_msg})
+                if _record_invalid_token_failure(
+                    invalid_token_failed_list=invalid_token_failed_list,
+                    account_id=account_id,
+                    account_email=account_email,
+                    error_message=error_msg,
+                ):
+                    invalid_token_failed_count += 1
                 try:
                     from outlook_web.repositories.refresh_logs import log_refresh_result
 
@@ -1019,6 +1128,13 @@ def refresh_failed_accounts(
             else:
                 failed_count += 1
                 failed_list.append({"id": account_id, "email": account_email, "error": error_msg})
+                if _record_invalid_token_failure(
+                    invalid_token_failed_list=invalid_token_failed_list,
+                    account_id=account_id,
+                    account_email=account_email,
+                    error_message=error_msg,
+                ):
+                    invalid_token_failed_count += 1
     finally:
         release_distributed_lock(db, lock_name, lock_owner_id)
 
@@ -1040,6 +1156,8 @@ def refresh_failed_accounts(
             "success_count": success_count,
             "failed_count": failed_count,
             "failed_list": failed_list,
+            "invalid_token_failed_count": invalid_token_failed_count,
+            "invalid_token_failed_list": invalid_token_failed_list,
         },
         200,
     )

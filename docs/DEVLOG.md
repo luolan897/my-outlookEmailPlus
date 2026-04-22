@@ -1,5 +1,83 @@
 # DEVLOG
 
+## Unreleased - Issue #49 失效账号检测与清理（方案 C）代码实现
+
+记录时间：2026-04-22
+
+### 新增功能
+
+- **Phase A - 后端失效判定与聚合**：
+  - `refresh.py` 新增 `_classify_refresh_failure()` helper，统一识别 `invalid_grant / AADSTS70000` 错误；
+  - `refresh.py` 新增 `_record_invalid_token_failure()` helper，辅助收集鉴定结果；
+  - 全量刷新、定时刷新、选中刷新、重试失败 四条 SSE/JSON 链路均扩展返回 `invalid_token_failed_count` 和 `invalid_token_failed_list` 字段（保持旧字段兼容）。
+
+- **Phase B - 独立治理接口**：
+  - 新增 `GET /api/accounts/invalid-token-candidates` 接口，查询最近一次刷新失败且命中失效判定的候选账号（含分类 reason_code/reason_label）；
+  - 新增 `POST /api/accounts/batch-update-status` 接口，支持批量更新账号状态（默认推荐 `inactive`），含去重、存在性校验与审计日志。
+
+- **Phase C - 前端治理面板闭环**：
+  - 刷新模态框新增"失效 Token 治理面板"HTML 区域（检测摘要 + 候选列表 + 批量动作按钮）；
+  - `main.js` 新增 6 个治理函数：`resetInvalidTokenGovernanceState`、`showInvalidTokenDetectionSummary`、`loadInvalidTokenGovernanceCandidates`、`hideInvalidTokenGovernance`、`batchSetInvalidTokenInactive`、`batchDeleteInvalidTokenCandidates`；
+  - 全量刷新 / 重试失败 完成后自动触发治理面板加载；
+  - 刷新模态框操作栏新增"🔍 失效治理"手动入口按钮；
+  - 批量删除需二次确认，复用现有 `batch-delete` 接口。
+
+- **Phase D - 测试**：
+  - 新增 `tests/test_invalid_token_governance.py`（12 个用例），覆盖：
+    - `_classify_refresh_failure` 5 种分类场景（invalid_grant / aadsts70000 / 正常错误 / None / 空串）；
+    - `invalid-token-candidates` 3 个接口场景（空列表 / 命中候选 / 排除正常错误）；
+    - `batch-update-status` 3 个接口场景（成功停用 / 空ID拒绝 / 无效状态拒绝）；
+    - 端到端闭环（候选查询 → 批量停用 → 状态验证）。
+
+### 修复
+
+- 无代码修复；本轮为纯功能新增。
+
+### 重要变更
+
+- 刷新模态框 `hideRefreshModal()` 现在调用 `resetInvalidTokenGovernanceState()` 以清理治理面板状态；
+- `showRefreshModal()` 现在自动调用 `loadInvalidTokenGovernanceCandidates({keepVisibleWhenEmpty: false, silentWhenEmpty: true})` 以静默预加载候选。
+
+---
+
+## Unreleased - Issue #49 失效账号检测与清理（方案 C）文档基线
+
+记录时间：2026-04-22
+
+### 新增功能
+
+- 无（本次为文档收口，不包含业务代码实现）。
+
+### 修复
+
+- 无代码修复；本轮聚焦于失效账号治理需求的范围冻结与实施路径定义。
+
+### 重要变更
+
+- 新增 Issue #49 需求评估文档：
+  - `docs/BUG/2026-04-22-批量导入后失效账号检测与清理需求评估BUG.md`
+- 新增方案 C 执行 TODO：
+  - `docs/TODO/2026-04-22-失效账号检测与清理（方案C）TODO.md`
+- 新增“可解决性深度评估”记录：
+  - 判断为中低复杂度（整合型改造），首版预计 1~2 个迭代日；
+  - 关键控制点为失效判定口径（`invalid_grant / AADSTS70000`）与删除安全策略。
+- 新增“V1 拟实施方案”记录：
+  - 后端：统一判定 helper + 刷新结果扩展字段 + 候选列表接口 + 批量置 inactive 接口；
+  - 前端：刷新结果失效摘要 + 治理面板（默认置 inactive，删除二次确认）；
+  - 测试：helper/接口/前端契约与人工验收闭环。
+- 新增执行提示词：
+  - `docs/DEV/2026-04-22-Issue49-失效账号检测与清理-实施提示词.md`
+  - 用于指导其他 AI 按 Phase A~D 顺序落地，不再重复方案讨论。
+  - 会话策略更新：优先“直接在会话中交付提示词正文”，文档文件保留为归档备份。
+- 方案决策已冻结为“混合方案（方案 C）”：
+  1. 全量检测主入口纳入失效识别（`invalid_grant / AADSTS70000`）
+  2. 保留独立治理入口（批量置 inactive / 批量删除）
+  3. 默认安全策略：优先置 inactive，删除必须二次确认并保留审计
+
+### 测试/验证
+
+- 本轮未执行自动化测试（仅文档落盘与记录）。
+
 ## v2.1.0 - 数据概览大盘与提取链路观测增强
 
 发布日期：2026-04-20
