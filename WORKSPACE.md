@@ -140,6 +140,38 @@
 
 ---
 
+#### 231. v2.2.2 再次修复 CI 并重新发布
+
+**时间**：2026-04-22
+
+**背景**：
+v2.2.1 推送后 CI 仍未通过，需进一步修复。
+
+**v2.2.1 CI 失败分析**：
+- `Code Quality`（run `#24756334834`）失败：`isort --check-only` 报告 `test_settings_dynamic_provider_names.py` import 顺序错误
+- `Python Tests`（run `#24756334832`）失败：测试本身通过（`Ran 1378 tests in 156.278s OK (skipped=9)`），但 `coverage xml` 阶段报错：`No source for code: '/tmp/.../plugins/temp_mail_providers/custom_one.py'`
+- `Build and Push Docker Image`（run `#24756334837` / `#24756334840`）失败：质量门禁仍被阻断
+
+**修复措施**：
+1. **isort**：对 `test_settings_dynamic_provider_names.py` 执行 `isort --profile black --line-length 127`，调整内部 import 顺序。
+2. **coverage omit**：在 `pyproject.toml` 中新增 `[tool.coverage.run]`，配置 `omit = ["*/outlookEmail-tests-*/plugins/temp_mail_providers/*.py", "*/outlookEmail-tests-*/plugins/temp_mail_providers/test_plugin/*.py"]`，排除测试期间动态创建的临时插件文件。
+3. **测试文件泄漏**：将 `test_temp_mail_plugin_manager.py`（2 处）与 `test_temp_mail_plugin_api.py`（1 处）的 `tearDown` 中文件清理模式从 `mock_*.py` 放宽为 `*.py`，防止 `custom_one.py` 等残留。
+4. **gitignore**：新增 `.coverage` 与 `coverage.xml`，避免本地 coverage 产物误提交。
+
+**本地验证**：
+- `isort --check-only` ✅
+- `black --check` ✅
+- `flake8`（critical errors）✅
+- `coverage run + xml + report` ✅（无 `No source for code` 错误）
+
+**重新发布**：
+- Commit：`792b663` — `fix(ci): 修复 isort + coverage + 插件测试文件泄漏`
+- Tag：`v2.2.2`（已推送至 origin）
+- GitHub Release：`https://github.com/ZeroPointSix/outlookEmailPlus/releases/tag/v2.2.2`
+  - 产物已上传
+
+---
+
 ## 2026-04-21
 
 ### 操作记录
