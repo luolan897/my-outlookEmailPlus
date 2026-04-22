@@ -4,6 +4,16 @@ All notable changes to OutlookMail Plus are documented in this file.
 
 ## [Unreleased]
 
+## [v2.2.1] - 2026-04-22
+
+### 修复 / Bug Fixes
+
+- **CI 测试环境兼容性修复**：将 `tests/test_settings_dynamic_provider_names.py` 从 pytest 语法迁移至标准库 `unittest`，消除 CI 环境中因缺少 `pytest` 导致的 `ModuleNotFoundError`，修复 `Python Tests` 与 `Build and Push Docker Image` 质量门禁失败。
+
+### 重要变更 / Important Changes
+
+- **版本升级**：`outlook_web.__version__` 从 `2.2.0` 升级为 `2.2.1`。
+
 ## [v2.2.0] - 2026-04-22
 
 ### 新增功能 / New Features
