@@ -59,6 +59,11 @@ def create_blueprint() -> Blueprint:
         methods=["POST"],
     )
     bp.add_url_rule(
+        "/api/accounts/batch-update-status",
+        view_func=accounts_controller.api_batch_update_status,
+        methods=["POST"],
+    )
+    bp.add_url_rule(
         "/api/accounts/tags",
         view_func=accounts_controller.api_batch_manage_tags,
         methods=["POST"],
@@ -127,6 +132,11 @@ def create_blueprint() -> Blueprint:
     bp.add_url_rule(
         "/api/accounts/refresh-logs/failed",
         view_func=accounts_controller.api_get_failed_refresh_logs,
+        methods=["GET"],
+    )
+    bp.add_url_rule(
+        "/api/accounts/invalid-token-candidates",
+        view_func=accounts_controller.api_get_invalid_token_candidates,
         methods=["GET"],
     )
     bp.add_url_rule(

@@ -8,175 +8,59 @@
 
 ### 操作记录
 
-#### 227. 全量测试回归验证（Batched Pytest）
-
+#### 265. PR #48 合并后 UX 修复：消息栏布局跳动 + 字段复制色反馈去除
 **时间**：2026-04-22
 
 **背景**：
-用户要求验证当前代码库健康状况。此前单次 `pytest tests/ -q` 在 300s 内仅完成约 24–25% 后超时，因此改用分批并行执行策略。
+PR #48 合并后，用户在手工验收浏览器扩展「点击字段复制」功能时发现两处体验问题：
+1. 点击字段复制时，顶部消息栏从 `display:none` 切换为 `display:block`，导致整页内容被向下推动，产生「跳动」感。
+2. 字段被点击后会添加 `.copied` 类，触发绿色背景/边框/文字色变化，用户认为视觉噪点过多、不好看，希望仅保留顶部消息栏的「已复制」提示。
 
-**执行方法**：
-- 将 `tests/` 下 123 个测试文件拆分为 7 个互不相交的批次
-- 7 个批次并行运行，每批次超时上限 300s
-- 所有批次均基于独立的临时数据库（`tests/_import_app.py` 进程隔离），无并发冲突
+**本次修改**：
 
-**批次结果**：
+| 文件 | 改动 |
+|------|------|
+| `browser-extension/popup.js` | `showMessage()` / `hideMessage()`：移除 `display:none/block` 直接操作，改为通过 `classList.add/remove('show')` 控制显隐 |
+| `browser-extension/popup.js` | `handleCopyField()`：移除 `input.classList.add('copied')` 及对应的 `setTimeout` 自动清除逻辑 |
+| `browser-extension/popup.html` | `.message-bar`：由 `display:none` 改为 `opacity:0`，增加 `transition`；新增 `.message-bar.show { opacity:1 }` |
+| `browser-extension/popup.html` | 移除 `.form-input.copy-on-click.copied` 全部 CSS 规则（绿色背景、边框、文字色、transition） |
 
-| 批次 | 文件数 | 结果 | 耗时 |
-|------|--------|------|------|
-| 1 | 21 | 134 passed, 2 skipped | 24.82s |
-| 2 | 20 | 145 passed | 37.17s |
-| 3 | 3 | 140 passed | 64.13s |
-| 4 | 20 | 264 passed, 1 skipped | 60.27s |
-| 5 | 20 | 151 passed, 6 skipped | 52.63s |
-| 6 | 20 | 261 passed | 41.07s |
-| 7 | 19 | 274 passed | 75.18s |
+**修复效果**：
+1. 消息栏始终占据布局空间，仅通过 `opacity` 淡入淡出，彻底消除页面跳动。
+2. 字段复制后不再有任何颜色变化，仅顶部消息栏显示「已复制」3 秒后自动消失。
 
-**汇总**：
-- **Total passed**: 1,369
-- **Total skipped**: 9
-- **Total failed**: 0
-- **覆盖率**：123 / 123 测试文件全部通过
+**文档同步**：
+1. 更新：`我们的文档/开放文档/CN/CN-00003-pr48-review-and-merge-recommendation.md`
+   - 追加「合并后 UX 修复」章节。
+2. 更新：`WORKSPACE.md`
+   - 新增本条目（Entry #265）。
 
-**结论**：
-当前代码库处于健康状态，全量回归无失败项。`test_external_api.py`（140 个测试，64.13s）仍是单文件耗时最长的模块，但在批次隔离下未触发超时。
+**当前状态**：
+1. UX 修复代码已提交，commit：`8b48eb7`。
+2. **用户决策变更**：用户决定不等待浏览器手工确认，直接跑全量回归测试；若测试通过即视为完成。
+3. 全量等价分批回归已执行完毕，结果：**`Ran 1369 tests`，全部 `OK`**（仅 P 批次含预期 `skipped=7`）。
+4. 已按用户要求启动本地服务供人工验收：PID `46824`，`http://127.0.0.1:5000` 返回 200 ✅
+5. 本轮未执行 push。
 
 ---
 
-#### 228. 文档同步与本地提交
-
-**时间**：2026-04-22
-
-**背景**：
-用户要求将本地修改进行提交，并根据实际测试结果修改相关文档，操作及时记录到 WORKSPACE。
-
-**文档修改**：
-1. `docs/DEVLOG.md`
-   - 在 v2.1.0「测试/验证」小节追加 2026-04-22 复测结果
-   - 记录 batched pytest 方法、新增测试文件、以及 `1,369 passed / 9 skipped / 0 failed` 基线
-2. `WORKSPACE.md`
-   - 已在本条目上方记录 #227 全量验证详情
-
-**提交内容**：
-- 新增 `tests/test_auth_user_id_login.py`（login_required user_id 场景验证，80 行）
-- 新增 `tests/test_settings_dynamic_provider_names.py`（动态 provider 名称注册表验证，175 行）
-- 更新 `docs/DEVLOG.md` 回归基线
-- 更新 `WORKSPACE.md` 操作日志
-- 同步 `tests/layout-system/coverage/*` 路径与时间戳（5 个文件）
-
-**提交记录**：
-- Commit：`a01fe81`
-- Message：`test: 补充 user_id 登录与 provider 名称单元测试，同步回归基线与文档`
-- 分支状态：`main` 领先 `origin/main` 共 10 个提交（含本次）
-
 ---
 
-#### 229. v2.2.0 发布（GitHub Release）
-
+#### 264. Issue #49 — 用户确认验收通过，准备手动测试
 **时间**：2026-04-22
 
 **背景**：
-用户要求以发布助手身份，基于距离上一次推送的新修改生成发布日志并发布到 GitHub Release。经确认本项目为 Python + Docker 项目（非 Tauri），因此将构建产物适配为 Docker 镜像 / 源码 zip / 浏览器扩展 zip。
+用户确认验收通过，并选择使用场景 A（有真实失效 token 账号）进行手动测试。用户要求使用之前启动的验收服务实例（端口 5097）来测试。
 
-**发布前准备**：
-1. **版本号更新**：
-   - `outlook_web/__init__.py`：`2.1.1` → `2.2.0`
-   - `browser-extension/manifest.json`：`0.2.0` → `0.3.0`
-2. **文档同步**：
-   - `README.md` / `README.en.md`：当前稳定版本与版本亮点同步到 `v2.2.0`
-   - `CHANGELOG.md`：新增 `v2.2.0` 发布记录（含新增功能 / 修复 / 重要变更 / 测试验证四部分）
-   - `docs/DEVLOG.md`：新增 `v2.2.0` 发布章节
-3. **代码质量修复**：
-   - 执行 `black --line-length 127 .` 与 `isort --profile black --line-length 127 .`
-   - 16 个文件被 reformatted
-   - 复测 CI 等效 `flake8`（critical errors + complexity check）→ 0 错误 ✅
+**讨论要点**：
+1. 用户质疑 `inactive` 状态是否是项目已有的 → 确认 `accounts.js:602` 已有 `toggleAccountStatus()` 函数
+2. 用户质疑是否应复用现有 `PUT /api/accounts/{id}` 而非新增 `batch-update-status` → 用户最终确认保留批量接口
+3. 用户要求提供实际可操作的测试步骤 → 已提供完整 6 步测试流程
+4. 用户要求手写 HTML 预览 → 已补充 Playwright 真实 UI 截图
 
-**测试验证**：
-- `tests/test_version_update.py`：51 passed ✅（动态版本断言正常）
-- 此前全量回归：1,369 passed, 9 skipped, 0 failed ✅
-
-**构建与发布**：
-- Commit：`c894739` — `chore(release): prepare v2.2.0`
-- Tag：`v2.2.0`（已推送至 origin）
-- GitHub Release：`https://github.com/ZeroPointSix/outlookEmailPlus/releases/tag/v2.2.0`
-  - 由 `create-github-release.yml` 自动创建
-  - 已手动上传产物：
-    - `outlookEmailPlus-v2.2.0-src.zip`（4,593,937 bytes）
-    - `browser-extension-v0.3.0.zip`（44,713 bytes）
-- Docker 镜像：GitHub Actions `docker-build-push.yml` 已触发（tag `v2.2.0`），状态 `in_progress`
-  - 本地 Docker Desktop 未运行，因此未执行本地 `docker build`，由 CI 自动完成
-
----
-
-#### 230. CI 修复与 v2.2.1 补丁发布
-
-**时间**：2026-04-22
-
-**背景**：
-用户要求检查 CICD 状态。v2.2.0 发布后，`Python Tests` 与 `Build and Push Docker Image` 均失败，需修复后重新触发推送。
-
-**失败根因分析**：
-- `Python Tests`（run `#24755887979`）失败：`tests/test_settings_dynamic_provider_names.py` 使用 `import pytest`，但 CI 环境未安装 pytest，导致 `ModuleNotFoundError`
-- `Build and Push Docker Image`（run `#24755887965` / `#24755887980`）失败：质量门禁依赖 Python Tests，测试未通过导致 Docker 构建被阻断
-
-**修复措施**：
-- 将 `tests/test_settings_dynamic_provider_names.py` 从 pytest 语法完整迁移至标准库 `unittest`：
-  - 移除 `import pytest`
-  - 用 `unittest.TestCase` + `setUp`/`tearDown` 替代 pytest fixtures
-  - 用 `self.assertRaises(ValueError)` 替代 `pytest.raises`
-  - 本地验证：`python -m unittest tests.test_settings_dynamic_provider_names -v` → 16 tests passed ✅
-
-**版本更新**：
-- `outlook_web/__init__.py`：`2.2.0` → `2.2.1`
-- `README.md` / `README.en.md` / `CHANGELOG.md` / `docs/DEVLOG.md`：追加 v2.2.1 章节
-
-**重新发布**：
-- Commit：`9075089` — `fix(ci): migrate test_settings_dynamic_provider_names from pytest to unittest`
-- Tag：`v2.2.1`（已推送至 origin）
-- GitHub Release：`https://github.com/ZeroPointSix/outlookEmailPlus/releases/tag/v2.2.1`
-  - 由 `create-github-release.yml` 自动创建
-  - 产物已上传：`outlookEmailPlus-v2.2.0-src.zip`、`browser-extension-v0.3.0.zip`
-- CI 状态：`Python Tests` 与 `Build and Push Docker Image` 已重新触发，等待执行结果
-
----
-
-#### 231. v2.2.2 再次修复 CI 并重新发布
-
-**时间**：2026-04-22
-
-**背景**：
-v2.2.1 推送后 CI 仍未通过，需进一步修复。
-
-**v2.2.1 CI 失败分析**：
-- `Code Quality`（run `#24756334834`）失败：`isort --check-only` 报告 `test_settings_dynamic_provider_names.py` import 顺序错误
-- `Python Tests`（run `#24756334832`）失败：测试本身通过（`Ran 1378 tests in 156.278s OK (skipped=9)`），但 `coverage xml` 阶段报错：`No source for code: '/tmp/.../plugins/temp_mail_providers/custom_one.py'`
-- `Build and Push Docker Image`（run `#24756334837` / `#24756334840`）失败：质量门禁仍被阻断
-
-**修复措施**：
-1. **isort**：对 `test_settings_dynamic_provider_names.py` 执行 `isort --profile black --line-length 127`，调整内部 import 顺序。
-2. **coverage omit**：在 `pyproject.toml` 中新增 `[tool.coverage.run]`，配置 `omit = ["*/outlookEmail-tests-*/plugins/temp_mail_providers/*.py", "*/outlookEmail-tests-*/plugins/temp_mail_providers/test_plugin/*.py"]`，排除测试期间动态创建的临时插件文件。
-3. **测试文件泄漏**：将 `test_temp_mail_plugin_manager.py`（2 处）与 `test_temp_mail_plugin_api.py`（1 处）的 `tearDown` 中文件清理模式从 `mock_*.py` 放宽为 `*.py`，防止 `custom_one.py` 等残留。
-4. **gitignore**：新增 `.coverage` 与 `coverage.xml`，避免本地 coverage 产物误提交。
-
-**本地验证**：
-- `isort --check-only` ✅
-- `black --check` ✅
-- `flake8`（critical errors）✅
-- `coverage run + xml + report` ✅（无 `No source for code` 错误）
-
-**重新发布**：
-- Commit：`792b663` — `fix(ci): 修复 isort + coverage + 插件测试文件泄漏`
-- Tag：`v2.2.2`（已推送至 origin）
-- GitHub Release：`https://github.com/ZeroPoint.Six/outlookEmailPlus/releases/tag/v2.2.2`
-  - 产物已上传
-
-**CI 最终结果（v2.2.2）**：
-- `Python Tests`（run `#24758092980`）✅ 成功 — `2m51s`
-- `Code Quality`（run `#24758092984`）✅ 成功 — `31s`
-- `Build and Push Docker Image`（main `#24758092981` / tag `#24758092978`）✅ 成功 — `4m0s`
-- `Create GitHub Release`（run `#24758092979`）✅ 成功 — `13s`
-- `SonarCloud Scan`（run `#24758092975`）✅ 成功 — `4m13s`
-- **结论**：v2.2.2 全部 CI 链路已恢复绿色，Docker 镜像已成功构建并推送
+**当前状态**：
+1. 验收服务运行中：`http://127.0.0.1:5097`（密码 `admin12345`）
+2. 等待用户手动测试完成后反馈
 
 ---
 
@@ -184,1004 +68,239 @@ v2.2.1 推送后 CI 仍未通过，需进一步修复。
 
 ### 操作记录
 
-#### 226. 检索 OpenCode Go 套餐计费模式并同步文档
+---
 
-**时间**：2026-04-21
+#### 263. Issue #49 — 补充上下文确认与 UI 截图
+**时间**：2026-04-22
 
 **背景**：
-用户要求检索 opencode go 套餐的计费模式，并根据实际检索结果修改相关文档，将操作及时记录到 WORKSPACE.md。
+用户询问了几个关键问题：
+1. `inactive`（停用）状态是否是项目中已有的？→ **是的**，`accounts.js:602` 已有 `toggleAccountStatus()` 函数
+2. 新增的 `batch-update-status` 是否应该复用现有的 `PUT /api/accounts/{id}`？→ **用户确认保留批量接口**（效率更高）
+3. HTML 预览是否是真实 UI？→ **之前是手写模拟**，已补充 Playwright 真实 UI 截图
 
-**检索来源**：
-- https://opencode.ai/go
-- https://opencode.ai/zen
-- https://opencode.ai/enterprise
-
-**OpenCode Go 计费模式实际结果**：
-
-| 项目 | 详情 |
-|------|------|
-| 套餐名称 | OpenCode Go |
-| 首月价格 | $5 |
-| 续费价格 | $10/月 |
-| 计费方式 | 订阅制，按月扣费 |
-| 取消政策 | 可随时取消 |
-| 额外充值 | 支持 Top up credit |
-| 适用对象 | 可与任何 coding agent 配合使用（不限于 OpenCode） |
-
-**Go 套餐包含模型及 5 小时请求限额**：
-
-| 模型 | 每 5 小时请求数 |
-|------|----------------|
-| Big Pickle + free models | 200 |
-| GLM-5.1 | 880 |
-| Kimi K2.6 | 3,450（当前享 3 倍用量，限时至 4 月 27 日） |
-| MiMo-V2-Pro | 1,290 |
-| Qwen3.6 Plus | 3,300 |
-| MiniMax M2.7 | 3,400 |
-| Qwen3.5 Plus | 10,200 |
-| 其他包含 | GLM-5、Kimi K2.5、MiMo-V2-Omni、MiniMax M2.5 |
-
-**同平台其他方案对比**：
-
-| 方案 | 定价模式 | 特点 |
-|------|---------|------|
-| **Go** | $5 首月，之后 $10/月 | 订阅制，慷慨限额，适合高频使用 |
-| **Zen** | 预存 $20 + $1.23 手续费，按请求扣费 | 零加价，余额低于 $5 自动续充，更灵活 |
-| **Enterprise** | 联系销售定制 | 企业级部署、SSO、内部 AI 网关集成 |
-| **Free** | 免费 | 仅包含基础免费模型，限额较低 |
+**本次操作**：
+1. 核实项目中 `inactive` 状态的完整链路：
+   - 前端：`toggleAccountStatus(accountId, currentStatus)`（`accounts.js:602`）
+   - 后端：`PUT /api/accounts/{id}` 接受 `{ status: 'inactive' }`
+   - 刷新链路：`WHERE a.status = 'active'` 条件自动跳过 `inactive` 账号
+2. 使用 Playwright 在真实运行服务（端口 5097）上截取刷新模态框和治理面板截图
+3. 截图保存到 `screenshots/real_refresh_modal.png` 和 `screenshots/real_governance_panel.png`
 
 **当前状态**：
-OpenCode Go 套餐计费模式已确认并记录到 WORKSPACE.md。如需整理为独立知识库文档（如 docs/ 下的外部资料备忘），可继续执行。
+1. Issue #49 全部实现已完成并提交（`53b4e50`）
+2. 等待用户查看真实 UI 截图后反馈
 
 ---
 
-#### 210. 标准模式小窗 UI 排版错乱 — BUG 分析与 TODO 拆分
+---
 
-**时间**：2026-04-21
+#### 262. Issue #49 — 全量测试 + 提交 + 端到端模拟验证
+**时间**：2026-04-22
 
 **背景**：
-- 用户要求分析 `docs/BUG/2026-04-21-标准模式小窗UI排版错乱-Grid断点适配缺陷.md`
-- 该 BUG 来自 GitHub Issue #50，Owner 已确认小窗存在 UI 问题
-- **用户进一步要求**：最终效果应是“响应式的”，需考虑 PWA 适配
+用户要求提交代码、跑全量测试、并模拟完整验证链路。
 
-**第一轮分析（基于 BUG 文档）**：
+**本地提交**：
+- Commit: `53b4e50`
+- Message: `feat: 失效账号检测与治理闭环（Issue #49 方案 C）`
+- 12 files changed, 1849 insertions(+), 2 deletions(-)
 
-1. **文档质量评估**：
-   - 文档结构完整，核心数学推导（四栏最小 1010px + 侧边栏 220px = 1230px 溢出阈值）逻辑自洽
-   - 代码引用（`layout.css`、`layout-manager.js`、`main.css`）经核对**引用内容存在**
-2. **第二轮深度验证（关键发现）**：
-   - `tests/layout-system/README.md` 明确标注 `layout-manager.js` / `layout.css` / `state-manager.js` 为 **Deprecated**
-   - `test_smoke_contract.py` 明确断言这些文件**不应**出现在 HTML 中
-   - **结论**：BUG 文档分析的 Grid 四栏布局系统已废弃，**不是当前生产代码**
-3. **当前生产代码实际状态**：
-   - 模板使用 `<div class="workspace workspace-mailbox">`（flex 三栏布局）
-   - CSS 定义：`.groups-column { width: 220px; flex-shrink: 0; }`、`.accounts-column { width: 280px; flex-shrink: 0; }`
-   - **实际根因**：`@media (max-width: 1024px) and (min-width: 769px)` 只处理了 sidebar（缩为 60px），但 `.workspace` 仍为 `flex-direction: row`，三栏固定宽度无自适应机制
-   - **问题区间**：800px~1024px 时，三栏内容（搜索栏、+按钮、分页）开始挤压错位
+**全量测试结果**：
+- 命令：`python -m unittest discover -s tests -v`（排除 2 个浏览器测试，120 文件）
+- 结果：`Ran 1367 tests in 375.057s`
+- 状态：`FAILED (failures=2, errors=1, skipped=7)`
+- **3 个失败全部来自 `tests/test_pool_cf_real_e2e.py`（CF Worker 真实 E2E），与 Issue #49 改动无关**
+- Issue #49 新增的 12 条测试全部通过
 
-**用户方向性要求**：
-- 不要只做局部断点修复
-- 要建立**完整的响应式断点体系**
-- 考虑 **PWA** 视口适配（`manifest.json`、`100dvh` 等）
+**端到端模拟验证**（`e2e_simulate_issue49.py`）：
 
-**本次产出**：
+验证数据：
+- `invalid_token_test_01@outlook.com` — 刷新日志含 `invalid_grant`
+- `invalid_token_test_02@outlook.com` — 刷新日志含 `AADSTS70000`
+- `normal_error_test@outlook.com` — 刷新日志含 `ConnectionTimeout`（对照组）
 
-| 文件 | 说明 |
-|------|------|
-| `docs/TODO/2026-04-21-Grid断点适配缺陷修复TODO.md` | 任务拆分文档（已按实际代码重新分析，含响应式策略草案 + PWA 考虑） |
-
----
-
-#### 211. 用户选择方案 B — 生成实现提示词
-
-**时间**：2026-04-21
-
-**用户决策**：
-- 明确选择 **方案 B：平板断点折叠 groups 栏**
-- 要求根据 TODO 结合实际代码生成精确实现提示词，供其他 AI 执行代码修改
-
-**本次文档更新**：
-
-| 文件 | 操作 | 说明 |
-|------|------|------|
-| `docs/BUG/2026-04-21-标准模式小窗UI排版错乱-Grid断点适配缺陷.md` | 修改 | 增加「重要勘误」与「按实际生产代码重新分析」章节，废弃 Grid 方案 |
-| `docs/TODO/2026-04-21-Grid断点适配缺陷修复TODO.md` | 修改 | 标记方案 B 已选定，更新 Task 状态 |
-| `WORKSPACE.md` | 修改 | 记录用户决策 |
+验证结果：
+1. ✅ `invalid_grant` 账号被识别为候选
+2. ✅ `AADSTS70000` 账号被识别为候选
+3. ✅ 普通网络错误账号被正确排除
+4. ✅ `POST /api/accounts/batch-update-status` 批量停用成功（`updated_count: 2`）
+5. ✅ 两个失效账号状态正确更新为 `inactive`
+6. ✅ 正常账号状态保持 `active` 未被影响
+7. ✅ 再次查询候选列表时，状态标签已更新为 `inactive`
+8. 额外发现：`PatrickHowell5358@outlook.jp`（之前存在的真实账号）也被识别为候选，说明判定逻辑对历史数据也生效
 
 **当前状态**：
-- BUG 文档已修正（Grid → flex 三栏）
-- TODO 已更新（方案 B 已选定）
-- 实现提示词已生成，待用户确认后交由其他 AI 执行
-- 尚未修改任何业务代码
+1. Issue #49 方案 C 全链路（Phase A~D + 模拟 E2E）已完成
+2. 验收服务仍在 `http://127.0.0.1:5097` 运行中（密码 `admin12345`）
+3. 用户可在浏览器中查看治理面板效果
 
 ---
 
-#### 212. 方案 B 代码修改落地 — 平板断点折叠 groups 栏
+---
 
-**时间**：2026-04-21
+#### 261. Issue #49 失效账号检测与清理 — 前端验收服务与 HTML 结构验证通过
+**时间**：2026-04-22
 
-**本次修改**：
+**背景**：
+在 Phase A~D 代码实现和自动化测试完成后，启动人工验收实例进行前端结构验证。
+
+**本次操作**：
+1. 在端口 5097 启动后台验收实例（临时 DB，调度器关闭，密码 `admin12345`）
+2. 编写 `verify_issue49_governance.py` 验收脚本，通过 HTTP 请求检查：
+   - HTML 结构（6 个关键 DOM 元素全部存在）
+   - 操作按钮（3 个按钮全部存在）
+   - JS 函数（6 个治理函数全部存在于 main.js）
+   - API 端点（`invalid-token-candidates` 返回正常、`batch-update-status` 空值正确拒绝）
+   - 治理面板位置（嵌入在刷新模态框内）
+3. 全部 7 步检查通过
+
+**当前状态**：
+1. Issue #49 方案 C 的 Phase A~D 已全部完成并通过自动化测试和前端结构验证
+2. 剩余 Task 4.4 人工验收：需在浏览器中实际导入含失效 token 的账号并走完全链路
+
+---
+
+---
+
+#### 260. Issue #49 失效账号检测与清理（方案 C）— Phase A~D 全部实现完成
+**时间**：2026-04-22
+
+**背景**：
+基于已完成的文档基线（BUG 评估、TODO、实施提示词），本轮会话在保留现有刷新/重试链路的前提下，补齐了"失效账号识别 + 批量治理"闭环。方案 C 的核心思路是：全量检测主入口自动识别失效账号，同时提供独立治理入口供后续手动处置。
+
+**Phase A - 后端失效判定与聚合**：
 
 | 文件 | 改动 |
 |------|------|
-| `static/css/main.css` | 平板断点 `@media (max-width: 1024px) and (min-width: 769px)` 中：<br>- 默认隐藏 `.workspace.workspace-mailbox .groups-column`<br>- 增加 `.groups-expanded` 绝对定位浮动面板样式<br>- 隐藏 groups-accounts resizer<br>- 全局增加 `.btn-toggle-groups { display: none; }` 桌面端隐藏 |
-| `templates/index.html` | `accounts-column` header 中增加 `☰` 展开分组按钮 `#btnToggleGroups` |
-| `static/js/main.js` | 增加 `toggleGroupsColumn()` 函数，切换 `groups-expanded` class 并更新按钮 title |
-| `static/js/i18n.js` | 增加「展开分组」/「收起分组」两条翻译词条 |
+| `outlook_web/services/refresh.py` | 新增 `INVALID_TOKEN_ERROR_KEYWORDS = ("invalid_grant", "aadsts70000")` |
+| `outlook_web/services/refresh.py` | 新增 `_classify_refresh_failure(error_message)` — 统一判定是否属于失效 token |
+| `outlook_web/services/refresh.py` | 新增 `_record_invalid_token_failure(...)` — 辅助收集鉴定结果（含 200 条上限） |
+| `outlook_web/services/refresh.py` | `stream_refresh_all_accounts` — 扩展 SSE complete 事件返回 `invalid_token_failed_count` + `invalid_token_failed_list` |
+| `outlook_web/services/refresh.py` | `stream_trigger_scheduled_refresh` — 同上扩展 |
+| `outlook_web/services/refresh.py` | `stream_refresh_selected_accounts` — 同上扩展 |
+| `outlook_web/services/refresh.py` | `refresh_failed_accounts` — 同上扩展（JSON 响应） |
 
-**全量回归测试**：
-- 命令：`python -m unittest discover -s tests -v`
-- 结果：`Ran 1243 tests in 301.871s`
-- 状态：`OK (skipped=7)` ✅
-
-**当前状态**：
-- 代码修改已完成，全量测试通过
-- 待浏览器人工验收（1366px / 1024px / 900px / 800px / 768px 断点行为）
-
----
-
-#### 213. 移动端 detail-focus 补全 — 邮箱列表/详情 + 临时邮箱响应式修复
-
-**时间**：2026-04-21
-
-**问题分析**：
-- 之前的 detail-focus CSS 规则只添加在平板断点 (769-1024px)
-- 移动端断点 (≤768px) 缺失 detail-focus 规则，导致：
-  - 临时邮箱详情区 `tempEmailDetailSection` 在移动端默认可见（无 `display:none`）
-  - 邮箱详情区在移动端无法正确切换列表/详情
-- JS `setMailboxDetailFocus` / `setTempDetailFocus` 在 `active=false` 时无条件设置 `display:none`，会误伤桌面端
-
-**本次修改**：
+**Phase B - 独立治理接口**：
 
 | 文件 | 改动 |
 |------|------|
-| `static/css/main.css` | 移动端 `@media (max-width: 768px)` 中新增：<br>- `#tempEmailDetailSection { display: none }` 默认隐藏<br>- `.detail-focus` 临时邮箱/邮箱列表切换规则<br>- 合并已有的 resizer 隐藏规则 |
-| `templates/index.html` | `tempEmailDetailSection` 添加 `style="display:none"` 行内默认隐藏 |
-| `static/js/features/emails.js` | `setMailboxDetailFocus` 和 `setTempDetailFocus` 重构为三段逻辑：<br>- 窄视口 + 进入详情 → 隐藏列表/展示详情<br>- 窄视口 + 退出详情 → 恢复列表/隐藏详情<br>- 桌面视口 → 清除内联样式，让 CSS 控制 |
+| `outlook_web/controllers/accounts.py` | 新增 `_normalize_account_status()` — 状态值白名单校验 |
+| `outlook_web/controllers/accounts.py` | 新增 `api_batch_update_status()` — `POST /api/accounts/batch-update-status`，含去重、存在性校验、审计日志 |
+| `outlook_web/controllers/accounts.py` | 新增 `api_get_invalid_token_candidates()` — `GET /api/accounts/invalid-token-candidates`，查询最近一次刷新失败且命中失效判定的候选 |
+| `outlook_web/routes/accounts.py` | 注册两个新路由 |
 
-**待验收项**：
-- 桌面端 (>1024px)：邮箱列表+详情双栏正常；临时邮箱三栏正常
-- 平板端 (769-1024px)：groups 折叠；邮件详情 focus 切换正常
-- 移动端 (≤768px)：全部垂直堆叠；邮件详情 focus 切换正常；临时邮箱详情区默认隐藏
+**Phase C - 前端闭环**：
 
----
+| 文件 | 改动 |
+|------|------|
+| `templates/partials/modals.html` | 刷新模态框新增"失效 Token 治理面板"HTML 区域（检测摘要横幅 + 候选列表 + 批量动作按钮） |
+| `templates/partials/modals.html` | 操作栏新增"🔍 失效治理"手动入口按钮 |
+| `static/js/main.js` | 新增全局状态变量 `latestInvalidTokenDetectedCount`、`invalidTokenGovernanceCandidates` |
+| `static/js/main.js` | `showRefreshModal()` — 新增 `resetInvalidTokenGovernanceState()` + `loadInvalidTokenGovernanceCandidates()` 调用 |
+| `static/js/main.js` | `hideRefreshModal()` — 新增 `resetInvalidTokenGovernanceState()` 调用 |
+| `static/js/main.js` | `refreshAllAccounts()` SSE complete — 新增 `invalid_token_failed_count > 0` 时自动触发治理面板 |
+| `static/js/main.js` | `retryFailedAccounts()` — 新增 `invalid_token_failed_count > 0` 时自动触发治理面板 |
+| `static/js/main.js` | 新增 6 个治理函数：`resetInvalidTokenGovernanceState`、`showInvalidTokenDetectionSummary`、`loadInvalidTokenGovernanceCandidates`、`hideInvalidTokenGovernance`、`batchSetInvalidTokenInactive`（一键停用）、`batchDeleteInvalidTokenCandidates`（二次确认删除） |
 
-#### 214. 服务重启 — 端口 5600 加载最新响应式修复代码
+**Phase D - 测试**：
 
-**时间**：2026-04-21
+| 文件 | 改动 |
+|------|------|
+| `tests/test_invalid_token_governance.py` | 新增 12 个测试用例 |
 
-**操作**：
-- 停止旧进程 (PID 12316，端口 5600)
-- 入口文件确认：`web_outlook_app.py`（非 `app.py`）
-- 端口通过 `$env:PORT = "5600"` 环境变量传入
-- 新服务 PID 42936，`http://127.0.0.1:5600` 返回 200 ✅
+**自动化测试结果**：
+- 针对性回归 7 个模块 56 条用例 → `Ran 56 tests in 26.344s`、`OK` ✅
 
----
+**前端验收结果**（`verify_issue49_governance.py`，端口 5097）：
+- ✅ 登录成功
+- ✅ 治理面板容器 `#invalidTokenGovernanceContainer` 存在
+- ✅ 检测摘要区 `#invalidTokenSummary` 存在
+- ✅ 候选列表区 `#invalidTokenCandidateListWrap` 存在
+- ✅ 批量置为停用 / 批量删除 / 忽略 按钮存在
+- ✅ "🔍 失效治理"入口按钮存在
+- ✅ 6 个 JS 治理函数均存在于 `main.js`
+- ✅ `GET /api/accounts/invalid-token-candidates` 返回 `success=True`
+- ✅ `POST /api/accounts/batch-update-status` (空 ids) 正确拒绝
+- ✅ 治理面板正确嵌入在刷新模态框内
 
-#### 215. 人工验收通过 — 移动端/平板/桌面端 detail-focus 响应式行为确认
+**文档同步**：
 
-**时间**：2026-04-21
-
-**验收结果**：
-- ✅ 邮箱页面：列表/详情切换正常
-- ✅ 临时邮箱页面：消息列表/详情切换正常
-- ✅ 移动端 (≤768px)：垂直堆叠 + detail-focus 切换正常
-- ✅ 平板端 (769-1024px)：groups 折叠 + detail-focus 切换正常
-- ✅ 桌面端 (>1024px)：三栏/双栏布局正常
-
----
-
-#### 216. 全量回归测试 — 响应式修复后全绿
-
-**时间**：2026-04-21
-
-**命令**：`python -m unittest discover -s tests -v`
-
-**结果**：
-- Ran 1243 tests in 347.924s
-- **OK (skipped=7)** ✅
-
-**结论**：Entry 213/214 的 CSS/HTML/JS 修改（纯前端响应式修复）未引入任何回归。
-
----
-
-#### 217. 本地 git commit — 响应式修复全部提交
-
-**时间**：2026-04-21
-
-**提交信息**：
-```
-fix: 修复标准模式小窗 UI 排版错乱（Issue #50）- 响应式断点适配
-```
-
-**提交 SHA**：`b64433c`
-**分支**：`Buggithubissue`
-**文件数**：11 files changed, 1150 insertions(+), 10 deletions(-)
-
-**包含文件**：
-- `WORKSPACE.md` — Entry 210-216 操作记录
-- `docs/BUG/...` — BUG 分析文档
-- `docs/TODO/...` — TODO 任务文档
-- `static/css/main.css` — 平板+移动端响应式规则
-- `static/js/features/emails.js` — detail-focus 三段逻辑
-- `static/js/features/accounts.js` — 切换账号重置 detail focus
-- `static/js/features/temp_emails.js` — 临时邮箱 detail focus 调用
-- `static/js/main.js` — toggleGroupsColumn + 响应式 groups
-- `static/js/i18n.js` — 翻译词条
-- `templates/index.html` — 展开分组按钮 + tempEmailDetailSection 默认隐藏
-- `tests/test_responsive_detail_focus_contract.py` — 契约测试
-
-**排除**：`session/` 临时文件、`test_output.log`、`server_*.log`
+| 文件 | 操作 |
+|------|------|
+| `docs/DEVLOG.md` | 新增"代码实现"条目 |
+| `docs/TODO/2026-04-22-失效账号检测与清理（方案C）TODO.md` | Phase 1-4 状态更新 |
+| `WORKSPACE.md` | 本条目 + Entry #261 |
 
 ---
 
-#### 211. 临时邮箱 Provider 插件化 — 修复 D-INST-04 与 D-INST-09，测试全绿
+---
 
+#### 256. `main` fast-forward 合入 `dev` — 主干工作树复测通过并保留本地 `WORKSPACE` stash
 **时间**：2026-04-21
 
 **背景**：
-`tests/test_temp_mail_plugin_manager.py` 剩余 2 个失败用例（D-INST-04、D-INST-09），目标在不修改实现文件的前提下分析根因并修复。
-
-**根因分析**：
-
-1. **D-INST-04**：
-   - `MOCK_REGISTRY_JSON` 中 `sha256: "abc123"` 是 6 位字符串，不符合合法 SHA256 格式（需 64 位十六进制）。
-   - 实现层的校验逻辑：只有当 sha256 字段为合法 64 位十六进制时才实际比对；`"abc123"` 被跳过。
-   - D-INST-01/08/10 同样使用 `"abc123"` 且期望成功 → 与 D-INST-04 期望失败构成夹具冲突。
-   - **修复**：在 D-INST-04 内部覆写 registry，提供合法格式（`"a" * 64`）但与实际内容不匹配的 sha256，与 D-INST-03 思路对称。
-
-2. **D-INST-09**：
-   - 原代码 `shutil.rmtree(backup.parent)` 删除整个 `plugins/` 目录，连同 `registry.json` 一起删除。
-   - 该测试按字母序首先运行，此时 `_AVAILABLE_PLUGINS_CACHE` 为空，registry 缺失后 `install_plugin("mock_mgr")` 抛 `PLUGIN_NOT_FOUND`。
-   - **修复**：改为 `shutil.rmtree(backup)` 仅删除 `temp_mail_providers/` 子目录，保留 `registry.json`，测试意图"插件目录不存在时自动创建"完整覆盖，无副作用。
-
-**修改文件**：
-- `tests/test_temp_mail_plugin_manager.py`（仅修改上述两个测试方法）
-
-**本次测试结果**：
-- `tests/test_temp_mail_plugin_manager.py` → `31/31 passed` ✅（全绿）
-
-**文档更新**：
-- `docs/TDD/2026-04-21-临时邮箱插件化TDD.md`：更新当前状态为 `31/31 passed`，补充 D-INST-04 和 D-INST-09 的准确场景描述
-
----
-
-#### 212. 临时邮箱 Provider 插件化 — 修复 E2E 测试，插件化专项全量 89/89
-
-**时间**：2026-04-21
-
-**背景**：
-在完成 D 层全绿（31/31）后继续推进，发现 `tests/test_temp_mail_plugin_e2e.py` 有 3 个失败用例（H-E2E-04、H-E2E-05、H-E2E-06）。
-
-**根因分析**：
-
-1. **H-E2E-04**（`test_e2e_config_persistence`）：  
-   `install_plugin()` 写入文件但不加载插件，`read_plugin_config()` 需要 `_REGISTRY` 中存在插件（用于读取 `config_schema`），但测试缺少 `reload_plugins()` 调用 → 抛 `PLUGIN_NOT_LOADED`。  
-   **修复**：在 `install_plugin()` 之后插入 `reload_plugins()` 调用。
-
-2. **H-E2E-05**（`test_e2e_reload_with_updated_plugin`）：  
-   `from outlook_web.services.temp_mail_plugin_factory import reload_plugins` — 模块名错误（typo），实际模块为 `temp_mail_provider_factory`。  
-   **修复**：改为 `from outlook_web.services.temp_mail_provider_factory import reload_plugins`。
-
-3. **H-E2E-06**（`test_e2e_plugin_provider_business_chain`）：同 H-E2E-05，模块名 typo。  
-   **修复**：同上。
-
-**修改文件**：
-- `tests/test_temp_mail_plugin_e2e.py`（仅修改上述三个测试方法）
-
-**本次测试结果**：
-- `tests/test_temp_mail_plugin_e2e.py` → `6/6 passed` ✅
-- **插件化专项全量：89/89 passed ✅**（`python -m unittest discover -s tests -p "test_temp_mail_plugin_*.py"`）
-
-**文档更新**：
-- `docs/TDD/2026-04-21-临时邮箱插件化TDD.md`：状态更新为 89/89 全绿，新增 E2E 测试结果
-- `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`：D 层与 H 层用例全部勾选为 `[x]`，TDD 基线更新为 89/89
-
----
-
-#### 213. 临时邮箱 Provider 插件化 — M4 前端插件管理 UI
-
-**时间**：2026-04-21
-
-**背景**：
-后端全量 89/89 通过后，按 TODO M4 推进前端插件管理 UI 实现。
-
-**本次实现**：
-
-1. **新增 `static/js/features/plugins.js`**
-   - `PluginManager` 全局 IIFE 对象，提供完整的插件管理 UI 逻辑
-   - `loadPlugins()` → `GET /api/plugins`，渲染已安装/可安装/加载失败三态插件列表
-   - `install(name, url)` → `POST /api/plugins/install`
-   - `confirmUninstall` / `uninstall(name)` → `POST /api/plugins/{name}/uninstall`
-   - `toggleConfig(name)` → 并行拉取 schema + 当前配置，动态生成表单（支持 text/password/number/url/textarea/select/toggle 字段类型）
-   - `saveConfig(name)` → `POST /api/plugins/{name}/config`
-   - `testConnection(name)` → `POST /api/plugins/{name}/test-connection`
-   - `applyChanges()` → `POST /api/system/reload-plugins`，热刷新后自动重新加载列表
-   - `_refreshProviderRadios()` / `_refreshProviderSelect()`：安装的插件自动注入设置页 radio 组和临时邮箱页的 provider select
-    - 自定义安装 modal 控制：`openCustomInstallModal` / `closeCustomInstallModal` / `customInstall`
-
-2. **修改 `templates/index.html`**
-   - 在 `settings-tab-temp-mail` 末尾新增「插件管理」卡片（折叠态，点击展开）
-   - 含 badge 显示已安装插件数，首次展开时自动 `loadPlugins()`
-
-3. **修改 `templates/partials/modals.html`**
-   - 新增「自定义安装插件」模态框，含插件名称 + 下载 URL 两个必填项，以及安全警示文案
-
-4. **修改 `templates/partials/scripts.html`**
-   - 在最后一行追加 `plugins.js` 的加载
-
-5. **修改 `static/js/main.js`**
-   - `onTempMailProviderChange()` 新增 `cloudflare_temp_mail` 专属分支，避免选中插件 provider 时错误展示 CF Worker 面板
-
-**验证**：
-- 页面加载检查：`plugins.js`、`pluginManagerCard`、`pluginCustomInstallModal` 三项均存在于渲染 HTML 中 ✅
-- 插件化专项全量回归：89/89 passed ✅（未引入新失败）
-
----
-
-#### 214. 临时邮箱 Provider 插件化 — 按当前工作树重跑确认专项 89/89
-
-**时间**：2026-04-21
-
-**背景**：
-在用户明确要求“以我本地刚跑结果为准”后，继续核对时发现当前工作树中的 `tests/test_temp_mail_plugin_manager.py` 与 `WORKSPACE` 已经前进到更新状态。为避免继续用旧结论覆盖新代码，本轮改为直接以**当前工作树**重跑插件化专项并回填文档。
-
-**本次实际执行**：
-1. 重新核对 `tests/test_temp_mail_plugin_manager.py`
-   - `D-INST-04` 已改为使用一个格式合法但故意错误的 64 位 `sha256`
-   - `D-INST-09` 已改为仅删除 `temp_mail_providers/` 子目录，保留 `registry.json`
-2. 重新执行：
-   - `python -m pytest tests/test_temp_mail_plugin_manager.py -v --tb=short` → `31/31 passed`
-   - `python -m pytest tests/test_temp_mail_plugin_e2e.py -v --tb=short` → `6/6 passed`
-   - `python -m pytest (Get-ChildItem 'tests\\test_temp_mail_plugin_*.py' | ForEach-Object { $_.FullName }) -v --tb=short` → `89/89 passed`
-
-**结论**：
-1. 以当前工作树为准，插件化后端与 CLI 专项已达到 **89/89 passed**。
-2. 先前的 `29/31` 结论对应的是更早的一版本地视图，已不再代表当前仓库真实状态。
-3. 本轮已继续将相关会话文档回填到“当前工作树已 89/89 passed”的真实状态。
-
----
-
-#### 215. 临时邮箱 Provider 插件化 — 收口 M4 真实缺口并继续回填文档
-
-**时间**：2026-04-21
-
-**背景**：
-用户选择继续推进 M4 前端插件管理 UI，并要求每次行动前先充分获取上下文，同时把相关结果及时回填到会话文档与 `WORKSPACE.md`。重新核对当前工作树后，发现 M4 代码主体其实已在仓库中，但仍有一处真实缺口和多处文档口径滞后。
-
-**本次核对结论**：
-1. `templates/index.html`、`templates/partials/modals.html`、`templates/partials/scripts.html`、`static/js/features/plugins.js` 均已存在，说明插件管理卡片、模态框与脚本接入已经落地。
-2. 当前真实缺口是：插件 provider 的注入逻辑只会在 `PluginManager.loadPlugins()` 执行后生效，而该函数原先依赖用户先展开插件管理卡片；因此已安装插件不会在页面初始进入时自动出现在设置页 provider radio 与临时邮箱页 provider select 中。
-3. 另外，折叠态 badge 虽然已写入文本，但模板初始是 `display:none`，现状下不会显示“已安装数量”。
-
-**本次修改**：
-1. 修改 `static/js/features/plugins.js`
-   - 新增 `init()`，页面加载后自动执行 `loadPlugins()`，确保插件 provider 在未展开卡片时也会自动注入到页面现有 DOM。
-   - 修正 `pluginManagerBadge` 的显示逻辑，加载后显式显示 badge。
-   - 在 `_refreshProviderRadios()` / `_refreshProviderSelect()` 中保留用户当前选择，避免刷新插件列表后把当前 provider 选择意外重置。
-2. 修改文档回填实际状态
-   - `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`：将 M4 改为“代码已落地，浏览器级手动验收待做”，并把 T4.3 的实现口径修正为 `plugins.js` 注入而非 `temp_emails.js` 单独改造。
-   - `docs/FD/2026-04-21-临时邮箱插件化FD.md`：把前端模块函数名、provider 集成方式、文件变更清单修正为当前工作树实际实现。
-   - `docs/TD/2026-04-21-临时邮箱插件化TD.md`：补充“示意代码仅供参考，实际以前端现有实现为准”，并把 M4 勾选状态改为代码已落地。
-
-**当前状态**：
-1. M4 前端插件管理 UI 的代码主干已落地，且本轮补上了“页面初始自动注入插件 provider / badge 可见”的真实缺口。
-2. 浏览器级手动验收仍未在本会话执行，因此文档继续保持“实现已落地、手动验收待做”的口径。
-
----
-
-#### 216. 临时邮箱 Provider 插件化 — 继续清理顶部摘要口径
-
-**时间**：2026-04-21
-
-**背景**：
-在完成 M4 代码缺口修正与文档回填后，继续核对插件化主文档顶部摘要时，仍发现少量旧口径写成“当前主要剩余是 M4 落地阶段”，与当前工作树真实状态不一致。
-
-**本次修改**：
-1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
-   - 将顶部“当前主要差异”修正为：当前工作树下插件化后端、CLI 与 M4 前端代码主干已落地；后续主要剩余 M4 浏览器级手动验收与 M5 全量回归。
-2. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
-   - 将“当前实施状态”修正为：M1~M4 代码主干已落地，剩余工作聚焦于 M4 手动验收与全量回归。
-
-**当前状态**：
-1. 插件化相关主文档顶部摘要已进一步与当前工作树现状对齐。
-2. 若继续严格按 TODO 推进，下一步应在 **T4.4 浏览器级手动验收** 与 **M5 全量回归** 之间明确方向。
-
----
-
-#### 217. 临时邮箱 Provider 插件化 — 按用户决定先只继续文档回填
-
-**时间**：2026-04-21
-
-**背景**：
-在明确“按 TODO 继续推进”后，我先补齐了 M5 相关文档上下文。随后用户进一步明确：**先只继续修改文档，后面再跑全量测试**。因此本轮不执行 T4.4 浏览器级手动验收，也不实际运行 M5 全量回归，只继续把文档状态修正为当前真实进度。
-
-**本次修改**：
-1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
-   - T4.4 当前状态改为：本会话按当前决策先不执行浏览器级手动点验。
-   - M5 目标改为：插件化专项与 E2E 已通过，当前主要剩余全量回归未执行。
-   - T5.2 补充当前状态：本会话先继续文档回填，暂不执行全量回归。
-   - T5.3 改为已完成：插件化专项全量 `89/89` 已确认通过。
-2. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
-   - M5 阶段改为：插件化专项已 `89/89 passed`，剩余为全量回归与后续如需发布前的浏览器级手动验收。
-
-**当前状态**：
-1. 文档层面已经明确区分：
-   - **已完成**：插件化专项全量、E2E、M4 代码主干
-   - **未执行**：T4.4 浏览器级手动验收、M5 全量回归
-2. 本轮没有运行新的测试命令，纯属状态回填。
-
----
-
-#### 218. 临时邮箱 Provider 插件化 — 修正 TD 中残留的旧测试文件口径
-
-**时间**：2026-04-21
-
-**背景**：
-继续只做文档回填时，再次扫描插件化主文档，发现 `docs/TD/2026-04-21-临时邮箱插件化TD.md` 中仍残留早期设计期的单文件测试名 `tests/test_temp_mail_plugin_system.py`，以及与当前工作树不完全一致的前端文件变更清单。
-
-**本次修改**：
-1. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
-   - 将“测试文件”由单文件 `tests/test_temp_mail_plugin_system.py` 改为当前真实拆分的 7 个专项测试文件：
-     - registry / factory / loader / manager / api / cli / e2e
-   - 将文件变更清单中的前端部分修正为：
-     - `templates/partials/modals.html`
-     - `templates/partials/scripts.html`
-     - `templates/index.html`
-   - 将测试文件清单修正为 `tests/test_temp_mail_plugin_*.py` 的拆分形态。
-   - 将底部测试摘要改为：当前工作树插件化测试已拆分为 7 个专项文件，共 89 个用例。
-
-**当前状态**：
-1. TD 中“测试文件结构”与“前端文件变更清单”现已与当前工作树更一致。
-2. 本轮依然没有运行新的测试命令，只继续做文档口径收口。
-
----
-
-#### 219. 临时邮箱 Provider 插件化 — 进入 M5 回归并修复模块边界失败
-
-**时间**：2026-04-21
-
-**背景**：
-用户明确要求开始跑全量测试并继续推进 TODO。实际执行 `python -m unittest discover -s tests -v` 后，回归没有直接得到完整结果，而是先暴露出两类真实状态：一是完整 discover 会卡在首个 Playwright 浏览器流用例；二是在排除浏览器 unittest 的回归中，存在 2 个模块边界失败。
-
-**本次实际结果**：
-1. 直接执行：
-   - `python -m unittest discover -s tests -v`
-   - 运行停在 `tests/test_account_edit_browser_flow.py::test_browser_can_edit_outlook_remark_without_reentering_credentials`
-   - 当前无法把“完整 discover 全绿”标记为已完成
-2. 浏览器 unittest 之外的全量回归（首次）：
-   - `1330 tests`，`FAILED (failures=2, skipped=7)`
-   - 两个失败均为 **模块边界违规**
-     - `outlook_web/repositories/settings.py` 导入了 `outlook_web.services.temp_mail_provider_base`
-     - `outlook_web/routes/system.py` 导入了 `outlook_web.services.temp_mail_provider_factory`
-3. 修复后再验证：
-   - `python -m unittest tests.test_module_boundaries -v` → `Ran 3 tests`，`OK`
-   - `python -m unittest discover -s tests -p "test_temp_mail_plugin_*.py" -v` → `Ran 89 tests`，`OK`
-   - 再次执行排除浏览器 unittest 的全量回归 → `Ran 1330 tests in 552.761s`，`OK (skipped=7)`
-
-**本次代码修改**：
-1. 新增 `outlook_web/temp_mail_registry.py`
-   - 将 provider 注册表下沉到中性模块，避免 repository 直接依赖 service 层
-2. 修改 `outlook_web/services/temp_mail_provider_base.py`
-   - 改为复用中性注册表模块
-3. 修改 `outlook_web/repositories/settings.py`
-   - `get_supported_temp_mail_provider_names()` 改为从中性注册表读取
-4. 修改 `outlook_web/services/temp_mail_provider_factory.py`
-   - 改为从中性注册表读取 `_REGISTRY`
-5. 修改 `outlook_web/services/temp_mail_plugin_manager.py`
-   - 改为从中性注册表读取/移除 provider
-6. 修改 `outlook_web/controllers/system.py` 与 `outlook_web/routes/system.py`
-   - `reload_plugins()` 的 service 依赖下沉到 controller，route 层只调 controller，恢复分层约定
-
-**文档回填**：
-1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
-   - M5 改为：插件化专项、E2E 与非浏览器全量回归已通过；剩余阻塞为 2 个 Playwright unittest
-2. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
-   - 顶部状态补充非浏览器全量回归 `1330 tests` 已通过
-   - 文件变更清单补入 `outlook_web/temp_mail_registry.py`
-3. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
-   - 当前状态补入非浏览器全量回归结果
-   - 文件清单补入中性注册表模块
-4. `docs/TDD/2026-04-21-临时邮箱插件化TDD.md`
-   - 当前核对状态补入：完整 discover 卡在浏览器 unittest；非浏览器全量回归 `1330 tests` 已通过
-
-**当前状态**：
-1. 插件化专项：`89/89 passed`
-2. 模块边界失败：已修复并通过针对性验证
-3. 非浏览器全量回归：`1330 tests`，`OK (skipped=7)`
-4. 剩余阻塞：`tests/test_account_edit_browser_flow.py` 与 `tests/test_csrf_browser_recovery.py` 两个 Playwright unittest，尚未收口
-
----
-
-#### 239. 临时邮箱 Provider 插件化 — 记录第三方插件域名选择与配置入口的真实 UX 缺口
-
-**时间**：2026-04-21
-
-**背景**：
-在把新的 `cloudflare_temp_mail_test_plugin.py` 平铺到运行时插件目录并重启真实服务后，继续按真实页面行为回看插件接入体验，发现“插件已经能被识别”并不等于“插件在临时邮箱页面拥有与内置 CF Provider 一样的域名选择体验”。用户进一步明确，希望插件管理只承担安装 / 卸载职责，而插件自己的配置应落到对应设置区域，而不是继续嵌在安装界面里。
-
-**本次结论**：
-1. `static/js/features/plugins.js`
-   - 已经会把已安装插件注入 `#tempEmailProviderSelect`
-2. `static/js/features/temp_emails.js`
-   - `loadTempEmails()` 与 `onTempEmailProviderChange()` 仍把域名下拉启用条件硬编码为 `cloudflare_temp_mail`
-3. 因而第三方插件即使 `get_options()` 返回 `domains`，当前临时邮箱页面也无法自然手动选域名
-4. 同时插件 `config_schema` 仍渲染在「插件管理」卡片内，生命周期管理与运行时设置尚未分离
-
-**本次修改**：
-1. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
-   - 新增当前实现与推荐方向的区分
-   - 明确记录：插件域名选择尚未泛化，插件管理与运行时设置尚未拆分
-2. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
-   - 补充前端根因：Provider 下拉已注入，但域名选择仍硬编码在 `cloudflare_temp_mail`
-3. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
-   - 新增 T4.5 后续优化项，记录 UI 职责拆分与域名选择泛化
-4. `临时邮箱Provider插件接入说明.md`
-   - 补充当前真实 UI 限制，避免后续接入者误判“返回 domains 就一定能手动选域名”
-5. `临时邮箱Provider插件接入提示词.md`
-   - 补充 Agent 实施边界：涉及插件域名选择时，需要单独修改前端而不是只写 Provider 插件
-
-**当前状态**：
-1. 文档已经与真实 UI 行为重新对齐，不再把“插件 provider 已注入”误写成“插件域名选择能力已完整打通”
-2. 当前仓库的更合理后续方向已经明确：
-   - 插件管理：安装 / 卸载 / 应用变更 / 错误展示
-   - Provider 设置：各插件自己的运行时配置
-   - 临时邮箱页：按 `get_options()` 动态决定域名下拉行为
-
----
-
-#### 240. 插件 Provider 域名选择泛化与设置入口解耦 — 新增 BUG 文档与独立 TODO
-
-**时间**：2026-04-21
-
-**背景**：
-在用户明确选择按**方案 B**推进后，本轮先不直接修改功能代码，而是先把这个问题从“零散讨论结论”升级成两份可持续引用的正式文档：一份 BUG 文档负责沉淀问题定义、复现路径、根因和方案对比；一份 TODO 文档负责把方案 B 拆成后续可执行任务。
-
-**本次新增文档**：
-1. `docs/BUG/2026-04-21-插件Provider域名选择未泛化与设置入口耦合BUG.md`
-   - 记录了：
-     - 插件 provider 已注入，但域名选择仍写死在 `cloudflare_temp_mail`
-     - 设置页 Provider 单选组只会切换内置 GPTMail / CF Worker 面板
-     - 插件配置仍耦合在插件管理卡片里
-   - 给出方案 A / 方案 B 对比，并明确推荐方案 B
-2. `docs/TODO/2026-04-21-插件Provider域名选择泛化与设置入口解耦TODO.md`
-   - 将方案 B 拆成 4 个阶段：
-     - 交互边界收敛
-     - 设置页 UI 解耦
-     - 临时邮箱页域名泛化
-     - 回归与验收
-
-**本次联动修改**：
-1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
-   - 在 T4.5 中补充指向上述 BUG / TODO 两份独立文档
-
-**当前状态**：
-1. 这次问题已经从“会话中的分析结论”升级成可持续跟踪的正式文档资产
-2. 下一步如果继续实施，就可以直接按独立 TODO 的 Phase 1 开始，不需要重新整理问题背景
-
----
-
-#### 241. 插件 Provider 域名选择泛化与设置入口解耦 — 完成 Phase 1 设计边界核对
-
-**时间**：2026-04-21
-
-**背景**：
-在用户选择“直接进入 Phase 1，开始做方案 B 分析与设计”后，本轮继续读取了插件配置 API、设置页加载/保存逻辑、Provider 单选组切换逻辑和设置页 HTML 结构，目标不是立刻写代码，而是先确认：方案 B 到底需不需要新增后端协议，以及插件设置区应如何落位。
-
-**本次确认结果**：
-1. `outlook_web/routes/plugins.py` + `outlook_web/controllers/plugins.py`
-   - 已经提供：
-     - `GET /api/plugins/{name}/config/schema`
-     - `GET /api/plugins/{name}/config`
-     - `POST /api/plugins/{name}/config`
-     - `POST /api/plugins/{name}/test-connection`
-   - 这足够支撑独立插件设置面板，**不需要为方案 B 新开后端协议**
-2. `static/js/main.js`
-   - `saveSettings()` 当前只负责：
-     - `temp_mail_provider`
-     - `temp_mail_*`
-     - `cf_worker_*`
-   - 这说明插件 schema 配置不应并入 `/api/settings`，而应继续走 `/api/plugins/{name}/config`
-3. `templates/index.html`
-   - 现有 `#gptmailConfigPanel`、`#cfWorkerConfigPanel`、`#pluginManagerCard` 之间天然存在一个稳定插槽
-   - 适合作为独立 `#pluginProviderConfigPanel` 的推荐落点
-4. `static/js/main.js:onTempMailProviderChange(provider)`
-   - 当前只会切换内置 GPTMail / CF Worker 面板
-   - 方案 B 后续应在这里接入插件设置面板显示逻辑
-
-**本次文档更新**：
-1. `docs/BUG/2026-04-21-插件Provider域名选择未泛化与设置入口耦合BUG.md`
-   - 补充：`/api/settings` 不应承载插件 schema 配置
-2. `docs/TODO/2026-04-21-插件Provider域名选择泛化与设置入口解耦TODO.md`
-   - 将 Phase 1 状态更新为“设计已完成”
-   - 补充现有 API 复用、设置区落位、插件管理职责收口的已确认结论
-3. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
-   - 补充：方案 B 的重点是前端承载位置变化，不需要新增插件配置后端协议
-4. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
-   - 补充：现有插件配置 API 已足够，`saveSettings()` 不应承担插件 schema 配置
-
-**当前状态**：
-1. 方案 B 的 Phase 1 已经完成“设计边界确认”
-2. 现在已经可以直接进入：
-   - **Phase 2：设置页 UI 解耦**
-3. 当前仍未修改功能代码，全部是设计收口与文档回填
-
----
-
-#### 242. 插件 Provider 域名选择泛化与设置入口解耦 — 新增可直接执行的实施提示词
-
-**时间**：2026-04-21
-
-**背景**：
-在用户明确表示“直接生成一版详细的提示词，我来让其它的 AI 直接执行工作”后，本轮继续读取了仓库里已有的实施提示词模板（尤其是 `docs/DEV/2026-04-21-临时邮箱插件化-实施提示词.md` 与 `docs/DEV/2026-04-05-设置页面重构-AI执行提示词.md`），然后结合已经完成的 BUG/TODO/Phase 1 设计结论，生成了一份可以直接交给其他 AI 执行的长提示词。
-
-**本次新增文档**：
-1. `docs/DEV/2026-04-21-插件Provider域名选择泛化与设置入口解耦-实施提示词.md`
-   - 明确说明当前真实状态：
-     - 现有插件配置 API 已足够
-     - `/api/settings` 不应承载插件 schema 配置
-     - 设置页推荐新增 `#pluginProviderConfigPanel`
-   - 明确要求按 `Phase 2 → Phase 3` 顺序实施
-   - 明确列出要修改的文件、禁止事项、验收要求、文档同步要求
-
-**本次联动修改**：
-1. `docs/TODO/2026-04-21-插件Provider域名选择泛化与设置入口解耦TODO.md`
-   - 补充“执行提示词”引用
-2. `docs/BUG/2026-04-21-插件Provider域名选择未泛化与设置入口耦合BUG.md`
-   - 在关联文档中补充这份新的实施提示词
-
-**当前状态**：
-1. 现在已经有一份可以直接发给其他 AI 开工的完整提示词
-2. 这份提示词不会再把工作引回“是否需要新增后端协议”的旧讨论，而是直接基于方案 B 和已完成的 Phase 1 继续实现
-
----
-
-#### 243. 插件 Provider 域名选择泛化与设置入口解耦 — 按用户要求直接交付提示词正文
-
-**时间**：2026-04-21
-
-**背景**：
-在提示词文档创建完成后，用户进一步明确表示“直接给我就好了”，并再次强调：
-1. 相关文档需要根据实际持续同步；
-2. 操作过程要及时记录进 `WORKSPACE.md`；
-3. 后续对话必须继续通过寸止 MCP 进行；
-4. 每次行动之前都必须先充分获取上下文；
-5. 结果不能只写到文档里，也要同步明确告知用户。
-
-**本次记录**：
-1. 本轮没有新增功能代码修改。
-2. 已按用户要求准备直接在会话中交付 `docs/DEV/2026-04-21-插件Provider域名选择泛化与设置入口解耦-实施提示词.md` 的正文内容，而不是只给文件路径。
-3. 本条记录用于固定后续会话口径，避免把“只落文档不回告用户”误当成完成。
-
-**当前状态**：
-1. 提示词文档已经落盘。
-2. 会话内直接交付正文已被视为本轮实际动作的一部分。
-3. 后续仍需继续遵守：先获取上下文，再动作，并通过寸止 MCP 向用户同步结果。
-
----
-
-#### 244. 插件 Provider 域名选择泛化与设置入口解耦 — 完成方案 B 前端主干改造
-
-**时间**：2026-04-21
-
-**背景**：
-在用户明确选择“直接开始按方案 B 改代码”后，本轮先重新读取了 `templates/index.html`、`static/js/main.js`、`static/js/features/plugins.js`、`static/js/features/temp_emails.js` 以及关联 FD / TD / TODO / BUG 文档，再继续核对了 `/api/temp-emails/options` 与插件配置接口的真实返回结构，确认：
-1. 插件独立设置面板可以直接复用 `/api/plugins/{name}/config*`；
-2. 插件配置不应并入 `/api/settings`；
-3. 域名下拉逻辑应按 `domains` / `domain_strategy` 判断，而不是继续写死 `cloudflare_temp_mail`。
-
-**本次代码修改**：
-1. `templates/index.html`
-   - 在 `#cfWorkerConfigPanel` 与 `#pluginManagerCard` 之间新增 `#pluginProviderConfigPanel`
-   - 更新插件管理卡片说明文案，明确运行时配置应在上方 Provider 设置区完成
-2. `static/js/main.js`
-   - 扩展 `onTempMailProviderChange(provider)`
-   - 插件 Provider 选中时显示独立插件配置面板，内置 Provider 选中时隐藏该面板
-3. `static/js/features/plugins.js`
-   - 新增独立插件配置面板渲染路径
-   - 将插件卡片按钮从“配置”改为“打开设置”
-   - 移除插件管理卡片内联配置表单承载
-   - 插件管理卡片收敛为安装 / 卸载 / 应用变更 / 错误展示
-4. `static/js/features/temp_emails.js`
-   - 去掉 `cloudflare_temp_mail` 域名硬编码
-   - 按 Provider 维度缓存 `/api/temp-emails/options`
-   - 增加请求序号保护，避免切换 Provider 时被旧 options 响应串号
-   - 域名下拉 / hint / status 改为按 `domains` / `domain_strategy` 统一渲染
-
-**本次文档同步**：
-1. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
-   - 将前端状态更新为“方案 B 主干已落地”
-2. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
-   - 将前端技术现状更新为独立插件设置面板 + Provider-agnostic 域名逻辑
-3. `docs/TODO/2026-04-21-插件Provider域名选择泛化与设置入口解耦TODO.md`
-   - 将 Phase 2 / Phase 3 更新为“代码已落地”，Phase 4 保持待人工验收
-4. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
-   - 将 T4.5 更新为“第一轮前端实现已完成，待回归”
-5. `docs/BUG/2026-04-21-插件Provider域名选择未泛化与设置入口耦合BUG.md`
-   - 将 BUG 状态更新为“主干已落地，待人工回归确认”
-6. `docs/DEV/2026-04-21-插件Provider域名选择泛化与设置入口解耦-实施提示词.md`
-   - 补记该提示词对应的前端主干已在后续会话落地
-
-**当前状态**：
-1. 方案 B 的 Phase 2 / Phase 3 前端主干已经落地。
-2. 本轮未执行测试命令，也未做人工点击验收。
-3. 下一步如继续，应围绕 Phase 4 做人工验收 / 回归确认或按需修边角行为。
-
----
-
-#### 245. 插件 Provider 域名选择泛化与设置入口解耦 — 清扫边角文档口径
-
-**时间**：2026-04-21
-
-**背景**：
-在方案 B 前端主干落地后，我继续做了一轮“遗漏点清扫”：重新搜索了代码与文档中是否还残留旧的内联配置路径、旧的 `cloudflare_temp_mail` 域名硬编码描述，或把“修复前现状”误写成“当前状态”的文案。
+在 `dev` 上完成插件化前端收口、人工验收通过和相关提交后，用户进一步要求把这些改动合并到 `main`，并在 `main` 分支上重新跑一遍完整全量。执行前发现 `main` 工作树（`E:\\hushaokang\\Data-code\\outlookEmail`）本身有一份未提交的 `WORKSPACE.md` 本地记录，因此不能直接 merge。
 
 **本次处理**：
-1. 代码侧确认：
-   - 已无 `plugin-cfg-*` 这类旧的内联配置容器残留
-   - 临时邮箱页域名逻辑已不再按 `cloudflare_temp_mail` 单点硬编码决定
-2. 文档侧补充了“修复前”标识，避免误读：
-   - `docs/BUG/2026-04-21-插件Provider域名选择未泛化与设置入口耦合BUG.md`
-     - 将复现 / 实际行为 / 关键代码定位等章节明确标注为“修复前”
-   - `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
-     - 将 T4.5 的“问题现状”改为“问题现状（修复前）”
-
-**当前状态**：
-1. 剩余待处理项已从“实现缺口”进一步收敛为“人工验收与回归确认”。
-2. 相关文档中对“历史问题”和“当前状态”的边界已更清晰，不容易再把修复前描述误当成当前事实。
-
----
-
-#### 246. 插件 Provider 域名选择泛化与设置入口解耦 — 完整全量回归通过
-
-**时间**：2026-04-21
-
-**背景**：
-在方案 B 前端主干与边角文档清扫完成后，用户明确要求“跑全量的测试”。本轮先重新读取了最新 `WORKSPACE.md`、插件化主 TODO 中的 M5 记录，以及方案 B 独立 TODO 中的 Phase 4 状态，再按当前仓库既定口径执行完整回归命令。
-
-**本次执行**：
-1. 运行命令：`python -m unittest discover -s tests -v`
-2. 实际结果：`Ran 1344 tests in 311.670s`
-3. 最终结论：`OK (skipped=7)`
-
-**本次文档同步**：
-1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
-   - 将完整回归基线更新为 `Ran 1344 tests in 311.670s`、`OK (skipped=7)`
-2. `docs/TODO/2026-04-21-插件Provider域名选择泛化与设置入口解耦TODO.md`
-   - 将 Phase 4 状态更新为“自动回归已通过，待人工验收”
-3. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
-   - 将顶部当前实施状态中的完整回归结果更新为最新数字
-4. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
-   - 将技术现状中的完整回归结果更新为最新数字
-
-**当前状态**：
-1. 方案 B 前端主干不仅已落地，而且已经通过当前工作树下的完整全量 unittest 回归。
-2. 当前剩余待办已进一步收敛为：若还要继续，只剩人工验收类确认与极细节行为复查。
-
----
-
-#### 247. 插件 Provider 域名选择泛化与设置入口解耦 — 修复首次加载时的 Provider 恢复链路
-
-**时间**：2026-04-21
-
-**背景**：
-在用户选择“继续做人工验收导向的代码复核”后，本轮继续从人工点击路径反推潜在问题，重点复核了“设置页首次加载 → `loadSettings()` 恢复全局 Provider → `plugins.js` 延后注入插件 radio”这条链路。复核中确认存在一个容易在人工验收时暴露、但不一定被现有自动化直接覆盖的缺口：若全局设置里保存的是插件 Provider，页面首开时插件 radio 尚未注入，后续 `_refreshProviderRadios()` 会错误回退到 `legacy_bridge`。
-
-**本次修复**：
-1. `static/js/main.js`
-   - `loadSettings()` 在解析出 `mappedProvider` 后，先把目标值写入 `.provider-radio-group.dataset.pendingProvider`
-   - 如果当下就能找到对应 radio，则立即勾选并清空 pending 标记
-2. `static/js/features/plugins.js`
-   - `_refreshProviderRadios()` 在插件 radio 注入完成后，优先使用 `dataset.pendingProvider` 恢复目标 Provider
-   - 成功恢复后清空 pending 标记，避免后续刷新重复干扰
-
-**本次文档同步**：
-1. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
-   - 补记“已保存插件 Provider 在页面首开时也能正确恢复”
-2. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
-   - 补记 pendingProvider 恢复链路的实现细节
-3. `docs/BUG/2026-04-21-插件Provider域名选择未泛化与设置入口耦合BUG.md`
-   - 在当前状态中补记该恢复链路已修复
-
-**当前状态**：
-1. 方案 B 相关前端主干已不只覆盖“切换时可用”，还补上了“页面首开时保存状态恢复”的人工验收高风险点。
-2. 当前剩余工作继续收敛为：人工点击验收本身，以及是否还存在更细的交互边角。
-
----
-
-#### 248. 插件 Provider 域名选择泛化与设置入口解耦 — 恢复链路修复后再次完整回归通过
-
-**时间**：2026-04-21
-
-**背景**：
-在修复“已保存插件 Provider 在设置页首次加载时可能错误回退到 `legacy_bridge`”之后，为了避免把前一轮全量回归结果误用到新代码上，用户明确要求基于最新工作树再完整跑一遍全量 unittest。
-
-**本次执行**：
-1. 运行命令：`python -m unittest discover -s tests -v`
-2. 实际结果：`Ran 1344 tests in 352.641s`
-3. 最终结论：`OK (skipped=7)`
-
-**本次文档同步**：
-1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
-   - 将最新完整回归基线更新为 `Ran 1344 tests in 352.641s`、`OK (skipped=7)`
-2. `docs/TODO/2026-04-21-插件Provider域名选择泛化与设置入口解耦TODO.md`
-   - 将 Phase 4 下的自动回归结果更新为修复后再次回归的最新数字
-3. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
-   - 将顶部当前实施状态中的最新完整回归结果更新为修复后结果
-4. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
-   - 将技术现状中的最新完整回归结果更新为修复后结果
-
-**当前状态**：
-1. 方案 B 前端主干、首次加载恢复链路补丁，以及相关文档回填之后，当前工作树已再次通过完整全量 unittest 回归。
-2. 现在剩余事项继续收敛为：人工验收类确认，以及是否还要补更细的交互复核说明。
-
----
-
-#### 249. 插件 Provider 域名选择泛化与设置入口解耦 — 为人工验收快速处理静态资源缓存
-
-**时间**：2026-04-21
-
-**背景**：
-在继续准备人工验收时，用户反馈“对应 tab 下面没有设置”。结合人工验收实例日志进一步排查后，确认一个高概率现实因素是浏览器仍在吃旧静态资源缓存：现有实例返回的 `main.js / plugins.js / temp_emails.js` 请求均带 `?v=2.1.0`，并出现了 `304`，这会让浏览器继续使用改动前的旧 JS。
-
-**本次处理**：
-1. 采用用户选定的“快速修复”方案，不做结构性静态资源指纹重构。
-2. 将 `outlook_web.__version__` 从 `2.1.0` 提升到 `2.1.1`，用于立即刷新 `templates/partials/scripts.html` 中的静态资源查询参数。
-3. 下一步将基于这个新版本号重启人工验收实例，确保浏览器重新拉取最新前端资源。
-
-**当前状态**：
-1. 静态资源版本号已经更新到 `2.1.1`。
-2. 当前动作的目标不是发布版本，而是消除人工验收阶段“浏览器继续吃旧 JS 缓存”的干扰因素。
-
----
-
-#### 250. 插件 Provider 域名选择泛化与设置入口解耦 — 人工验收实例已按新版本重新拉起
-
-**时间**：2026-04-21
-
-**背景**：
-在将静态资源版本号提升到 `2.1.1` 之后，需要重新拉起一个可用于人工验收的实例，确保浏览器能够访问到最新前端资源。首次尝试使用 detached 方式重启时，子进程没有正确吃到 `HOST / PORT / DATABASE_PATH / SCHEDULER_AUTOSTART` 环境变量，反而按默认配置误起成了 `0.0.0.0:5000`。
-
-**本次处理**：
-1. 复核启动日志，确认失败根因是子 PowerShell 启动命令中的环境变量注入与引号转义失真，而不是应用本身启动失败。
-2. 停止误起在 `5000` 端口上的默认实例（PID `48480`）。
-3. 改为生成临时 `ps1` 启动脚本，再由独立子 PowerShell 用 `-File` 执行，显式写入：
-   - `HOST=127.0.0.1`
-   - `PORT=5097`
-   - `DATABASE_PATH=%TEMP%\\outlookEmail-manual-accept-live.db`
-   - `SCHEDULER_AUTOSTART=false`
-   - `LOGIN_PASSWORD=admin12345`
-4. 复核结果：
-   - `127.0.0.1:5097` 已监听
-   - 启动日志显示访问地址为 `http://127.0.0.1:5097`
-   - 调度器已按配置跳过启动
-   - 数据库路径已切换到临时验收 DB
-
-**当前状态**：
-1. 最新人工验收实例已经稳定运行在 `http://127.0.0.1:5097`。
-2. 当前人工验收链路已不再受旧实例默认端口、默认 DB、调度器自动启动等因素干扰。
-
----
-
-#### 251. 插件 Provider 域名选择泛化与设置入口解耦 — 版本号提升后的全量回归重新稳定
-
-**时间**：2026-04-21
-
-**背景**：
-在为人工验收快速处理静态资源缓存后，`outlook_web.__version__` 已从 `2.1.0` 提升到 `2.1.1`。用户随后要求基于最新工作树再跑一轮完整全量回归，确认这次版本号调整与人工验收实例重启没有引入新问题。
-
-**本次处理**：
-1. 首次执行 `python -m unittest discover -s tests -v` 时，完整全量未通过，最终结果为 `Ran 1344 tests in 347.900s`、`FAILED (failures=3, skipped=7)`。
-2. 失败点全部集中在 `tests/test_version_update.py`：
-   - `test_sidebar_has_version_number`
-   - `test_degradation_when_github_unreachable`
-   - `test_has_update_true_when_newer`
-3. 进一步定位确认根因并非业务回归，而是这些测试将当前版本硬编码为 `2.1.0`，未随 `outlook_web.__version__ = 2.1.1` 同步。
-4. 将 `tests/test_version_update.py` 改为直接引用 `outlook_web.__version__` 做动态断言，并先单独回跑：
-   - `python -m unittest tests.test_version_update -v`
-   - 结果：`Ran 51 tests in 16.037s`、`OK`
-5. 随后再次执行完整全量：
-   - `python -m unittest discover -s tests -v`
-   - 结果：`Ran 1344 tests in 383.480s`、`OK (skipped=7)`
-
-**本次文档同步**：
-1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
-   - 将完整回归最新基线更新为 `Ran 1344 tests in 383.480s`、`OK (skipped=7)`
-2. `docs/TODO/2026-04-21-插件Provider域名选择泛化与设置入口解耦TODO.md`
-   - 补记人工验收实例已按 `2.1.1` 重新拉起，并将最新完整回归结果更新为 `383.480s`
-3. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
-   - 更新顶部当前实施状态与人工验收实例就绪口径
-4. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
-   - 补记 `tests/test_version_update.py` 已改为动态跟随 `outlook_web.__version__`
-5. `docs/BUG/2026-04-21-插件Provider域名选择未泛化与设置入口耦合BUG.md`
-   - 将状态更新为“人工验收实例已就绪”，并补记最新完整回归结果
-
-**当前状态**：
-1. 版本号提升到 `2.1.1` 后，完整全量回归已经重新稳定通过。
-2. 当前剩余工作继续收敛为页面级人工验收，而不是自动化回归或测试基线不一致问题。
-
----
-
-#### 252. 插件 Provider 域名选择泛化与设置入口解耦 — 本轮代码与文档进入可提交状态
-
-**时间**：2026-04-21
-
-**背景**：
-在完成设置页插件配置面板解耦、临时邮箱页 provider-agnostic 域名逻辑、首次加载恢复链路修复、`2.1.1` 静态资源版本刷新、人工验收实例重启，以及版本测试动态化修复之后，用户要求将本轮结果做一次本地提交。
-
-**本次收敛**：
-1. 代码侧已包含：
-   - `templates/index.html` 新增独立插件 Provider 配置承载区
-   - `static/js/main.js` / `static/js/features/plugins.js` 完成设置入口与插件管理解耦
-   - `static/js/features/temp_emails.js` 完成按 provider options 的域名能力泛化
-   - `outlook_web.__version__` 更新到 `2.1.1`
-   - `tests/test_version_update.py` 改为动态跟随运行时版本
-2. 文档侧已同步：
-   - 主插件化 TODO / 方案 B TODO
-   - FD / TD / BUG
-   - 插件接入说明 / 接入提示词
-   - `WORKSPACE.md`
-3. 验证基线已锁定为：
-   - `python -m unittest tests.test_version_update -v` → `Ran 51 tests in 16.037s`、`OK`
-   - `python -m unittest discover -s tests -v` → `Ran 1344 tests in 383.480s`、`OK (skipped=7)`
-
-**当前状态**：
-1. 本轮相关代码、文档、测试结果已经对齐，可进行本地提交。
-2. 提交后的剩余工作继续收敛为人工验收本身，以及是否继续处理 `Moemail` 的运行时 500 问题。
-
----
-
-#### 253. 将 `main` 合并回当前分支 — 解决 `WORKSPACE` 冲突并完成合并态回归
-
-**时间**：2026-04-21
-
-**背景**：
-在本轮插件 Provider 前端收口已经本地提交后，用户要求继续尝试将 `main` 分支先合并到当前分支。合并前已先核对：`main` 比当前分支额外多出一个标准模式小窗 UI 响应式修复提交（`39920b0`）和一个后续 merge 提交；同时，本地遗留的 4 个未跟踪文件与 `main` 上无同路径冲突。
-
-**本次执行**：
-1. 执行 `git merge --no-edit main`
-2. 自动合并成功的文件包括：
-   - `static/css/main.css`
-   - `static/js/features/accounts.js`
-   - `static/js/features/emails.js`
-   - `static/js/features/temp_emails.js`
-   - `static/js/i18n.js`
-   - `static/js/main.js`
-   - `templates/index.html`
-   - `docs/BUG/2026-04-21-标准模式小窗UI排版错乱-Grid断点适配缺陷.md`
-   - `docs/TODO/2026-04-21-Grid断点适配缺陷修复TODO.md`
-   - `tests/test_responsive_detail_focus_contract.py`
-3. 唯一冲突文件为 `WORKSPACE.md`
-4. 冲突处理策略：
-   - 保留当前分支已有的 226~252 相关记录
-   - 同时补回 `main` 带来的 210~217 响应式修复记录
-   - 不简化为一句“已 merge”，而是完整保留两条历史线
-5. 合并态再次执行完整回归：
+1. 先将 `main` 工作树里的 `WORKSPACE.md` 本地改动安全暂存：
+   - `stash@{0}: On main: main-worktree-workspace-before-dev-merge`
+2. 在 `main` 工作树执行：
+   - `git merge --no-edit dev`
+3. 由于 `main` 是 `dev` 的祖先，本次合并为 **fast-forward**，未产生新的 merge 冲突。
+4. 随后在 `main` 工作树重新执行完整全量：
    - 命令：`python -m unittest discover -s tests -v`
-   - 结果：`Ran 1357 tests in 409.316s`
+   - 结果：`Ran 1357 tests in 463.280s`
    - 结论：`OK (skipped=7)`
 
 **本次文档同步**：
 1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
-   - 将最新完整回归基线更新为 `Ran 1357 tests in 409.316s`、`OK (skipped=7)`
+   - 将最新完整回归基线更新为 `Ran 1357 tests in 463.280s`、`OK (skipped=7)`
 2. `docs/TODO/2026-04-21-插件Provider域名选择泛化与设置入口解耦TODO.md`
-   - 补记该结果来自合并 `main` 并解决冲突后的最新工作树
+   - 补记最新回归来自 `main` 工作树的 fast-forward 合并后结果
 3. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
-   - 将顶部当前实施状态中的完整回归结果更新为 `1357 tests`
+   - 更新顶部当前实施状态中的完整回归结果
 4. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
-   - 将技术现状中的最新完整回归结果更新为 `1357 tests`
+   - 更新技术现状中的最新完整回归结果
 5. `docs/BUG/2026-04-21-插件Provider域名选择未泛化与设置入口耦合BUG.md`
-   - 将当前状态中的完整回归结果更新为合并 `main` 后的最新数字
+   - 更新当前状态中的最新完整全量结果
 
 **当前状态**：
-1. `main` 已经成功并入当前分支，唯一冲突 `WORKSPACE.md` 已人工解决。
-2. 当前最新完整回归基线已更新为 `Ran 1357 tests in 409.316s`、`OK (skipped=7)`。
-3. 下一步只剩完成 merge commit 本身，以及后续是否继续做人工验收或处理 `Moemail` 500。
+1. `main` 已经包含 `dev` 上本轮所有插件化收口改动。
+2. 主干工作树最新完整全量结果为 `Ran 1357 tests in 463.280s`、`OK (skipped=7)`。
+3. `main` 工作树原有的那份本地 `WORKSPACE.md` 记录仍安全保存在 stash 中，未被覆盖也未被丢弃。
+
+---
+
+---
+
+#### 255. 插件 Provider 域名选择泛化与设置入口解耦 — 用户确认人工验收通过并完成收口提交
+**时间**：2026-04-21
+
+**背景**：
+在 `main` 合并、真实插件夹具测试纳入版本管理、以及最新完整全量回归通过之后，用户在本会话中明确选择“开始人工验收（推荐）”，随后直接反馈“验收通过可以提交一下好吧”。
+
+**本次文档同步**：
+1. `docs/TODO/2026-04-21-插件Provider域名选择泛化与设置入口解耦TODO.md`
+   - 将 Phase 4 状态从“自动回归已通过，待人工验收”更新为“自动回归与人工验收均已通过”
+2. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 在 M4 当前状态中补记“用户已在本会话明确确认：本轮人工验收通过”
+3. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
+   - 将顶部当前实施状态中的“后续人工验收收口”更新为“人工验收已通过”
+4. `docs/BUG/2026-04-21-插件Provider域名选择未泛化与设置入口耦合BUG.md`
+   - 将状态更新为“🟢 主干已落地，人工验收已通过”
+
+**当前状态**：
+1. 本轮插件 Provider 域名选择泛化与设置入口解耦的前端主干，已经同时满足：
+   - 最新完整全量回归通过
+   - 用户侧人工验收通过
+2. 当前动作已经从“继续修正问题”转为“按最新真实状态完成收口提交”。
+
+---
 
 ---
 
 #### 254. 管理未跟踪插件夹具文件 — 本地排除工具文件并确认新增测试可提交
-
 **时间**：2026-04-21
 
 **背景**：
@@ -1231,673 +350,511 @@ fix: 修复标准模式小窗 UI 排版错乱（Issue #50）- 响应式断点适
 
 ---
 
-#### 255. 插件 Provider 域名选择泛化与设置入口解耦 — 用户确认人工验收通过并完成收口提交
-
-**时间**：2026-04-21
-
-**背景**：
-在 `main` 合并、真实插件夹具测试纳入版本管理、以及最新完整全量回归通过之后，用户在本会话中明确选择“开始人工验收（推荐）”，随后直接反馈“验收通过可以提交一下好吧”。
-
-**本次文档同步**：
-1. `docs/TODO/2026-04-21-插件Provider域名选择泛化与设置入口解耦TODO.md`
-   - 将 Phase 4 状态从“自动回归已通过，待人工验收”更新为“自动回归与人工验收均已通过”
-2. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
-   - 在 M4 当前状态中补记“用户已在本会话明确确认：本轮人工验收通过”
-3. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
-   - 将顶部当前实施状态中的“后续人工验收收口”更新为“人工验收已通过”
-4. `docs/BUG/2026-04-21-插件Provider域名选择未泛化与设置入口耦合BUG.md`
-   - 将状态更新为“🟢 主干已落地，人工验收已通过”
-
-**当前状态**：
-1. 本轮插件 Provider 域名选择泛化与设置入口解耦的前端主干，已经同时满足：
-   - 最新完整全量回归通过
-   - 用户侧人工验收通过
-2. 当前动作已经从“继续修正问题”转为“按最新真实状态完成收口提交”。
-
 ---
 
-#### 256. `main` fast-forward 合入 `dev` — 主干工作树复测通过并保留本地 `WORKSPACE` stash
-
+#### 253. 将 `main` 合并回当前分支 — 解决 `WORKSPACE` 冲突并完成合并态回归
 **时间**：2026-04-21
 
 **背景**：
-在 `dev` 上完成插件化前端收口、人工验收通过和相关提交后，用户进一步要求把这些改动合并到 `main`，并在 `main` 分支上重新跑一遍完整全量。执行前发现 `main` 工作树（`E:\\hushaokang\\Data-code\\outlookEmail`）本身有一份未提交的 `WORKSPACE.md` 本地记录，因此不能直接 merge。
+在本轮插件 Provider 前端收口已经本地提交后，用户要求继续尝试将 `main` 分支先合并到当前分支。合并前已先核对：`main` 比当前分支额外多出一个标准模式小窗 UI 响应式修复提交（`39920b0`）和一个后续 merge 提交；同时，本地遗留的 4 个未跟踪文件与 `main` 上无同路径冲突。
 
-**本次处理**：
-1. 先将 `main` 工作树里的 `WORKSPACE.md` 本地改动安全暂存：
-   - `stash@{0}: On main: main-worktree-workspace-before-dev-merge`
-2. 在 `main` 工作树执行：
-   - `git merge --no-edit dev`
-3. 由于 `main` 是 `dev` 的祖先，本次合并为 **fast-forward**，未产生新的 merge 冲突。
-4. 随后在 `main` 工作树重新执行完整全量：
+**本次执行**：
+1. 执行 `git merge --no-edit main`
+2. 自动合并成功的文件包括：
+   - `static/css/main.css`
+   - `static/js/features/accounts.js`
+   - `static/js/features/emails.js`
+   - `static/js/features/temp_emails.js`
+   - `static/js/i18n.js`
+   - `static/js/main.js`
+   - `templates/index.html`
+   - `docs/BUG/2026-04-21-标准模式小窗UI排版错乱-Grid断点适配缺陷.md`
+   - `docs/TODO/2026-04-21-Grid断点适配缺陷修复TODO.md`
+   - `tests/test_responsive_detail_focus_contract.py`
+3. 唯一冲突文件为 `WORKSPACE.md`
+4. 冲突处理策略：
+   - 保留当前分支已有的 226~252 相关记录
+   - 同时补回 `main` 带来的 210~217 响应式修复记录
+   - 不简化为一句“已 merge”，而是完整保留两条历史线
+5. 合并态再次执行完整回归：
    - 命令：`python -m unittest discover -s tests -v`
-   - 结果：`Ran 1357 tests in 463.280s`
+   - 结果：`Ran 1357 tests in 409.316s`
    - 结论：`OK (skipped=7)`
 
 **本次文档同步**：
 1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
-   - 将最新完整回归基线更新为 `Ran 1357 tests in 463.280s`、`OK (skipped=7)`
+   - 将最新完整回归基线更新为 `Ran 1357 tests in 409.316s`、`OK (skipped=7)`
 2. `docs/TODO/2026-04-21-插件Provider域名选择泛化与设置入口解耦TODO.md`
-   - 补记最新回归来自 `main` 工作树的 fast-forward 合并后结果
+   - 补记该结果来自合并 `main` 并解决冲突后的最新工作树
 3. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
-   - 更新顶部当前实施状态中的完整回归结果
+   - 将顶部当前实施状态中的完整回归结果更新为 `1357 tests`
 4. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
-   - 更新技术现状中的最新完整回归结果
+   - 将技术现状中的最新完整回归结果更新为 `1357 tests`
 5. `docs/BUG/2026-04-21-插件Provider域名选择未泛化与设置入口耦合BUG.md`
-   - 更新当前状态中的最新完整全量结果
+   - 将当前状态中的完整回归结果更新为合并 `main` 后的最新数字
 
 **当前状态**：
-1. `main` 已经包含 `dev` 上本轮所有插件化收口改动。
-2. 主干工作树最新完整全量结果为 `Ran 1357 tests in 463.280s`、`OK (skipped=7)`。
-3. `main` 工作树原有的那份本地 `WORKSPACE.md` 记录仍安全保存在 stash 中，未被覆盖也未被丢弃。
+1. `main` 已经成功并入当前分支，唯一冲突 `WORKSPACE.md` 已人工解决。
+2. 当前最新完整回归基线已更新为 `Ran 1357 tests in 409.316s`、`OK (skipped=7)`。
+3. 下一步只剩完成 merge commit 本身，以及后续是否继续做人工验收或处理 `Moemail` 500。
 
 ---
 
-#### 220. 临时邮箱 Provider 插件化 — 记录浏览器 unittest 延后修复决策
+---
 
+#### 252. 插件 Provider 域名选择泛化与设置入口解耦 — 本轮代码与文档进入可提交状态
 **时间**：2026-04-21
 
 **背景**：
-在拿到 M5 的实际回归结果后，用户明确表示：先继续按 TODO 推进，并把当前测试结果记录下来；`tests/test_account_edit_browser_flow.py` 与 `tests/test_csrf_browser_recovery.py` 这两个 Playwright unittest 的卡点后续再修复。
+在完成设置页插件配置面板解耦、临时邮箱页 provider-agnostic 域名逻辑、首次加载恢复链路修复、`2.1.1` 静态资源版本刷新、人工验收实例重启，以及版本测试动态化修复之后，用户要求将本轮结果做一次本地提交。
 
-**本次修改**：
-1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
-   - 在 T5.2 当前状态中补充一条决策口径：这 2 个 Playwright unittest 先记录结果，后续再单独修复。
+**本次收敛**：
+1. 代码侧已包含：
+   - `templates/index.html` 新增独立插件 Provider 配置承载区
+   - `static/js/main.js` / `static/js/features/plugins.js` 完成设置入口与插件管理解耦
+   - `static/js/features/temp_emails.js` 完成按 provider options 的域名能力泛化
+   - `outlook_web.__version__` 更新到 `2.1.1`
+   - `tests/test_version_update.py` 改为动态跟随运行时版本
+2. 文档侧已同步：
+   - 主插件化 TODO / 方案 B TODO
+   - FD / TD / BUG
+   - 插件接入说明 / 接入提示词
+   - `WORKSPACE.md`
+3. 验证基线已锁定为：
+   - `python -m unittest tests.test_version_update -v` → `Ran 51 tests in 16.037s`、`OK`
+   - `python -m unittest discover -s tests -v` → `Ran 1344 tests in 383.480s`、`OK (skipped=7)`
 
 **当前状态**：
-1. 当前会话对 M5 的结论已经明确：
-   - 插件化专项：已通过
-   - 非浏览器全量回归：已通过
-   - 2 个 Playwright unittest：结果已记录，修复延后
-2. 本轮没有新增测试执行，仅补记用户的推进决策。
+1. 本轮相关代码、文档、测试结果已经对齐，可进行本地提交。
+2. 提交后的剩余工作继续收敛为人工验收本身，以及是否继续处理 `Moemail` 的运行时 500 问题。
 
 ---
 
-#### 221. 临时邮箱 Provider 插件化 — 梳理下一轮准备清单
-
-**时间**：2026-04-21
-
-**背景**：
-在用户要求“继续梳理 TODO 剩余项并做下一轮准备”后，我先重新读取了 TODO 中所有未完成项，确认当前真正剩余的不是泛泛的“还没做完”，而是两个明确的收尾方向：浏览器级手动验收，以及 2 个 Playwright unittest 的卡点修复。
-
-**本次修改**：
-1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
-   - 新增“**5. 下一轮准备（截至当前会话）**”小节
-   - 明确写出：
-     - 若继续 M5，应优先单独排查 `tests/test_account_edit_browser_flow.py` 与 `tests/test_csrf_browser_recovery.py`
-     - 若继续 M4，应按 mockup 完成 6 项浏览器级手动验收
-     - 当前已可复用的结果基线：插件化专项 `89/89 passed`、非浏览器全量回归 `1330 tests` 通过
-     - 本阶段不再重复做的动作：插件专项重跑、模块边界失败复记
-
-**当前状态**：
-1. TODO 已经不仅能反映“现在做到哪”，也能直接指导“下一轮先做什么”。
-2. 本轮继续只做文档整理，没有新增测试执行。
-
 ---
 
-#### 222. 临时邮箱 Provider 插件化 — 补充 TODO 顶部完成度概览
-
+#### 251. 插件 Provider 域名选择泛化与设置入口解耦 — 版本号提升后的全量回归重新稳定
 **时间**：2026-04-21
 
 **背景**：
-用户直接追问“TODO 效果怎么样了，完成到哪里了”。为避免每次都需要从分散的勾选项里人工推断状态，本轮把当前会话已经确认的里程碑进度直接收敛成一张概览表，放到 TODO 顶部。
+在为人工验收快速处理静态资源缓存后，`outlook_web.__version__` 已从 `2.1.0` 提升到 `2.1.1`。用户随后要求基于最新工作树再跑一轮完整全量回归，确认这次版本号调整与人工验收实例重启没有引入新问题。
 
-**本次修改**：
-1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
-   - 新增“**2.1 当前完成度概览**”表格
-   - 逐项总结：
-     - M1：已完成
-     - M2：已完成
-     - M3：已完成
-     - M4：代码主干已完成，浏览器级手动验收暂缓
-     - M5：插件化专项 `89/89`、E2E 与非浏览器全量回归已通过；2 个 Playwright unittest 后续再修
-
-**当前状态**：
-1. 现在只看 TODO 顶部，就能快速知道本任务已经推进到哪个里程碑。
-2. 本轮仍然只是文档整理，没有新增测试执行。
-
----
-
-#### 223. 临时邮箱 Provider 插件化 — 完成 T4.4 浏览器级手动验收
-
-**时间**：2026-04-21
-
-**背景**：
-用户明确要求按 TODO 顺序继续推进，先完成 T4.4「前端手动验收」，并且要求实际“启动一下看一下”。最初尝试 detached 启动 `web_outlook_app.py` 时，外部进程未能稳定提供可访问页面，因此本轮改用与现有浏览器测试一致的方式：在单次脚本中临时启动测试内 Web 服务，再用 Playwright 对插件管理 UI 做真实交互验收。
-
-**本次实际执行**：
-1. 使用 `tests._import_app.import_web_app_module()` + `werkzeug.serving.make_server()` 启动临时本地 Web 服务。
-2. 使用 Playwright 打开真实设置页，并对插件接口做 route mock，分别覆盖：
-   - 折叠态：标题与已安装数量 badge
-   - 展开态：已安装 / 可安装 / 加载失败三类插件项
-   - 安装流程：点击安装后的成功提示
-   - 配置态：动态表单渲染、测试连接、保存配置
-   - 错误态：加载失败错误信息展示
-   - 自定义安装：模态框输入名称和 URL 后完成提交
-3. 首次脚本运行时仅因当前 Playwright 版本不支持 `page.expect_dialog()` 中断；改为 `page.on('dialog', ...)` 后补跑通过。
-
-**本次实际结果**：
-1. T4.4 共 10 个检查点全部通过，最终输出：
-   - `总检查项: 10`
-   - `失败项: 0`
-2. 结论上可将 M4 从“代码主干已完成、手动验收暂缓”更新为“代码主干与浏览器级手动验收均已完成”。
-
-**本次文档更新**：
-1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
-   - 将 M4 完成度更新为已完成
-   - 勾选 T4.4 的 6 个验收项
-   - 将“下一轮准备”中的 M4 项改为已完成、无需重复执行
-2. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
-   - 顶部当前实施状态补入：浏览器级手动验收已完成
-3. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
-   - 将 M5 小结中的浏览器级手动验收改为已完成
-
-**当前状态**：
-1. 插件化任务现已完成 M1、M2、M3、M4。
-2. 当前剩余主阻塞仅为完整 `python -m unittest discover -s tests -v` 中的 2 个 Playwright unittest 卡点。
-
----
-
-#### 224. 临时邮箱 Provider 插件化 — 修复浏览器 unittest 等待条件并拿到完整 discover 绿灯
-
-**时间**：2026-04-21
-
-**背景**：
-在完成 T4.4 浏览器级手动验收后，用户明确要求继续推进 M5，并再次强调所有动作前先充分获取上下文、同时持续同步会话文档与 `WORKSPACE.md`。重新核对 `tests/test_account_edit_browser_flow.py` 与 `tests/test_csrf_browser_recovery.py` 后，发现两者都依赖 `page.wait_for_load_state("networkidle")`，而页面初始化阶段本身会并发触发 `groups / accounts / settings / version-check / plugins` 等后台请求，这使“页面可操作”与“网络彻底静默”被混为一谈，导致完整 discover 场景更容易卡住。
-
-**本次排查与验证**：
-1. 先单跑两个浏览器 unittest：
-   - `python -m unittest tests.test_account_edit_browser_flow.AccountEditBrowserFlowTests.test_browser_can_edit_outlook_remark_without_reentering_credentials -v`
-   - `python -m unittest tests.test_csrf_browser_recovery.CsrfBrowserRecoveryTests.test_browser_recovers_after_stale_csrf_token_and_retries_once -v`
-   - 两者均可单独通过
-2. 查询 Playwright 官方资料后，确认 `networkidle` 更适合等待网络空闲，不适合作为 UI ready 的主要断言；更推荐用 URL / locator / DOM 状态等 web-first 等待。
-3. 修改：
-   - `tests/test_account_edit_browser_flow.py`
-   - `tests/test_csrf_browser_recovery.py`
-   - 将登录后的 `networkidle` 等待改为：
-     - `wait_for_url(..., timeout=60_000)`
-     - `#app` 可见
-     - `#page-mailbox` 不再带 `page-hidden`
-     - 再等待该测试真正关心的控件/数据出现
-4. 修改后再次验证：
-   - `python -m unittest tests.test_account_edit_browser_flow tests.test_csrf_browser_recovery -v` → `Ran 2 tests`，`OK`
-   - `python -m unittest discover -s tests -v` → `Ran 1332 tests in 352.180s`，`OK (skipped=7)`
-
-**本次文档更新**：
-1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
-   - 将 M5 更新为已完成
-   - 将 T5.2 当前状态改为完整 discover 已通过
-   - 将顶部“当前主要差异”与“下一轮准备”改为已收口口径
-2. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
-   - 顶部当前实施状态补入完整 discover 通过结果
-3. `docs/TDD/2026-04-21-临时邮箱插件化TDD.md`
-   - 将“浏览器 unittest 卡住”更新为“等待条件修复后完整 discover 通过”
-4. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
-   - 顶部现状、测试现状与 M5 小结改为完整回归已通过
-
-**当前状态**：
-1. 插件化任务现已完成 M1、M2、M3、M4、M5。
-2. 当前工作树的最终回归基线：
-   - 插件化专项：`89/89 passed`
-   - 完整回归：`Ran 1332 tests in 352.180s`，`OK (skipped=7)`
-
----
-
-#### 225. 临时邮箱 Provider 插件化 — 继续收口 TODO 文案与完成定义
-
-**时间**：2026-04-21
-
-**背景**：
-在完整回归已经拿到绿灯后，用户进一步要求“继续完善我们的 TODO，看一下具体情况内容”，并再次强调所有结果都要先充分获取上下文、同步相关文档与 `WORKSPACE.md`。重新通读 `docs/TODO/2026-04-21-临时邮箱插件化TODO.md` 后，发现虽然里程碑状态已经改为全绿，但仍残留少量进行时口径，不利于后续直接把 TODO 当作已完成任务单阅读。
-
-**本次修改**：
-1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
-   - 将 TDD 基线表中的“当前主要差异”改为“当前收口结论”，避免在任务已完成后继续保留“差异”语义
-   - 将 T1.5 中“现有测试全量回归不报错”补勾为已完成
-   - 将“## 5. 下一轮准备”改名为“## 5. 当前收口基线”，更符合当前任务已经完成的实际状态
-   - 在“## 7. 完成定义”下补充当前状态说明：上述 7 条已满足，本期插件化已完成
-
-**当前状态**：
-1. TODO 现在不仅反映“测试已通过”，也在文案层明确表达了“任务已收口完成”。
-2. 当前插件化相关主文档、测试结果与 `WORKSPACE.md` 记录已保持一致。
-
----
-
-#### 227. 临时邮箱 Provider 插件化 — 重新核对实现状态并重跑专项/完整回归
-
-**时间**：2026-04-21
-
-**背景**：
-在插件化 TODO 已经完成收口后，用户继续要求：先汇报几个任务功能实现的现状，再直接检查文档并重新启动测试。为避免只凭上一轮结果复述，本轮先重新读取了关键实现文件，再重新执行插件专项和完整回归。
-
-**本次重新核对的实现现状**：
-1. `outlook_web/services/temp_mail_provider_base.py`
-   - `register_provider()`、`get_registry()` 与 `TempMailProviderBase` 的 provider 元信息类属性均已存在
-2. `outlook_web/services/temp_mail_provider_factory.py`
-   - `_BUILTIN_PROVIDERS`、`load_plugins()`、`reload_plugins()`、`get_available_providers()` 均已落地
-3. `outlook_web/services/temp_mail_plugin_manager.py`
-   - `install_plugin()`、`uninstall_plugin()`、配置 CRUD、`test_plugin_connection()` 均已落地
-4. `web_outlook_app.py`
-   - `install-provider` / `uninstall-provider` / `list-providers` 三个 CLI 入口已接入
-5. `static/js/features/plugins.js`
-   - `loadPlugins()`、`install()`、`uninstall()`、`testConnection()`、`applyChanges()`、`customInstall()`、`init()` 均已存在并启用
-6. 浏览器 unittest
-   - `tests/test_account_edit_browser_flow.py`
-   - `tests/test_csrf_browser_recovery.py`
-   - 当前均已改为面向 DOM 就绪的等待，不再依赖 `networkidle`
-
-**本次测试结果**：
-1. 插件化专项：
-   - `python -m unittest discover -s tests -p "test_temp_mail_plugin_*.py" -v`
-   - 结果：`Ran 89 tests in 1.826s`，`OK`
-2. 完整回归：
+**本次处理**：
+1. 首次执行 `python -m unittest discover -s tests -v` 时，完整全量未通过，最终结果为 `Ran 1344 tests in 347.900s`、`FAILED (failures=3, skipped=7)`。
+2. 失败点全部集中在 `tests/test_version_update.py`：
+   - `test_sidebar_has_version_number`
+   - `test_degradation_when_github_unreachable`
+   - `test_has_update_true_when_newer`
+3. 进一步定位确认根因并非业务回归，而是这些测试将当前版本硬编码为 `2.1.0`，未随 `outlook_web.__version__ = 2.1.1` 同步。
+4. 将 `tests/test_version_update.py` 改为直接引用 `outlook_web.__version__` 做动态断言，并先单独回跑：
+   - `python -m unittest tests.test_version_update -v`
+   - 结果：`Ran 51 tests in 16.037s`、`OK`
+5. 随后再次执行完整全量：
    - `python -m unittest discover -s tests -v`
-   - 结果：`Ran 1332 tests in 369.705s`，`OK (skipped=7)`
+   - 结果：`Ran 1344 tests in 383.480s`、`OK (skipped=7)`
 
-**本次文档更新**：
+**本次文档同步**：
 1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
-   - 将完整回归时长从上一轮结果刷新为本轮最新值 `369.705s`
-2. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
-   - 顶部当前实施状态中的完整回归结果刷新为本轮最新值
-3. `docs/TDD/2026-04-21-临时邮箱插件化TDD.md`
-   - 完整回归结果刷新为本轮最新值
+   - 将完整回归最新基线更新为 `Ran 1344 tests in 383.480s`、`OK (skipped=7)`
+2. `docs/TODO/2026-04-21-插件Provider域名选择泛化与设置入口解耦TODO.md`
+   - 补记人工验收实例已按 `2.1.1` 重新拉起，并将最新完整回归结果更新为 `383.480s`
+3. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
+   - 更新顶部当前实施状态与人工验收实例就绪口径
 4. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
-   - 顶部现状、测试现状与 M5 小结中的完整回归结果刷新为本轮最新值
+   - 补记 `tests/test_version_update.py` 已改为动态跟随 `outlook_web.__version__`
+5. `docs/BUG/2026-04-21-插件Provider域名选择未泛化与设置入口耦合BUG.md`
+   - 将状态更新为“人工验收实例已就绪”，并补记最新完整回归结果
 
 **当前状态**：
-1. 本轮已再次确认：插件化功能实现主链完整存在，且专项 + 完整回归均可重复跑通。
-2. 当前最新基线为：
-   - 插件化专项：`Ran 89 tests in 1.826s`，`OK`
-   - 完整回归：`Ran 1332 tests in 369.705s`，`OK (skipped=7)`
+1. 版本号提升到 `2.1.1` 后，完整全量回归已经重新稳定通过。
+2. 当前剩余工作继续收敛为页面级人工验收，而不是自动化回归或测试基线不一致问题。
 
 ---
 
-#### 228. 临时邮箱 Provider 插件化 — 启动可访问的人工验收实例
+---
 
+#### 250. 插件 Provider 域名选择泛化与设置入口解耦 — 人工验收实例已按新版本重新拉起
 **时间**：2026-04-21
 
 **背景**：
-在重新核对实现现状、并再次跑通专项与完整回归后，用户继续要求“启动一下人工来验收”。考虑到 detached 模式下 `python web_outlook_app.py` 在本环境里会 exit code 0 但不实际监听端口，本轮改用附着式长运行会话启动临时验收实例，并先自行验证可访问性，再把地址反馈给用户。
+在将静态资源版本号提升到 `2.1.1` 之后，需要重新拉起一个可用于人工验收的实例，确保浏览器能够访问到最新前端资源。首次尝试使用 detached 方式重启时，子进程没有正确吃到 `HOST / PORT / DATABASE_PATH / SCHEDULER_AUTOSTART` 环境变量，反而按默认配置误起成了 `0.0.0.0:5000`。
 
-**本次实际操作**：
-1. 先尝试 detached 启动：
-   - `HOST=127.0.0.1`
-   - `PORT=5098`
-   - `DATABASE_PATH=%TEMP%\\outlookEmail-manual-accept.db`
-   - 结果：进程退出后 5098 未监听，`/login` 返回 `502 Bad Gateway`
-2. 随后改为附着式异步会话启动：
+**本次处理**：
+1. 复核启动日志，确认失败根因是子 PowerShell 启动命令中的环境变量注入与引号转义失真，而不是应用本身启动失败。
+2. 停止误起在 `5000` 端口上的默认实例（PID `48480`）。
+3. 改为生成临时 `ps1` 启动脚本，再由独立子 PowerShell 用 `-File` 执行，显式写入：
    - `HOST=127.0.0.1`
    - `PORT=5097`
    - `DATABASE_PATH=%TEMP%\\outlookEmail-manual-accept-live.db`
    - `SCHEDULER_AUTOSTART=false`
-   - 使用临时登录口令 `admin12345`
-3. 实际验证：
-   - `Invoke-WebRequest http://127.0.0.1:5097/login` → `StatusCode = 200`
-   - `Get-NetTCPConnection -LocalPort 5097 -State Listen` → 监听存在
+   - `LOGIN_PASSWORD=admin12345`
+4. 复核结果：
+   - `127.0.0.1:5097` 已监听
+   - 启动日志显示访问地址为 `http://127.0.0.1:5097`
+   - 调度器已按配置跳过启动
+   - 数据库路径已切换到临时验收 DB
 
 **当前状态**：
-1. 当前已有一个可访问的临时人工验收实例运行在 `http://127.0.0.1:5097`。
-2. 该实例使用独立临时数据库，不影响现有数据。
-3. 若后续需要结束该实例，应在当前会话中显式停止 `manual-accept-live` 这个 PowerShell 会话。
+1. 最新人工验收实例已经稳定运行在 `http://127.0.0.1:5097`。
+2. 当前人工验收链路已不再受旧实例默认端口、默认 DB、调度器自动启动等因素干扰。
 
 ---
 
-#### 229. 临时邮箱 Provider 插件化 — 补充人工/模拟验收操作说明
-
-**时间**：2026-04-21
-
-**背景**：
-在人工验收实例已经启动可访问后，用户继续追问“我们现在该如何进行模拟测试、该怎么实际操作”。为避免这些关键信息只停留在对话里，本轮把可复用的手工验收思路同步回 TODO 和 `WORKSPACE.md`。
-
-**本次修改**：
-1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
-   - 在 `T4.4 前端手动验收` 的当前状态下新增“**可复用的人工/模拟验收路径**”
-   - 明确写出：
-     - 登录验收实例后进入 `设置 → 临时邮箱 → 插件管理`
-     - 基础交互先验证折叠态 / 展开态 / 刷新 / 应用变更
-     - 如需模拟“已安装 / 加载失败”，在 `<DATABASE_PATH 上级目录>\\plugins\\temp_mail_providers\\` 放置正常/故障插件文件后点击“应用变更”
-     - 如需模拟“安装 / 自定义安装”，通过 `registry.json` 或“自定义安装”URL 输入完成
-     - 如需模拟“配置 / 测试连接”，插件类需要提供 `config_schema` 与 `get_options()`
-
-**当前状态**：
-1. 现在只看 TODO 的 `T4.4` 小节，就能知道人工点验应该从哪里进、如何模拟不同状态。
-2. 当前人工验收实例仍运行在 `http://127.0.0.1:5097`，可继续配合上述步骤使用。
-
 ---
 
-#### 230. 临时邮箱 Provider 插件化 — 真实人工模拟发现 load_failed 错误态未贯通
-
+#### 249. 插件 Provider 域名选择泛化与设置入口解耦 — 为人工验收快速处理静态资源缓存
 **时间**：2026-04-21
 
 **背景**：
-在人工验收实例与模拟操作说明都准备好后，用户继续要求“你来帮助我来进行模拟一下，看看到底情况是怎么样的”。因此本轮没有停在说明层，而是直接在当前临时验收环境里放入示例插件、启动本地插件源、登录真实实例并逐条打插件 API，验证实际链路。
-
-**本次模拟准备**：
-1. 在 `%TEMP%\\plugins\\temp_mail_providers\\` 放入：
-   - `manual_mock_installed.py`（正常插件）
-   - `manual_mock_broken.py`（故障插件，导入缺失依赖）
-2. 在 `%TEMP%\\manual-plugin-feed\\` 放入：
-   - `manual_mock_available.py`（可安装插件）
-3. 在 `%TEMP%\\plugins\\registry.json` 写入 3 个插件条目
-4. 启动本地插件源：
-   - `python -m http.server 5096 --bind 127.0.0.1`
-
-**本次真实链路验证**：
-1. 已通过的真实链路：
-   - `GET /api/plugins/manual_mock_installed/config/schema` → 返回 schema
-   - `GET /api/plugins/manual_mock_installed/config` → 返回默认配置
-   - `POST /api/plugins/manual_mock_installed/config` → 保存成功
-   - `POST /api/plugins/manual_mock_installed/test-connection` → 返回“连接成功”
-   - `POST /api/plugins/install` 安装 `manual_mock_available` → 成功
-   - `POST /api/system/reload-plugins` → 成功加载 `manual_mock_available` 与 `manual_mock_installed`
-2. 发现的真实缺口：
-   - `POST /api/system/reload-plugins` 明确返回：
-     - `manual_mock_broken` in `failed`
-     - 错误：`ModuleNotFoundError: No module named 'definitely_missing_manual_plugin_dependency'`
-   - 但随后 `GET /api/plugins` 仍返回：
-     - `manual_mock_broken.status = "installed"`
-   - 结论：当前真实后端链路下，`load_failed` 没有被 `/api/plugins` 消费，前端无法真实显示“加载失败”错误态
-
-**本次文档更新**：
-1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
-   - 将 M4 从“已完成”调整为“主体已完成，但真实 `load_failed` 错误态仍待打通”
-   - 将 T4.4 的“错误态”验收项改回未完成，并补入真实人工模拟的结论
-   - 将“当前收口基线”改为“当前验证基线”
-   - 在完成定义中新增第 8 条：真实后端链路需把加载失败错误态展示到 UI
-2. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
-   - 顶部当前实施状态补入：真实 `load_failed` 错误态尚未贯通
-3. `docs/TDD/2026-04-21-临时邮箱插件化TDD.md`
-   - 补入：自动化未覆盖的真实集成缺口
-4. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
-   - 补入：`reload_plugins()` failed 结果未进入 `/api/plugins` 输出
-
-**当前状态**：
-1. 当前可以真实确认：安装、配置保存、测试连接、available → installed 主链都能跑通。
-2. 当前仍待修复：`load_failed` 错误态的真实后端到前端贯通。
-
----
-
-#### 231. 临时邮箱 Provider 插件化 — 修复 load_failed 聚合并完成真实复测
-
-**时间**：2026-04-21
-
-**背景**：
-在 230 中已经确认真实缺口位于 `/api/plugins` 没有消费 `reload-plugins` 的 failed 结果，导致故障插件仍显示为 `installed`。本轮继续按真实链路收口，先修代码，再用同一套人工验收实例重新验证。
-
-**本次实现**：
-1. 修改 `outlook_web/services/temp_mail_provider_factory.py`
-   - 新增 `_PLUGIN_LOAD_STATE`
-   - 新增 `get_plugin_load_state()`
-   - `load_plugins()` 现在会持久化最近一次插件加载结果
-   - 对“同一故障文件未变化时跳过重复导入”的路径，保留上一次 failed 状态，供 API 聚合读取
-2. 修改 `outlook_web/controllers/plugins.py`
-   - `api_get_plugins()` 改为聚合：
-     - `get_available_plugins()`
-     - `get_installed_plugins()`
-     - `get_plugin_load_state()`
-   - 故障插件现在返回 `status = "load_failed"`，并附带 `error`
-   - `installed_count` 改为仅统计真实 `installed` 项
-3. 修改测试：
-   - `tests/test_temp_mail_plugin_api.py`
-     - 新增 `test_get_plugins_marks_load_failed_status`
-   - `tests/test_temp_mail_plugin_loader.py`
-     - 新增 `test_reload_retains_failed_plugin_state_for_api_consumption`
-     - 补齐插件测试目录的清理，避免残留文件污染后续用例
-
-**本次验证**：
-1. 自动化验证：
-   - `python -m pytest tests/test_temp_mail_plugin_loader.py tests/test_temp_mail_plugin_api.py -v --tb=short`
-   - 结果：`34 passed`
-2. 真实人工验收环境复测：
-   - 重启 `manual-accept-live`（`http://127.0.0.1:5097`）
-   - 继续复用 `manual-plugin-feed`（`http://127.0.0.1:5096`）
-   - 登录后先获取 `/api/csrf-token`
-   - 带 `X-CSRFToken` 调用 `POST /api/system/reload-plugins`
-   - 随后调用 `GET /api/plugins`
-   - 实际结果：
-     - `reload_failed_names = ["manual_mock_broken"]`
-     - `manual_mock_broken.status = "load_failed"`
-     - `manual_mock_broken.error` 含 `ModuleNotFoundError`
-     - `installed_count = 2`
-
-**本次文档同步**：
-1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
-   - M4 改回已完成
-   - T4.4 错误态改回已完成
-   - 完成定义改为 8 条均已满足
-2. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
-   - 顶部状态改为真实后端闭环已完成
-3. `docs/TDD/2026-04-21-临时邮箱插件化TDD.md`
-   - 补入新增用例与真实复测结论
-4. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
-   - 补入状态缓存与聚合修复口径
-
-**当前状态**：
-1. `load_failed` 错误态已完成真实后端到前端贯通。
-2. 插件化任务当前已重新回到“完成”状态。
-
----
-
-#### 232. 临时邮箱 Provider 插件化 — 页面级点击验收确认 load_failed 错误卡片可见
-
-**时间**：2026-04-21
-
-**背景**：
-在 231 中已经完成 API 层与真实 HTTP 链路复测，但用户继续明确选择“继续做一次页面级点击验收”。因此本轮继续站在真实前端页面上操作，而不是停在接口层。
-
-**本次验收方式**：
-1. 继续复用：
-   - `manual-accept-live` → `http://127.0.0.1:5097`
-   - `manual-plugin-feed` → `http://127.0.0.1:5096`
-2. 使用 Playwright 对真实页面执行：
-   - 访问 `/login`
-   - 输入密码登录
-   - 点击左侧“设置”
-   - 切到“临时邮箱”Tab
-   - 展开“插件管理”卡片
-   - 真实点击“应用变更”
-3. 等待前端完成：
-   - `POST /api/system/reload-plugins`
-   - 随后重渲染插件列表
-
-**本次页面级结果**：
-1. `reload_failed_names = ["manual_mock_broken"]`
-2. 页面徽标：`已安装 2 个`
-3. `#plugin-item-manual_mock_broken` 卡片可见
-4. 卡片内可见：
-   - “加载失败”状态徽标
-   - `ModuleNotFoundError: No module named 'definitely_missing_manual_plugin_dependency'`
-5. 结论：真实用户在页面中点击“应用变更”后，已经能够直接看到 `load_failed` 错误卡片，不再需要只靠接口观察
-
-**本次文档同步**：
-1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
-   - 在 `T4.4` 下补入页面级点击验收结论
-   - 在 M4 当前状态中补入“真实 UI 已展示加载失败卡片”
-2. `docs/TDD/2026-04-21-临时邮箱插件化TDD.md`
-   - 补入页面级点击验收结论
-
-**当前状态**：
-1. 插件错误态已经完成 route mock、API 链路、真实 HTTP、真实页面点击四层验证。
-2. 当前 5097 / 5096 环境仍可继续复用。
-
----
-
-#### 233. 临时邮箱 Provider 插件化 — 新增根目录接入说明与 Agent 接入提示词
-
-**时间**：2026-04-21
-
-**背景**：
-在插件化真实闭环已经完成后，用户继续要求基于“当前文档设计和项目内容”补两份新的接入资料：一份给人直接阅读的接入说明，一份给 Agent 直接执行代码实现的提示词；同时要求两份都放在 `docs/` 根目录，并补 README 入口。
-
-**本次文档新增**：
-1. `docs/临时邮箱Provider插件接入说明.md`
-   - 面向开发者
-   - 说明 Provider 插件接入目标、真实运行时路径、基类契约、`config_schema`、方法返回结构、registry 安装方式、推荐验收步骤与最小清单
-   - 明确当前真实路径口径是 `<DATABASE_PATH 上级目录>/plugins/...`
-2. `docs/临时邮箱Provider插件接入提示词.md`
-   - 面向 AI / Agent
-   - 给出可直接发送的接入提示词模板
-   - 明确边界：不要重做插件系统主干，而是在现有插件架构上新增 Provider
-   - 要求 Agent 先读接入说明与插件化主文档，再实现代码、测试与文档
-
-**本次 README 更新**：
-1. `README.md`
-   - 在“项目文档”章节新增：
-     - `docs/临时邮箱Provider插件接入说明.md`
-     - `docs/临时邮箱Provider插件接入提示词.md`
-   - 补充说明：新增 Provider 时优先阅读这两份文档
-
-**本次落盘策略**：
-1. 两份文档都放在 `docs/` 根目录（按用户要求）
-2. 没有沿用 `docs/DEV/`，也没有拆到 `docs/API/`
-
-**当前状态**：
-1. 现在仓库里已经同时具备：
-   - 面向人的 Provider 接入说明
-   - 面向 Agent 的 Provider 接入提示词
-2. README 也已经补上入口，不需要再靠会话记忆找文档。
-
----
-
-#### 234. 临时邮箱 Provider 插件化 — 接入文档迁移到项目根目录并修正引用
-
-**时间**：2026-04-21
-
-**背景**：
-在 233 中已经按当时要求把两份接入文档落到 `docs/` 根目录，但用户随后进一步要求“放在我们的这个项目的根目录下面”，并继续要求把相关文档与 `WORKSPACE.md` 同步更新。因此本轮做的是路径迁移与引用修正，而不是重写内容。
-
-**本次迁移**：
-1. 将以下文件从 `docs/` 移动到项目根目录：
-   - `docs/临时邮箱Provider插件接入说明.md` → `临时邮箱Provider插件接入说明.md`
-   - `docs/临时邮箱Provider插件接入提示词.md` → `临时邮箱Provider插件接入提示词.md`
-2. 文档正文中的互相引用同步改为根目录路径：
-   - `临时邮箱Provider插件接入说明.md`
-   - `临时邮箱Provider插件接入提示词.md`
-
-**本次相关文档更新**：
-1. `README.md`
-   - “项目文档”章节中的两条入口改为根目录链接：
-     - `./临时邮箱Provider插件接入说明.md`
-     - `./临时邮箱Provider插件接入提示词.md`
-2. `WORKSPACE.md`
-   - 新增本条 234 号记录，说明这次路径迁移与引用修正
-
-**当前状态**：
-1. 两份接入文档现在都位于项目根目录。
-2. README 入口已同步到新路径。
-3. 文档正文互链已同步，不会再跳回旧的 `docs/` 路径。
-
----
-
-#### 235. 临时邮箱 Provider 插件化 — 本地提交本轮改动（不推送）
-
-**时间**：2026-04-21
-
-**背景**：
-在插件化功能、真实验收闭环、接入文档与路径迁移都完成后，用户进一步要求“现在可以尝试一下本地提交一下，不要推送”。因此本轮目标是只在本地创建 commit，不执行任何 push。
-
-**本次提交范围原则**：
-1. 纳入本轮插件化相关代码、测试、README、接入文档与 `WORKSPACE.md`
-2. 不纳入明显不属于本轮范围的文件（如 `.github/copilot-instructions.md`）
-3. 只做本地 commit，不做远端推送
-
-**当前状态**：
-1. `WORKSPACE.md` 已补记本次本地提交动作。
-2. 下一步将按本轮插件化相关文件创建本地 commit。
-
----
-
-#### 236. 临时邮箱 Provider 插件化 — 本地 commit 已创建（未推送）
-
-**时间**：2026-04-21
-
-**背景**：
-在 235 中先记录了本地提交计划后，本轮已实际完成一次本地 commit。用户要求“不要推送”，因此这里只记录本地 git 提交结果，不进行任何远端操作。
-
-**本次结果**：
-1. 本地 commit 已成功创建：
-   - `8ba2d20`
-   - 提交信息：`feat: 完成临时邮箱Provider插件化与接入文档`
-2. 本次 commit 已包含：
-   - 插件化后端代码
-   - 插件管理前端
-   - 插件化测试
-   - README / 接入文档 / 会话文档 / `WORKSPACE.md`
-3. 本次明确未做：
-   - `git push`
-   - 远端分支同步
-
-**额外说明**：
-1. `.github/copilot-instructions.md` 没有纳入本次提交。
-2. 本条 236 号记录用于把“本地提交已实际完成”这件事同步回 `WORKSPACE.md`。
-
-**当前状态**：
-1. 插件化相关改动已经至少有一条本地 commit 承载。
-2. 当前仍未向远端推送。
-
----
-
-#### 237. 临时邮箱 Provider 插件化 — 真实 moemail 插件验证与单层扫描口径回填
-
-**时间**：2026-04-21
-
-**背景**：
-用户说明“本地已经新增了一个真实的插件脚本”，并要求重新启动本地服务看看情况。因此本轮不是继续 mock，而是直接对真实插件文件做一次运行时验证。
-
-**本次发现**：
-1. 仓库中的真实插件位置是：
-   - `plugins/temp_mail_providers/test_plugin/moemail.py`
-2. 当前运行中的 5097 服务读取的运行时插件目录是：
-   - `%TEMP%\\plugins\\temp_mail_providers\\`
-3. 当前 loader 的真实扫描口径是：
-   - 只扫描插件目录下一层 `*.py`
-   - 不递归子目录
-4. 因此仅仅重启当前服务，并不会自动读到 `test_plugin/moemail.py` 这种嵌套布局
+在继续准备人工验收时，用户反馈“对应 tab 下面没有设置”。结合人工验收实例日志进一步排查后，确认一个高概率现实因素是浏览器仍在吃旧静态资源缓存：现有实例返回的 `main.js / plugins.js / temp_emails.js` 请求均带 `?v=2.1.0`，并出现了 `304`，这会让浏览器继续使用改动前的旧 JS。
 
 **本次处理**：
-1. 将真实插件文件按当前实现口径平铺到运行时插件目录：
-   - `%TEMP%\\plugins\\temp_mail_providers\\moemail.py`
-2. 重启 `manual-accept-live`（`http://127.0.0.1:5097`）
-3. 登录后验证：
-   - `GET /api/plugins`
-   - `GET /api/plugins/moemail/config/schema`
-   - `GET /api/plugins/moemail/config`
-   - `POST /api/plugins/moemail/test-connection`
-
-**本次真实结果**：
-1. `moemail` 已出现在真实插件列表中：
-   - `moemail_status = "installed"`
-2. `config/schema` 可正常读取，字段包括：
-   - `base_url`
-   - `api_key`
-   - `domains`
-   - `default_domain`
-   - `default_expiry_ms`
-   - `request_timeout`
-3. 默认配置为空时，测试连接返回：
-   - `CONNECTION_FAILED`
-   - `Moemail base_url 未配置`
-4. 结论：
-   - 插件本体可被真实服务识别
-   - 当前缺的不是加载，而是后续正式配置
-   - 若要保持仓库里的嵌套目录布局长期可用，后续需要扩 loader；否则应继续按“单层平铺 `.py`”使用
-
-**本次文档同步**：
-1. `临时邮箱Provider插件接入说明.md`
-   - 补入：当前 loader 只扫描单层 `*.py`，不递归子目录
-2. `临时邮箱Provider插件接入提示词.md`
-   - 补入：不要把插件做成嵌套目录结构
-3. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
-   - 补入：真实 `moemail.py` 验证得到的单层扫描口径
+1. 采用用户选定的“快速修复”方案，不做结构性静态资源指纹重构。
+2. 将 `outlook_web.__version__` 从 `2.1.0` 提升到 `2.1.1`，用于立即刷新 `templates/partials/scripts.html` 中的静态资源查询参数。
+3. 下一步将基于这个新版本号重启人工验收实例，确保浏览器重新拉取最新前端资源。
 
 **当前状态**：
-1. 5097 服务已经完成一次基于真实 `moemail.py` 的重启验证。
-2. 当前最准确的使用建议是：**插件文件直接平铺到运行时插件目录下一层**。
+1. 静态资源版本号已经更新到 `2.1.1`。
+2. 当前动作的目标不是发布版本，而是消除人工验收阶段“浏览器继续吃旧 JS 缓存”的干扰因素。
+
+---
+
+---
+
+#### 248. 插件 Provider 域名选择泛化与设置入口解耦 — 恢复链路修复后再次完整回归通过
+**时间**：2026-04-21
+
+**背景**：
+在修复“已保存插件 Provider 在设置页首次加载时可能错误回退到 `legacy_bridge`”之后，为了避免把前一轮全量回归结果误用到新代码上，用户明确要求基于最新工作树再完整跑一遍全量 unittest。
+
+**本次执行**：
+1. 运行命令：`python -m unittest discover -s tests -v`
+2. 实际结果：`Ran 1344 tests in 352.641s`
+3. 最终结论：`OK (skipped=7)`
+
+**本次文档同步**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 将最新完整回归基线更新为 `Ran 1344 tests in 352.641s`、`OK (skipped=7)`
+2. `docs/TODO/2026-04-21-插件Provider域名选择泛化与设置入口解耦TODO.md`
+   - 将 Phase 4 下的自动回归结果更新为修复后再次回归的最新数字
+3. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
+   - 将顶部当前实施状态中的最新完整回归结果更新为修复后结果
+4. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
+   - 将技术现状中的最新完整回归结果更新为修复后结果
+
+**当前状态**：
+1. 方案 B 前端主干、首次加载恢复链路补丁，以及相关文档回填之后，当前工作树已再次通过完整全量 unittest 回归。
+2. 现在剩余事项继续收敛为：人工验收类确认，以及是否还要补更细的交互复核说明。
+
+---
+
+---
+
+#### 247. 插件 Provider 域名选择泛化与设置入口解耦 — 修复首次加载时的 Provider 恢复链路
+**时间**：2026-04-21
+
+**背景**：
+在用户选择“继续做人工验收导向的代码复核”后，本轮继续从人工点击路径反推潜在问题，重点复核了“设置页首次加载 → `loadSettings()` 恢复全局 Provider → `plugins.js` 延后注入插件 radio”这条链路。复核中确认存在一个容易在人工验收时暴露、但不一定被现有自动化直接覆盖的缺口：若全局设置里保存的是插件 Provider，页面首开时插件 radio 尚未注入，后续 `_refreshProviderRadios()` 会错误回退到 `legacy_bridge`。
+
+**本次修复**：
+1. `static/js/main.js`
+   - `loadSettings()` 在解析出 `mappedProvider` 后，先把目标值写入 `.provider-radio-group.dataset.pendingProvider`
+   - 如果当下就能找到对应 radio，则立即勾选并清空 pending 标记
+2. `static/js/features/plugins.js`
+   - `_refreshProviderRadios()` 在插件 radio 注入完成后，优先使用 `dataset.pendingProvider` 恢复目标 Provider
+   - 成功恢复后清空 pending 标记，避免后续刷新重复干扰
+
+**本次文档同步**：
+1. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
+   - 补记“已保存插件 Provider 在页面首开时也能正确恢复”
+2. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
+   - 补记 pendingProvider 恢复链路的实现细节
+3. `docs/BUG/2026-04-21-插件Provider域名选择未泛化与设置入口耦合BUG.md`
+   - 在当前状态中补记该恢复链路已修复
+
+**当前状态**：
+1. 方案 B 相关前端主干已不只覆盖“切换时可用”，还补上了“页面首开时保存状态恢复”的人工验收高风险点。
+2. 当前剩余工作继续收敛为：人工点击验收本身，以及是否还存在更细的交互边角。
+
+---
+
+---
+
+#### 246. 插件 Provider 域名选择泛化与设置入口解耦 — 完整全量回归通过
+**时间**：2026-04-21
+
+**背景**：
+在方案 B 前端主干与边角文档清扫完成后，用户明确要求“跑全量的测试”。本轮先重新读取了最新 `WORKSPACE.md`、插件化主 TODO 中的 M5 记录，以及方案 B 独立 TODO 中的 Phase 4 状态，再按当前仓库既定口径执行完整回归命令。
+
+**本次执行**：
+1. 运行命令：`python -m unittest discover -s tests -v`
+2. 实际结果：`Ran 1344 tests in 311.670s`
+3. 最终结论：`OK (skipped=7)`
+
+**本次文档同步**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 将完整回归基线更新为 `Ran 1344 tests in 311.670s`、`OK (skipped=7)`
+2. `docs/TODO/2026-04-21-插件Provider域名选择泛化与设置入口解耦TODO.md`
+   - 将 Phase 4 状态更新为“自动回归已通过，待人工验收”
+3. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
+   - 将顶部当前实施状态中的完整回归结果更新为最新数字
+4. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
+   - 将技术现状中的完整回归结果更新为最新数字
+
+**当前状态**：
+1. 方案 B 前端主干不仅已落地，而且已经通过当前工作树下的完整全量 unittest 回归。
+2. 当前剩余待办已进一步收敛为：若还要继续，只剩人工验收类确认与极细节行为复查。
+
+---
+
+---
+
+#### 245. 插件 Provider 域名选择泛化与设置入口解耦 — 清扫边角文档口径
+**时间**：2026-04-21
+
+**背景**：
+在方案 B 前端主干落地后，我继续做了一轮“遗漏点清扫”：重新搜索了代码与文档中是否还残留旧的内联配置路径、旧的 `cloudflare_temp_mail` 域名硬编码描述，或把“修复前现状”误写成“当前状态”的文案。
+
+**本次处理**：
+1. 代码侧确认：
+   - 已无 `plugin-cfg-*` 这类旧的内联配置容器残留
+   - 临时邮箱页域名逻辑已不再按 `cloudflare_temp_mail` 单点硬编码决定
+2. 文档侧补充了“修复前”标识，避免误读：
+   - `docs/BUG/2026-04-21-插件Provider域名选择未泛化与设置入口耦合BUG.md`
+     - 将复现 / 实际行为 / 关键代码定位等章节明确标注为“修复前”
+   - `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+     - 将 T4.5 的“问题现状”改为“问题现状（修复前）”
+
+**当前状态**：
+1. 剩余待处理项已从“实现缺口”进一步收敛为“人工验收与回归确认”。
+2. 相关文档中对“历史问题”和“当前状态”的边界已更清晰，不容易再把修复前描述误当成当前事实。
+
+---
+
+---
+
+#### 244. 插件 Provider 域名选择泛化与设置入口解耦 — 完成方案 B 前端主干改造
+**时间**：2026-04-21
+
+**背景**：
+在用户明确选择“直接开始按方案 B 改代码”后，本轮先重新读取了 `templates/index.html`、`static/js/main.js`、`static/js/features/plugins.js`、`static/js/features/temp_emails.js` 以及关联 FD / TD / TODO / BUG 文档，再继续核对了 `/api/temp-emails/options` 与插件配置接口的真实返回结构，确认：
+1. 插件独立设置面板可以直接复用 `/api/plugins/{name}/config*`；
+2. 插件配置不应并入 `/api/settings`；
+3. 域名下拉逻辑应按 `domains` / `domain_strategy` 判断，而不是继续写死 `cloudflare_temp_mail`。
+
+**本次代码修改**：
+1. `templates/index.html`
+   - 在 `#cfWorkerConfigPanel` 与 `#pluginManagerCard` 之间新增 `#pluginProviderConfigPanel`
+   - 更新插件管理卡片说明文案，明确运行时配置应在上方 Provider 设置区完成
+2. `static/js/main.js`
+   - 扩展 `onTempMailProviderChange(provider)`
+   - 插件 Provider 选中时显示独立插件配置面板，内置 Provider 选中时隐藏该面板
+3. `static/js/features/plugins.js`
+   - 新增独立插件配置面板渲染路径
+   - 将插件卡片按钮从“配置”改为“打开设置”
+   - 移除插件管理卡片内联配置表单承载
+   - 插件管理卡片收敛为安装 / 卸载 / 应用变更 / 错误展示
+4. `static/js/features/temp_emails.js`
+   - 去掉 `cloudflare_temp_mail` 域名硬编码
+   - 按 Provider 维度缓存 `/api/temp-emails/options`
+   - 增加请求序号保护，避免切换 Provider 时被旧 options 响应串号
+   - 域名下拉 / hint / status 改为按 `domains` / `domain_strategy` 统一渲染
+
+**本次文档同步**：
+1. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
+   - 将前端状态更新为“方案 B 主干已落地”
+2. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
+   - 将前端技术现状更新为独立插件设置面板 + Provider-agnostic 域名逻辑
+3. `docs/TODO/2026-04-21-插件Provider域名选择泛化与设置入口解耦TODO.md`
+   - 将 Phase 2 / Phase 3 更新为“代码已落地”，Phase 4 保持待人工验收
+4. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 将 T4.5 更新为“第一轮前端实现已完成，待回归”
+5. `docs/BUG/2026-04-21-插件Provider域名选择未泛化与设置入口耦合BUG.md`
+   - 将 BUG 状态更新为“主干已落地，待人工回归确认”
+6. `docs/DEV/2026-04-21-插件Provider域名选择泛化与设置入口解耦-实施提示词.md`
+   - 补记该提示词对应的前端主干已在后续会话落地
+
+**当前状态**：
+1. 方案 B 的 Phase 2 / Phase 3 前端主干已经落地。
+2. 本轮未执行测试命令，也未做人工点击验收。
+3. 下一步如继续，应围绕 Phase 4 做人工验收 / 回归确认或按需修边角行为。
+
+---
+
+---
+
+#### 243. 插件 Provider 域名选择泛化与设置入口解耦 — 按用户要求直接交付提示词正文
+**时间**：2026-04-21
+
+**背景**：
+在提示词文档创建完成后，用户进一步明确表示“直接给我就好了”，并再次强调：
+1. 相关文档需要根据实际持续同步；
+2. 操作过程要及时记录进 `WORKSPACE.md`；
+3. 后续对话必须继续通过寸止 MCP 进行；
+4. 每次行动之前都必须先充分获取上下文；
+5. 结果不能只写到文档里，也要同步明确告知用户。
+
+**本次记录**：
+1. 本轮没有新增功能代码修改。
+2. 已按用户要求准备直接在会话中交付 `docs/DEV/2026-04-21-插件Provider域名选择泛化与设置入口解耦-实施提示词.md` 的正文内容，而不是只给文件路径。
+3. 本条记录用于固定后续会话口径，避免把“只落文档不回告用户”误当成完成。
+
+**当前状态**：
+1. 提示词文档已经落盘。
+2. 会话内直接交付正文已被视为本轮实际动作的一部分。
+3. 后续仍需继续遵守：先获取上下文，再动作，并通过寸止 MCP 向用户同步结果。
+
+---
+
+---
+
+#### 242. 插件 Provider 域名选择泛化与设置入口解耦 — 新增可直接执行的实施提示词
+**时间**：2026-04-21
+
+**背景**：
+在用户明确表示“直接生成一版详细的提示词，我来让其它的 AI 直接执行工作”后，本轮继续读取了仓库里已有的实施提示词模板（尤其是 `docs/DEV/2026-04-21-临时邮箱插件化-实施提示词.md` 与 `docs/DEV/2026-04-05-设置页面重构-AI执行提示词.md`），然后结合已经完成的 BUG/TODO/Phase 1 设计结论，生成了一份可以直接交给其他 AI 执行的长提示词。
+
+**本次新增文档**：
+1. `docs/DEV/2026-04-21-插件Provider域名选择泛化与设置入口解耦-实施提示词.md`
+   - 明确说明当前真实状态：
+     - 现有插件配置 API 已足够
+     - `/api/settings` 不应承载插件 schema 配置
+     - 设置页推荐新增 `#pluginProviderConfigPanel`
+   - 明确要求按 `Phase 2 → Phase 3` 顺序实施
+   - 明确列出要修改的文件、禁止事项、验收要求、文档同步要求
+
+**本次联动修改**：
+1. `docs/TODO/2026-04-21-插件Provider域名选择泛化与设置入口解耦TODO.md`
+   - 补充“执行提示词”引用
+2. `docs/BUG/2026-04-21-插件Provider域名选择未泛化与设置入口耦合BUG.md`
+   - 在关联文档中补充这份新的实施提示词
+
+**当前状态**：
+1. 现在已经有一份可以直接发给其他 AI 开工的完整提示词
+2. 这份提示词不会再把工作引回“是否需要新增后端协议”的旧讨论，而是直接基于方案 B 和已完成的 Phase 1 继续实现
+
+---
+
+---
+
+#### 241. 插件 Provider 域名选择泛化与设置入口解耦 — 完成 Phase 1 设计边界核对
+**时间**：2026-04-21
+
+**背景**：
+在用户选择“直接进入 Phase 1，开始做方案 B 分析与设计”后，本轮继续读取了插件配置 API、设置页加载/保存逻辑、Provider 单选组切换逻辑和设置页 HTML 结构，目标不是立刻写代码，而是先确认：方案 B 到底需不需要新增后端协议，以及插件设置区应如何落位。
+
+**本次确认结果**：
+1. `outlook_web/routes/plugins.py` + `outlook_web/controllers/plugins.py`
+   - 已经提供：
+     - `GET /api/plugins/{name}/config/schema`
+     - `GET /api/plugins/{name}/config`
+     - `POST /api/plugins/{name}/config`
+     - `POST /api/plugins/{name}/test-connection`
+   - 这足够支撑独立插件设置面板，**不需要为方案 B 新开后端协议**
+2. `static/js/main.js`
+   - `saveSettings()` 当前只负责：
+     - `temp_mail_provider`
+     - `temp_mail_*`
+     - `cf_worker_*`
+   - 这说明插件 schema 配置不应并入 `/api/settings`，而应继续走 `/api/plugins/{name}/config`
+3. `templates/index.html`
+   - 现有 `#gptmailConfigPanel`、`#cfWorkerConfigPanel`、`#pluginManagerCard` 之间天然存在一个稳定插槽
+   - 适合作为独立 `#pluginProviderConfigPanel` 的推荐落点
+4. `static/js/main.js:onTempMailProviderChange(provider)`
+   - 当前只会切换内置 GPTMail / CF Worker 面板
+   - 方案 B 后续应在这里接入插件设置面板显示逻辑
+
+**本次文档更新**：
+1. `docs/BUG/2026-04-21-插件Provider域名选择未泛化与设置入口耦合BUG.md`
+   - 补充：`/api/settings` 不应承载插件 schema 配置
+2. `docs/TODO/2026-04-21-插件Provider域名选择泛化与设置入口解耦TODO.md`
+   - 将 Phase 1 状态更新为“设计已完成”
+   - 补充现有 API 复用、设置区落位、插件管理职责收口的已确认结论
+3. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
+   - 补充：方案 B 的重点是前端承载位置变化，不需要新增插件配置后端协议
+4. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
+   - 补充：现有插件配置 API 已足够，`saveSettings()` 不应承担插件 schema 配置
+
+**当前状态**：
+1. 方案 B 的 Phase 1 已经完成“设计边界确认”
+2. 现在已经可以直接进入：
+   - **Phase 2：设置页 UI 解耦**
+3. 当前仍未修改功能代码，全部是设计收口与文档回填
+
+---
+
+---
+
+#### 240. 插件 Provider 域名选择泛化与设置入口解耦 — 新增 BUG 文档与独立 TODO
+**时间**：2026-04-21
+
+**背景**：
+在用户明确选择按**方案 B**推进后，本轮先不直接修改功能代码，而是先把这个问题从“零散讨论结论”升级成两份可持续引用的正式文档：一份 BUG 文档负责沉淀问题定义、复现路径、根因和方案对比；一份 TODO 文档负责把方案 B 拆成后续可执行任务。
+
+**本次新增文档**：
+1. `docs/BUG/2026-04-21-插件Provider域名选择未泛化与设置入口耦合BUG.md`
+   - 记录了：
+     - 插件 provider 已注入，但域名选择仍写死在 `cloudflare_temp_mail`
+     - 设置页 Provider 单选组只会切换内置 GPTMail / CF Worker 面板
+     - 插件配置仍耦合在插件管理卡片里
+   - 给出方案 A / 方案 B 对比，并明确推荐方案 B
+2. `docs/TODO/2026-04-21-插件Provider域名选择泛化与设置入口解耦TODO.md`
+   - 将方案 B 拆成 4 个阶段：
+     - 交互边界收敛
+     - 设置页 UI 解耦
+     - 临时邮箱页域名泛化
+     - 回归与验收
+
+**本次联动修改**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 在 T4.5 中补充指向上述 BUG / TODO 两份独立文档
+
+**当前状态**：
+1. 这次问题已经从“会话中的分析结论”升级成可持续跟踪的正式文档资产
+2. 下一步如果继续实施，就可以直接按独立 TODO 的 Phase 1 开始，不需要重新整理问题背景
+
+---
+
+---
+
+#### 239. 临时邮箱 Provider 插件化 — 记录第三方插件域名选择与配置入口的真实 UX 缺口
+**时间**：2026-04-21
+
+**背景**：
+在把新的 `cloudflare_temp_mail_test_plugin.py` 平铺到运行时插件目录并重启真实服务后，继续按真实页面行为回看插件接入体验，发现“插件已经能被识别”并不等于“插件在临时邮箱页面拥有与内置 CF Provider 一样的域名选择体验”。用户进一步明确，希望插件管理只承担安装 / 卸载职责，而插件自己的配置应落到对应设置区域，而不是继续嵌在安装界面里。
+
+**本次结论**：
+1. `static/js/features/plugins.js`
+   - 已经会把已安装插件注入 `#tempEmailProviderSelect`
+2. `static/js/features/temp_emails.js`
+   - `loadTempEmails()` 与 `onTempEmailProviderChange()` 仍把域名下拉启用条件硬编码为 `cloudflare_temp_mail`
+3. 因而第三方插件即使 `get_options()` 返回 `domains`，当前临时邮箱页面也无法自然手动选域名
+4. 同时插件 `config_schema` 仍渲染在「插件管理」卡片内，生命周期管理与运行时设置尚未分离
+
+**本次修改**：
+1. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
+   - 新增当前实现与推荐方向的区分
+   - 明确记录：插件域名选择尚未泛化，插件管理与运行时设置尚未拆分
+2. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
+   - 补充前端根因：Provider 下拉已注入，但域名选择仍硬编码在 `cloudflare_temp_mail`
+3. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 新增 T4.5 后续优化项，记录 UI 职责拆分与域名选择泛化
+4. `临时邮箱Provider插件接入说明.md`
+   - 补充当前真实 UI 限制，避免后续接入者误判“返回 domains 就一定能手动选域名”
+5. `临时邮箱Provider插件接入提示词.md`
+   - 补充 Agent 实施边界：涉及插件域名选择时，需要单独修改前端而不是只写 Provider 插件
+
+**当前状态**：
+1. 文档已经与真实 UI 行为重新对齐，不再把“插件 provider 已注入”误写成“插件域名选择能力已完整打通”
+2. 当前仓库的更合理后续方向已经明确：
+   - 插件管理：安装 / 卸载 / 应用变更 / 错误展示
+   - Provider 设置：各插件自己的运行时配置
+   - 临时邮箱页：按 `get_options()` 动态决定域名下拉行为
+
+---
 
 ---
 
 #### 238. 临时邮箱 Provider 插件化 — 新 CF 测试插件重启验证
-
 **时间**：2026-04-21
 
 **背景**：
@@ -1974,651 +931,1615 @@ fix: 修复标准模式小窗 UI 排版错乱（Issue #50）- 响应式断点适
 
 ---
 
-#### 209. 临时邮箱 Provider 插件化 — 文档状态回填与 WORKSPACE 同步
+---
 
+#### 237. 临时邮箱 Provider 插件化 — 真实 moemail 插件验证与单层扫描口径回填
 **时间**：2026-04-21
 
 **背景**：
-用户要求先充分获取上下文，再按当前仓库实际状态修正插件化会话文档，并把本轮操作持续记录到 `WORKSPACE.md`。
+用户说明“本地已经新增了一个真实的插件脚本”，并要求重新启动本地服务看看情况。因此本轮不是继续 mock，而是直接对真实插件文件做一次运行时验证。
 
-**本次核对范围**：
-- 阅读：`docs/PRD/2026-04-21-临时邮箱插件化PRD.md`、`docs/FD/2026-04-21-临时邮箱插件化FD.md`、`docs/TD/2026-04-21-临时邮箱插件化TD.md`、`docs/TDD/2026-04-21-临时邮箱插件化TDD.md`、`docs/TODO/2026-04-21-临时邮箱插件化TODO.md`、`WORKSPACE.md`
-- 核对代码：`outlook_web/services/temp_mail_provider_base.py`、`outlook_web/services/temp_mail_provider_factory.py`、`outlook_web/services/temp_mail_provider_cf.py`、`outlook_web/services/temp_mail_provider_custom.py`、`outlook_web/repositories/settings.py`、`outlook_web/app.py`、`outlook_web/routes/system.py`、`outlook_web/routes/plugins.py`、`outlook_web/controllers/plugins.py`、`outlook_web/services/temp_mail_plugin_manager.py`、`web_outlook_app.py`、`docker-compose.yml`
-- 实际运行：`tests/test_temp_mail_plugin_registry.py`、`tests/test_temp_mail_plugin_factory.py`、`tests/test_temp_mail_plugin_loader.py`
+**本次发现**：
+1. 仓库中的真实插件位置是：
+   - `plugins/temp_mail_providers/test_plugin/moemail.py`
+2. 当前运行中的 5097 服务读取的运行时插件目录是：
+   - `%TEMP%\\plugins\\temp_mail_providers\\`
+3. 当前 loader 的真实扫描口径是：
+   - 只扫描插件目录下一层 `*.py`
+   - 不递归子目录
+4. 因此仅仅重启当前服务，并不会自动读到 `test_plugin/moemail.py` 这种嵌套布局
 
-**核对结论**：
-1. M1 核心链路已在仓库落地，且层 A/B/C 共 27 个用例已实际通过。
-2. M2 后端主干已存在：`temp_mail_plugin_manager.py`、`routes/plugins.py`、`controllers/plugins.py`、`POST /api/system/reload-plugins`、`app.py` 中的插件加载与 Blueprint 注册均已接好。
-3. 当前主要缺口是 CLI：`outlook_web/services/temp_mail_plugin_cli.py` 不存在，`web_outlook_app.py` 也尚未接入子命令；仓库根 `plugins/registry.json` 与 `plugins/temp_mail_providers/.gitkeep` 也未提交。
-4. 当前实现里的插件目录实际以 `DATABASE_PATH` 上级目录为根，即 `<DATABASE_PATH 上级目录>/plugins/...`；这与早期文档中固定仓库根 `plugins/` 的表述不一致。
+**本次处理**：
+1. 将真实插件文件按当前实现口径平铺到运行时插件目录：
+   - `%TEMP%\\plugins\\temp_mail_providers\\moemail.py`
+2. 重启 `manual-accept-live`（`http://127.0.0.1:5097`）
+3. 登录后验证：
+   - `GET /api/plugins`
+   - `GET /api/plugins/moemail/config/schema`
+   - `GET /api/plugins/moemail/config`
+   - `POST /api/plugins/moemail/test-connection`
 
-**本次文档回填**：
-- 更新 `docs/PRD/2026-04-21-临时邮箱插件化PRD.md`：将“待开发”修正为“开发中”，补入后端主干已落地与实际插件目录口径。
-- 更新 `docs/FD/2026-04-21-临时邮箱插件化FD.md`：修正“待代码实现”表述，并标注已存在/待实现模块。
-- 更新 `docs/TD/2026-04-21-临时邮箱插件化TD.md`：将“当前技术现状”改为当前仓库实现状态说明，明确路径口径偏差。
-- 更新 `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`：把初始基线与本轮核对结果分开记录，并将 A/B/C 已通过项勾选。
-- 更新 `docs/TDD/2026-04-21-临时邮箱插件化TDD.md`：补充本轮已跑通过的测试与尚未实现的 CLI 状态。
+**本次真实结果**：
+1. `moemail` 已出现在真实插件列表中：
+   - `moemail_status = "installed"`
+2. `config/schema` 可正常读取，字段包括：
+   - `base_url`
+   - `api_key`
+   - `domains`
+   - `default_domain`
+   - `default_expiry_ms`
+   - `request_timeout`
+3. 默认配置为空时，测试连接返回：
+   - `CONNECTION_FAILED`
+   - `Moemail base_url 未配置`
+4. 结论：
+   - 插件本体可被真实服务识别
+   - 当前缺的不是加载，而是后续正式配置
+   - 若要保持仓库里的嵌套目录布局长期可用，后续需要扩 loader；否则应继续按“单层平铺 `.py`”使用
+
+**本次文档同步**：
+1. `临时邮箱Provider插件接入说明.md`
+   - 补入：当前 loader 只扫描单层 `*.py`，不递归子目录
+2. `临时邮箱Provider插件接入提示词.md`
+   - 补入：不要把插件做成嵌套目录结构
+3. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
+   - 补入：真实 `moemail.py` 验证得到的单层扫描口径
 
 **当前状态**：
-本轮仅执行文档与 `WORKSPACE.md` 同步，未继续推进 CLI、前端或插件占位文件创建。
+1. 5097 服务已经完成一次基于真实 `moemail.py` 的重启验证。
+2. 当前最准确的使用建议是：**插件文件直接平铺到运行时插件目录下一层**。
 
 ---
 
-#### 208. 临时邮箱 Provider 插件化 — PRD 评估与实施讨论
+---
 
+#### 236. 临时邮箱 Provider 插件化 — 本地 commit 已创建（未推送）
 **时间**：2026-04-21
 
 **背景**：
-用户提供了关于“临时邮箱 Provider 插件化”的 PRD (`docs/PRD/2026-04-21-临时邮箱插件化PRD.md`)，要求评估其具体表现和实现思路。
+在 235 中先记录了本地提交计划后，本轮已实际完成一次本地 commit。用户要求“不要推送”，因此这里只记录本地 git 提交结果，不进行任何远端操作。
 
-**评估结论**：
-这份 PRD 内容表现非常务实和清晰，主要体现在以下几个方面：
-1. **切中要害**：准确抓住了 Docker 普通用户无法改代码、改镜像的痛点，给出了“一键安装、点按钮配参数”的产品方案。
-2. **架构克制**：在 v1 阶段不做复杂的权限沙箱隔离、不做文件自动热更新，而是让用户主动点击“刷新插件”，这极大降低了服务端状态混乱和崩溃的风险。
-3. **扩展性强**：基于 JSON Schema 动态生成配置表单，以及通过 `registry.json` 中心化管理，让插件开发者也有明确的规范可循。
+**本次结果**：
+1. 本地 commit 已成功创建：
+   - `8ba2d20`
+   - 提交信息：`feat: 完成临时邮箱Provider插件化与接入文档`
+2. 本次 commit 已包含：
+   - 插件化后端代码
+   - 插件管理前端
+   - 插件化测试
+   - README / 接入文档 / 会话文档 / `WORKSPACE.md`
+3. 本次明确未做：
+   - `git push`
+   - 远端分支同步
 
-**具体实现思路（四步走）**：
-1. **底层机制改造 (Phase 1)**：把原来写死在 `factory.py` 里的 `if/elif` 改成动态注册表。提供一个 `@register_provider` 装饰器，并且在 Flask 启动时以及用户调用“刷新插件”接口时，使用 `importlib` 扫描 `plugins/temp_mail_providers/` 目录下的所有 Python 文件加载进内存。
-2. **插件生命周期 API (Phase 1-2)**：实现读取官方 `registry.json` 的列表接口；实现下载 `.py` 文件并保存到本地目录的安装接口；实现删除文件的卸载接口。
-3. **动态配置与存储 (Phase 2)**：读取插件类自带的 `config_schema`，让前端动态渲染输入框。所有配置以 `plugin.插件名.字段名` 为 Key 存在现有的 SQLite `settings` 表中。
-4. **前端对接 (Phase 2)**：在设置页增加“插件管理”面板，同时让现有的“临时邮箱”下拉选择框能够读到加载好的第三方插件并走一样的流程。
+**额外说明**：
+1. `.github/copilot-instructions.md` 没有纳入本次提交。
+2. 本条 236 号记录用于把“本地提交已实际完成”这件事同步回 `WORKSPACE.md`。
 
-**当前状态**：已完成 PRD 的阅读评估并在本地工作区记录，准备确认无误后进入具体开发阶段。
+**当前状态**：
+1. 插件化相关改动已经至少有一条本地 commit 承载。
+2. 当前仍未向远端推送。
 
 ---
 
-## 2026-04-19
+---
 
-### 操作记录
-
-#### 169. 数据概览页（Dashboard 重构）— PRD 需求讨论与 UI 样例
-
-**时间**：2026-04-19
+#### 235. 临时邮箱 Provider 插件化 — 本地提交本轮改动（不推送）
+**时间**：2026-04-21
 
 **背景**：
-用户提出在前端新增一个综合数据大盘页面，全面替换现有 `page-dashboard`，聚合展示邮件系统的运营数据。
+在插件化功能、真实验收闭环、接入文档与路径迁移都完成后，用户进一步要求“现在可以尝试一下本地提交一下，不要推送”。因此本轮目标是只在本地创建 commit，不执行任何 push。
 
-**讨论决策**：
+**本次提交范围原则**：
+1. 纳入本轮插件化相关代码、测试、README、接入文档与 `WORKSPACE.md`
+2. 不纳入明显不属于本轮范围的文件（如 `.github/copilot-instructions.md`）
+3. 只做本地 commit，不做远端推送
 
-| 决策点 | 结论 |
-|--------|------|
-| 覆盖范围 | 综合大盘：账号健康 + 验证码提取 + 对外API + 邮箱池 + 系统活动 |
-| 布局样式 | Tab 切换布局（复用 settings-tab 风格） |
-| 与现有 dashboard 关系 | 全面替换 |
-| 图表库 | 不引入，纯 CSS 数据展示 |
-| 验证码提取耗时 | 新增 `verification_extract_logs` 表（精准记录每次提取耗时） |
-
-**Tab 结构**：
-1. 📊 总览 — 账号状态分布、邮箱池分布、刷新健康度
-2. 🔑 验证码提取 — 通道成功率、平均耗时、近期记录
-3. 🌐 对外 API — 日调用趋势（纯CSS柱图）、端点分布、调用方排名
-4. 🎱 邮箱池 — Claim/Complete/Release 统计、项目维度复用率
-5. 📋 系统活动 — 审计操作分布、通知推送健康、活动时间线
-
-**产出**：
-- 创建 `preview_dashboard.html`（独立预览文件，假数据，可直接浏览器打开查看效果）
-
-**状态**：UI 样例已创建，进入 PRD 讨论阶段（需求/Use Case 层面，不含技术细节）
+**当前状态**：
+1. `WORKSPACE.md` 已补记本次本地提交动作。
+2. 下一步将按本轮插件化相关文件创建本地 commit。
 
 ---
 
-#### 170. 数据概览页 — PRD 需求讨论（Use Case 聚焦）
+---
 
-**时间**：2026-04-19
+#### 234. 临时邮箱 Provider 插件化 — 接入文档迁移到项目根目录并修正引用
+**时间**：2026-04-21
 
-**讨论背景**：
-用户明确 PRD 讨论只需聚焦需求/Use Case，不含具体技术实现细节（接口设计、表结构等留待后续阶段）。
+**背景**：
+在 233 中已经按当时要求把两份接入文档落到 `docs/` 根目录，但用户随后进一步要求“放在我们的这个项目的根目录下面”，并继续要求把相关文档与 `WORKSPACE.md` 同步更新。因此本轮做的是路径迁移与引用修正，而不是重写内容。
 
-**进行中**：与用户逐步明确各 Tab 的具体使用场景与数据需求
+**本次迁移**：
+1. 将以下文件从 `docs/` 移动到项目根目录：
+   - `docs/临时邮箱Provider插件接入说明.md` → `临时邮箱Provider插件接入说明.md`
+   - `docs/临时邮箱Provider插件接入提示词.md` → `临时邮箱Provider插件接入提示词.md`
+2. 文档正文中的互相引用同步改为根目录路径：
+   - `临时邮箱Provider插件接入说明.md`
+   - `临时邮箱Provider插件接入提示词.md`
 
-**已确认 Tab（全部以 preview_dashboard.html 为准）：**
-- **Tab 1 总览**：账号状态分布、邮箱池快照（in_use/available/cooldown）、Token 刷新健康度、今日收件/提取快捷数字卡片 ✅
-- **Tab 2 验证码提取**：近7天KPI（提取次数/成功率/AI兜底/平均耗时）、各通道成功率进度条、各通道平均耗时进度条、近10条提取记录表格 ✅
-- **Tab 3 对外 API**：今日调用/7日总量/活跃Key数/成功率 KPI、近7天纯CSS柱图、端点调用分布进度条、调用方排名表格 ✅
-- **Tab 4 邮箱池**：可用/占用/7日Claim/成功完成率/复用率 KPI、7日操作分布进度条（Claim/Complete/Release/Expire）、项目维度Top5表格、最近邮箱池操作表格 ✅
-- **Tab 5 系统活动**：审计操作/Telegram/Email/Webhook KPI、通知推送健康进度条、操作类型分布进度条、最近系统活动时间线 ✅
+**本次相关文档更新**：
+1. `README.md`
+   - “项目文档”章节中的两条入口改为根目录链接：
+     - `./临时邮箱Provider插件接入说明.md`
+     - `./临时邮箱Provider插件接入提示词.md`
+2. `WORKSPACE.md`
+   - 新增本条 234 号记录，说明这次路径迁移与引用修正
 
-**设计原则**：所有 Tab 数据项均以 `preview_dashboard.html` 为准。
+**当前状态**：
+1. 两份接入文档现在都位于项目根目录。
+2. README 入口已同步到新路径。
+3. 文档正文互链已同步，不会再跳回旧的 `docs/` 路径。
 
-**产出**：
-- 创建 `docs/PRD/` 目录
-- 创建 `docs/PRD/2026-04-19-数据概览大盘PRD.md`（5 UC + 功能范围 + 验收标准 + 依赖项）
-- 创建 `docs/FD/2026-04-19-数据概览大盘FD.md`（数据模型/接口契约/前端模块/埋点设计/DB v23 迁移）
-- 创建 `docs/TD/2026-04-19-数据概览大盘TD.md`（DB迁移SQL/埋点实现/Blueprint注册/文件改动汇总/实现顺序/测试要点）
+---
 
-#### 171. 数据概览大盘 — PRD/FD/TD 三份文档 Review 与勘误
+---
 
-**时间**：2026-04-19
+#### 233. 临时邮箱 Provider 插件化 — 新增根目录接入说明与 Agent 接入提示词
+**时间**：2026-04-21
 
-**Review 发现的遗漏（均已修正）**：
+**背景**：
+在插件化真实闭环已经完成后，用户继续要求基于“当前文档设计和项目内容”补两份新的接入资料：一份给人直接阅读的接入说明，一份给 Agent 直接执行代码实现的提示词；同时要求两份都放在 `docs/` 根目录，并补 README 入口。
 
-| 文件 | 遗漏/错误 | 处置 |
+**本次文档新增**：
+1. `docs/临时邮箱Provider插件接入说明.md`
+   - 面向开发者
+   - 说明 Provider 插件接入目标、真实运行时路径、基类契约、`config_schema`、方法返回结构、registry 安装方式、推荐验收步骤与最小清单
+   - 明确当前真实路径口径是 `<DATABASE_PATH 上级目录>/plugins/...`
+2. `docs/临时邮箱Provider插件接入提示词.md`
+   - 面向 AI / Agent
+   - 给出可直接发送的接入提示词模板
+   - 明确边界：不要重做插件系统主干，而是在现有插件架构上新增 Provider
+   - 要求 Agent 先读接入说明与插件化主文档，再实现代码、测试与文档
+
+**本次 README 更新**：
+1. `README.md`
+   - 在“项目文档”章节新增：
+     - `docs/临时邮箱Provider插件接入说明.md`
+     - `docs/临时邮箱Provider插件接入提示词.md`
+   - 补充说明：新增 Provider 时优先阅读这两份文档
+
+**本次落盘策略**：
+1. 两份文档都放在 `docs/` 根目录（按用户要求）
+2. 没有沿用 `docs/DEV/`，也没有拆到 `docs/API/`
+
+**当前状态**：
+1. 现在仓库里已经同时具备：
+   - 面向人的 Provider 接入说明
+   - 面向 Agent 的 Provider 接入提示词
+2. README 也已经补上入口，不需要再靠会话记忆找文档。
+
+---
+
+---
+
+#### 232. 临时邮箱 Provider 插件化 — 页面级点击验收确认 load_failed 错误卡片可见
+**时间**：2026-04-21
+
+**背景**：
+在 231 中已经完成 API 层与真实 HTTP 链路复测，但用户继续明确选择“继续做一次页面级点击验收”。因此本轮继续站在真实前端页面上操作，而不是停在接口层。
+
+**本次验收方式**：
+1. 继续复用：
+   - `manual-accept-live` → `http://127.0.0.1:5097`
+   - `manual-plugin-feed` → `http://127.0.0.1:5096`
+2. 使用 Playwright 对真实页面执行：
+   - 访问 `/login`
+   - 输入密码登录
+   - 点击左侧“设置”
+   - 切到“临时邮箱”Tab
+   - 展开“插件管理”卡片
+   - 真实点击“应用变更”
+3. 等待前端完成：
+   - `POST /api/system/reload-plugins`
+   - 随后重渲染插件列表
+
+**本次页面级结果**：
+1. `reload_failed_names = ["manual_mock_broken"]`
+2. 页面徽标：`已安装 2 个`
+3. `#plugin-item-manual_mock_broken` 卡片可见
+4. 卡片内可见：
+   - “加载失败”状态徽标
+   - `ModuleNotFoundError: No module named 'definitely_missing_manual_plugin_dependency'`
+5. 结论：真实用户在页面中点击“应用变更”后，已经能够直接看到 `load_failed` 错误卡片，不再需要只靠接口观察
+
+**本次文档同步**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 在 `T4.4` 下补入页面级点击验收结论
+   - 在 M4 当前状态中补入“真实 UI 已展示加载失败卡片”
+2. `docs/TDD/2026-04-21-临时邮箱插件化TDD.md`
+   - 补入页面级点击验收结论
+
+**当前状态**：
+1. 插件错误态已经完成 route mock、API 链路、真实 HTTP、真实页面点击四层验证。
+2. 当前 5097 / 5096 环境仍可继续复用。
+
+---
+
+---
+
+#### 231. 临时邮箱 Provider 插件化 — 修复 load_failed 聚合并完成真实复测
+**时间**：2026-04-21
+
+**背景**：
+在 230 中已经确认真实缺口位于 `/api/plugins` 没有消费 `reload-plugins` 的 failed 结果，导致故障插件仍显示为 `installed`。本轮继续按真实链路收口，先修代码，再用同一套人工验收实例重新验证。
+
+**本次实现**：
+1. 修改 `outlook_web/services/temp_mail_provider_factory.py`
+   - 新增 `_PLUGIN_LOAD_STATE`
+   - 新增 `get_plugin_load_state()`
+   - `load_plugins()` 现在会持久化最近一次插件加载结果
+   - 对“同一故障文件未变化时跳过重复导入”的路径，保留上一次 failed 状态，供 API 聚合读取
+2. 修改 `outlook_web/controllers/plugins.py`
+   - `api_get_plugins()` 改为聚合：
+     - `get_available_plugins()`
+     - `get_installed_plugins()`
+     - `get_plugin_load_state()`
+   - 故障插件现在返回 `status = "load_failed"`，并附带 `error`
+   - `installed_count` 改为仅统计真实 `installed` 项
+3. 修改测试：
+   - `tests/test_temp_mail_plugin_api.py`
+     - 新增 `test_get_plugins_marks_load_failed_status`
+   - `tests/test_temp_mail_plugin_loader.py`
+     - 新增 `test_reload_retains_failed_plugin_state_for_api_consumption`
+     - 补齐插件测试目录的清理，避免残留文件污染后续用例
+
+**本次验证**：
+1. 自动化验证：
+   - `python -m pytest tests/test_temp_mail_plugin_loader.py tests/test_temp_mail_plugin_api.py -v --tb=short`
+   - 结果：`34 passed`
+2. 真实人工验收环境复测：
+   - 重启 `manual-accept-live`（`http://127.0.0.1:5097`）
+   - 继续复用 `manual-plugin-feed`（`http://127.0.0.1:5096`）
+   - 登录后先获取 `/api/csrf-token`
+   - 带 `X-CSRFToken` 调用 `POST /api/system/reload-plugins`
+   - 随后调用 `GET /api/plugins`
+   - 实际结果：
+     - `reload_failed_names = ["manual_mock_broken"]`
+     - `manual_mock_broken.status = "load_failed"`
+     - `manual_mock_broken.error` 含 `ModuleNotFoundError`
+     - `installed_count = 2`
+
+**本次文档同步**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - M4 改回已完成
+   - T4.4 错误态改回已完成
+   - 完成定义改为 8 条均已满足
+2. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
+   - 顶部状态改为真实后端闭环已完成
+3. `docs/TDD/2026-04-21-临时邮箱插件化TDD.md`
+   - 补入新增用例与真实复测结论
+4. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
+   - 补入状态缓存与聚合修复口径
+
+**当前状态**：
+1. `load_failed` 错误态已完成真实后端到前端贯通。
+2. 插件化任务当前已重新回到“完成”状态。
+
+---
+
+---
+
+#### 230. 临时邮箱 Provider 插件化 — 真实人工模拟发现 load_failed 错误态未贯通
+**时间**：2026-04-21
+
+**背景**：
+在人工验收实例与模拟操作说明都准备好后，用户继续要求“你来帮助我来进行模拟一下，看看到底情况是怎么样的”。因此本轮没有停在说明层，而是直接在当前临时验收环境里放入示例插件、启动本地插件源、登录真实实例并逐条打插件 API，验证实际链路。
+
+**本次模拟准备**：
+1. 在 `%TEMP%\\plugins\\temp_mail_providers\\` 放入：
+   - `manual_mock_installed.py`（正常插件）
+   - `manual_mock_broken.py`（故障插件，导入缺失依赖）
+2. 在 `%TEMP%\\manual-plugin-feed\\` 放入：
+   - `manual_mock_available.py`（可安装插件）
+3. 在 `%TEMP%\\plugins\\registry.json` 写入 3 个插件条目
+4. 启动本地插件源：
+   - `python -m http.server 5096 --bind 127.0.0.1`
+
+**本次真实链路验证**：
+1. 已通过的真实链路：
+   - `GET /api/plugins/manual_mock_installed/config/schema` → 返回 schema
+   - `GET /api/plugins/manual_mock_installed/config` → 返回默认配置
+   - `POST /api/plugins/manual_mock_installed/config` → 保存成功
+   - `POST /api/plugins/manual_mock_installed/test-connection` → 返回“连接成功”
+   - `POST /api/plugins/install` 安装 `manual_mock_available` → 成功
+   - `POST /api/system/reload-plugins` → 成功加载 `manual_mock_available` 与 `manual_mock_installed`
+2. 发现的真实缺口：
+   - `POST /api/system/reload-plugins` 明确返回：
+     - `manual_mock_broken` in `failed`
+     - 错误：`ModuleNotFoundError: No module named 'definitely_missing_manual_plugin_dependency'`
+   - 但随后 `GET /api/plugins` 仍返回：
+     - `manual_mock_broken.status = "installed"`
+   - 结论：当前真实后端链路下，`load_failed` 没有被 `/api/plugins` 消费，前端无法真实显示“加载失败”错误态
+
+**本次文档更新**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 将 M4 从“已完成”调整为“主体已完成，但真实 `load_failed` 错误态仍待打通”
+   - 将 T4.4 的“错误态”验收项改回未完成，并补入真实人工模拟的结论
+   - 将“当前收口基线”改为“当前验证基线”
+   - 在完成定义中新增第 8 条：真实后端链路需把加载失败错误态展示到 UI
+2. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
+   - 顶部当前实施状态补入：真实 `load_failed` 错误态尚未贯通
+3. `docs/TDD/2026-04-21-临时邮箱插件化TDD.md`
+   - 补入：自动化未覆盖的真实集成缺口
+4. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
+   - 补入：`reload_plugins()` failed 结果未进入 `/api/plugins` 输出
+
+**当前状态**：
+1. 当前可以真实确认：安装、配置保存、测试连接、available → installed 主链都能跑通。
+2. 当前仍待修复：`load_failed` 错误态的真实后端到前端贯通。
+
+---
+
+---
+
+#### 229. 临时邮箱 Provider 插件化 — 补充人工/模拟验收操作说明
+**时间**：2026-04-21
+
+**背景**：
+在人工验收实例已经启动可访问后，用户继续追问“我们现在该如何进行模拟测试、该怎么实际操作”。为避免这些关键信息只停留在对话里，本轮把可复用的手工验收思路同步回 TODO 和 `WORKSPACE.md`。
+
+**本次修改**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 在 `T4.4 前端手动验收` 的当前状态下新增“**可复用的人工/模拟验收路径**”
+   - 明确写出：
+     - 登录验收实例后进入 `设置 → 临时邮箱 → 插件管理`
+     - 基础交互先验证折叠态 / 展开态 / 刷新 / 应用变更
+     - 如需模拟“已安装 / 加载失败”，在 `<DATABASE_PATH 上级目录>\\plugins\\temp_mail_providers\\` 放置正常/故障插件文件后点击“应用变更”
+     - 如需模拟“安装 / 自定义安装”，通过 `registry.json` 或“自定义安装”URL 输入完成
+     - 如需模拟“配置 / 测试连接”，插件类需要提供 `config_schema` 与 `get_options()`
+
+**当前状态**：
+1. 现在只看 TODO 的 `T4.4` 小节，就能知道人工点验应该从哪里进、如何模拟不同状态。
+2. 当前人工验收实例仍运行在 `http://127.0.0.1:5097`，可继续配合上述步骤使用。
+
+---
+
+---
+
+#### 228. 临时邮箱 Provider 插件化 — 启动可访问的人工验收实例
+**时间**：2026-04-21
+
+**背景**：
+在重新核对实现现状、并再次跑通专项与完整回归后，用户继续要求“启动一下人工来验收”。考虑到 detached 模式下 `python web_outlook_app.py` 在本环境里会 exit code 0 但不实际监听端口，本轮改用附着式长运行会话启动临时验收实例，并先自行验证可访问性，再把地址反馈给用户。
+
+**本次实际操作**：
+1. 先尝试 detached 启动：
+   - `HOST=127.0.0.1`
+   - `PORT=5098`
+   - `DATABASE_PATH=%TEMP%\\outlookEmail-manual-accept.db`
+   - 结果：进程退出后 5098 未监听，`/login` 返回 `502 Bad Gateway`
+2. 随后改为附着式异步会话启动：
+   - `HOST=127.0.0.1`
+   - `PORT=5097`
+   - `DATABASE_PATH=%TEMP%\\outlookEmail-manual-accept-live.db`
+   - `SCHEDULER_AUTOSTART=false`
+   - 使用临时登录口令 `admin12345`
+3. 实际验证：
+   - `Invoke-WebRequest http://127.0.0.1:5097/login` → `StatusCode = 200`
+   - `Get-NetTCPConnection -LocalPort 5097 -State Listen` → 监听存在
+
+**当前状态**：
+1. 当前已有一个可访问的临时人工验收实例运行在 `http://127.0.0.1:5097`。
+2. 该实例使用独立临时数据库，不影响现有数据。
+3. 若后续需要结束该实例，应在当前会话中显式停止 `manual-accept-live` 这个 PowerShell 会话。
+
+---
+
+---
+
+#### 227. 临时邮箱 Provider 插件化 — 重新核对实现状态并重跑专项/完整回归
+**时间**：2026-04-21
+
+**背景**：
+在插件化 TODO 已经完成收口后，用户继续要求：先汇报几个任务功能实现的现状，再直接检查文档并重新启动测试。为避免只凭上一轮结果复述，本轮先重新读取了关键实现文件，再重新执行插件专项和完整回归。
+
+**本次重新核对的实现现状**：
+1. `outlook_web/services/temp_mail_provider_base.py`
+   - `register_provider()`、`get_registry()` 与 `TempMailProviderBase` 的 provider 元信息类属性均已存在
+2. `outlook_web/services/temp_mail_provider_factory.py`
+   - `_BUILTIN_PROVIDERS`、`load_plugins()`、`reload_plugins()`、`get_available_providers()` 均已落地
+3. `outlook_web/services/temp_mail_plugin_manager.py`
+   - `install_plugin()`、`uninstall_plugin()`、配置 CRUD、`test_plugin_connection()` 均已落地
+4. `web_outlook_app.py`
+   - `install-provider` / `uninstall-provider` / `list-providers` 三个 CLI 入口已接入
+5. `static/js/features/plugins.js`
+   - `loadPlugins()`、`install()`、`uninstall()`、`testConnection()`、`applyChanges()`、`customInstall()`、`init()` 均已存在并启用
+6. 浏览器 unittest
+   - `tests/test_account_edit_browser_flow.py`
+   - `tests/test_csrf_browser_recovery.py`
+   - 当前均已改为面向 DOM 就绪的等待，不再依赖 `networkidle`
+
+**本次测试结果**：
+1. 插件化专项：
+   - `python -m unittest discover -s tests -p "test_temp_mail_plugin_*.py" -v`
+   - 结果：`Ran 89 tests in 1.826s`，`OK`
+2. 完整回归：
+   - `python -m unittest discover -s tests -v`
+   - 结果：`Ran 1332 tests in 369.705s`，`OK (skipped=7)`
+
+**本次文档更新**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 将完整回归时长从上一轮结果刷新为本轮最新值 `369.705s`
+2. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
+   - 顶部当前实施状态中的完整回归结果刷新为本轮最新值
+3. `docs/TDD/2026-04-21-临时邮箱插件化TDD.md`
+   - 完整回归结果刷新为本轮最新值
+4. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
+   - 顶部现状、测试现状与 M5 小结中的完整回归结果刷新为本轮最新值
+
+**当前状态**：
+1. 本轮已再次确认：插件化功能实现主链完整存在，且专项 + 完整回归均可重复跑通。
+2. 当前最新基线为：
+   - 插件化专项：`Ran 89 tests in 1.826s`，`OK`
+   - 完整回归：`Ran 1332 tests in 369.705s`，`OK (skipped=7)`
+
+---
+
+---
+
+#### 226. 检索 OpenCode Go 套餐计费模式并同步文档
+**时间**：2026-04-21
+
+**背景**：
+用户要求检索 opencode go 套餐的计费模式，并根据实际检索结果修改相关文档，将操作及时记录到 WORKSPACE.md。
+
+**检索来源**：
+- https://opencode.ai/go
+- https://opencode.ai/zen
+- https://opencode.ai/enterprise
+
+**OpenCode Go 计费模式实际结果**：
+
+| 项目 | 详情 |
+|------|------|
+| 套餐名称 | OpenCode Go |
+| 首月价格 | $5 |
+| 续费价格 | $10/月 |
+| 计费方式 | 订阅制，按月扣费 |
+| 取消政策 | 可随时取消 |
+| 额外充值 | 支持 Top up credit |
+| 适用对象 | 可与任何 coding agent 配合使用（不限于 OpenCode） |
+
+**Go 套餐包含模型及 5 小时请求限额**：
+
+| 模型 | 每 5 小时请求数 |
+|------|----------------|
+| Big Pickle + free models | 200 |
+| GLM-5.1 | 880 |
+| Kimi K2.6 | 3,450（当前享 3 倍用量，限时至 4 月 27 日） |
+| MiMo-V2-Pro | 1,290 |
+| Qwen3.6 Plus | 3,300 |
+| MiniMax M2.7 | 3,400 |
+| Qwen3.5 Plus | 10,200 |
+| 其他包含 | GLM-5、Kimi K2.5、MiMo-V2-Omni、MiniMax M2.5 |
+
+**同平台其他方案对比**：
+
+| 方案 | 定价模式 | 特点 |
 |------|---------|------|
-| TD 文件改动汇总 | 缺少 `templates/partials/scripts.html`（需新增 `overview.js` 引用） | 已补充 |
-| TD 文件改动汇总 | 缺少 `static/js/main.js`（`navigate` 调用改为 `initOverview()`，topbar 标题更新）| 已补充 |
-| TD 文件改动汇总 | 缺少 `static/js/i18n.js`（新增 `'数据概览'`/`'运营数据大盘'` 英文翻译） | 已补充 |
-| TD 前端 JS 章节 | 未给出 `main.js` 具体改动代码 | 已补充三处改动代码示意 |
-| FD 前端模块设计 | 未覆盖 `scripts.html` 引用 + `main.js` 导航入口 + `i18n.js` | 已新增 4.5 节 |
+| **Go** | $5 首月，之后 $10/月 | 订阅制，慷慨限额，适合高频使用 |
+| **Zen** | 预存 $20 + $1.23 手续费，按请求扣费 | 零加价，余额低于 $5 自动续充，更灵活 |
+| **Enterprise** | 联系销售定制 | 企业级部署、SSO、内部 AI 网关集成 |
+| **Free** | 免费 | 仅包含基础免费模型，限额较低 |
 
-**确认正确的设计**：
-- `get_verification_result`（`external_api.py:913`）是**所有**提取场景（验证码/链接/前端手动/外部API）的唯一公共入口，在此处加埋点覆盖完整 ✅
-- `templates/partials/scripts.html` 是前端 JS 文件的统一加载入口（非 `index.html` 直接引入）✅
-- `main.js:L465` topbar 标题需从「仪表盘/系统概览」改为「数据概览/运营数据大盘」✅
+**当前状态**：
+OpenCode Go 套餐计费模式已确认并记录到 WORKSPACE.md。如需整理为独立知识库文档（如 docs/ 下的外部资料备忘），可继续执行。
+
+---
+
+---
+
+#### 225. 临时邮箱 Provider 插件化 — 继续收口 TODO 文案与完成定义
+**时间**：2026-04-21
+
+**背景**：
+在完整回归已经拿到绿灯后，用户进一步要求“继续完善我们的 TODO，看一下具体情况内容”，并再次强调所有结果都要先充分获取上下文、同步相关文档与 `WORKSPACE.md`。重新通读 `docs/TODO/2026-04-21-临时邮箱插件化TODO.md` 后，发现虽然里程碑状态已经改为全绿，但仍残留少量进行时口径，不利于后续直接把 TODO 当作已完成任务单阅读。
+
+**本次修改**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 将 TDD 基线表中的“当前主要差异”改为“当前收口结论”，避免在任务已完成后继续保留“差异”语义
+   - 将 T1.5 中“现有测试全量回归不报错”补勾为已完成
+   - 将“## 5. 下一轮准备”改名为“## 5. 当前收口基线”，更符合当前任务已经完成的实际状态
+   - 在“## 7. 完成定义”下补充当前状态说明：上述 7 条已满足，本期插件化已完成
+
+**当前状态**：
+1. TODO 现在不仅反映“测试已通过”，也在文案层明确表达了“任务已收口完成”。
+2. 当前插件化相关主文档、测试结果与 `WORKSPACE.md` 记录已保持一致。
+
+---
+
+---
+
+#### 224. 临时邮箱 Provider 插件化 — 修复浏览器 unittest 等待条件并拿到完整 discover 绿灯
+**时间**：2026-04-21
+
+**背景**：
+在完成 T4.4 浏览器级手动验收后，用户明确要求继续推进 M5，并再次强调所有动作前先充分获取上下文、同时持续同步会话文档与 `WORKSPACE.md`。重新核对 `tests/test_account_edit_browser_flow.py` 与 `tests/test_csrf_browser_recovery.py` 后，发现两者都依赖 `page.wait_for_load_state("networkidle")`，而页面初始化阶段本身会并发触发 `groups / accounts / settings / version-check / plugins` 等后台请求，这使“页面可操作”与“网络彻底静默”被混为一谈，导致完整 discover 场景更容易卡住。
+
+**本次排查与验证**：
+1. 先单跑两个浏览器 unittest：
+   - `python -m unittest tests.test_account_edit_browser_flow.AccountEditBrowserFlowTests.test_browser_can_edit_outlook_remark_without_reentering_credentials -v`
+   - `python -m unittest tests.test_csrf_browser_recovery.CsrfBrowserRecoveryTests.test_browser_recovers_after_stale_csrf_token_and_retries_once -v`
+   - 两者均可单独通过
+2. 查询 Playwright 官方资料后，确认 `networkidle` 更适合等待网络空闲，不适合作为 UI ready 的主要断言；更推荐用 URL / locator / DOM 状态等 web-first 等待。
+3. 修改：
+   - `tests/test_account_edit_browser_flow.py`
+   - `tests/test_csrf_browser_recovery.py`
+   - 将登录后的 `networkidle` 等待改为：
+     - `wait_for_url(..., timeout=60_000)`
+     - `#app` 可见
+     - `#page-mailbox` 不再带 `page-hidden`
+     - 再等待该测试真正关心的控件/数据出现
+4. 修改后再次验证：
+   - `python -m unittest tests.test_account_edit_browser_flow tests.test_csrf_browser_recovery -v` → `Ran 2 tests`，`OK`
+   - `python -m unittest discover -s tests -v` → `Ran 1332 tests in 352.180s`，`OK (skipped=7)`
+
+**本次文档更新**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 将 M5 更新为已完成
+   - 将 T5.2 当前状态改为完整 discover 已通过
+   - 将顶部“当前主要差异”与“下一轮准备”改为已收口口径
+2. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
+   - 顶部当前实施状态补入完整 discover 通过结果
+3. `docs/TDD/2026-04-21-临时邮箱插件化TDD.md`
+   - 将“浏览器 unittest 卡住”更新为“等待条件修复后完整 discover 通过”
+4. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
+   - 顶部现状、测试现状与 M5 小结改为完整回归已通过
+
+**当前状态**：
+1. 插件化任务现已完成 M1、M2、M3、M4、M5。
+2. 当前工作树的最终回归基线：
+   - 插件化专项：`89/89 passed`
+   - 完整回归：`Ran 1332 tests in 352.180s`，`OK (skipped=7)`
+
+---
+
+---
+
+#### 223. 临时邮箱 Provider 插件化 — 完成 T4.4 浏览器级手动验收
+**时间**：2026-04-21
+
+**背景**：
+用户明确要求按 TODO 顺序继续推进，先完成 T4.4「前端手动验收」，并且要求实际“启动一下看一下”。最初尝试 detached 启动 `web_outlook_app.py` 时，外部进程未能稳定提供可访问页面，因此本轮改用与现有浏览器测试一致的方式：在单次脚本中临时启动测试内 Web 服务，再用 Playwright 对插件管理 UI 做真实交互验收。
+
+**本次实际执行**：
+1. 使用 `tests._import_app.import_web_app_module()` + `werkzeug.serving.make_server()` 启动临时本地 Web 服务。
+2. 使用 Playwright 打开真实设置页，并对插件接口做 route mock，分别覆盖：
+   - 折叠态：标题与已安装数量 badge
+   - 展开态：已安装 / 可安装 / 加载失败三类插件项
+   - 安装流程：点击安装后的成功提示
+   - 配置态：动态表单渲染、测试连接、保存配置
+   - 错误态：加载失败错误信息展示
+   - 自定义安装：模态框输入名称和 URL 后完成提交
+3. 首次脚本运行时仅因当前 Playwright 版本不支持 `page.expect_dialog()` 中断；改为 `page.on('dialog', ...)` 后补跑通过。
+
+**本次实际结果**：
+1. T4.4 共 10 个检查点全部通过，最终输出：
+   - `总检查项: 10`
+   - `失败项: 0`
+2. 结论上可将 M4 从“代码主干已完成、手动验收暂缓”更新为“代码主干与浏览器级手动验收均已完成”。
+
+**本次文档更新**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 将 M4 完成度更新为已完成
+   - 勾选 T4.4 的 6 个验收项
+   - 将“下一轮准备”中的 M4 项改为已完成、无需重复执行
+2. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
+   - 顶部当前实施状态补入：浏览器级手动验收已完成
+3. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
+   - 将 M5 小结中的浏览器级手动验收改为已完成
+
+**当前状态**：
+1. 插件化任务现已完成 M1、M2、M3、M4。
+2. 当前剩余主阻塞仅为完整 `python -m unittest discover -s tests -v` 中的 2 个 Playwright unittest 卡点。
+
+---
+
+---
+
+#### 222. 临时邮箱 Provider 插件化 — 补充 TODO 顶部完成度概览
+**时间**：2026-04-21
+
+**背景**：
+用户直接追问“TODO 效果怎么样了，完成到哪里了”。为避免每次都需要从分散的勾选项里人工推断状态，本轮把当前会话已经确认的里程碑进度直接收敛成一张概览表，放到 TODO 顶部。
+
+**本次修改**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 新增“**2.1 当前完成度概览**”表格
+   - 逐项总结：
+     - M1：已完成
+     - M2：已完成
+     - M3：已完成
+     - M4：代码主干已完成，浏览器级手动验收暂缓
+     - M5：插件化专项 `89/89`、E2E 与非浏览器全量回归已通过；2 个 Playwright unittest 后续再修
+
+**当前状态**：
+1. 现在只看 TODO 顶部，就能快速知道本任务已经推进到哪个里程碑。
+2. 本轮仍然只是文档整理，没有新增测试执行。
+
+---
+
+---
+
+#### 221. 临时邮箱 Provider 插件化 — 梳理下一轮准备清单
+**时间**：2026-04-21
+
+**背景**：
+在用户要求“继续梳理 TODO 剩余项并做下一轮准备”后，我先重新读取了 TODO 中所有未完成项，确认当前真正剩余的不是泛泛的“还没做完”，而是两个明确的收尾方向：浏览器级手动验收，以及 2 个 Playwright unittest 的卡点修复。
+
+**本次修改**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 新增“**5. 下一轮准备（截至当前会话）**”小节
+   - 明确写出：
+     - 若继续 M5，应优先单独排查 `tests/test_account_edit_browser_flow.py` 与 `tests/test_csrf_browser_recovery.py`
+     - 若继续 M4，应按 mockup 完成 6 项浏览器级手动验收
+     - 当前已可复用的结果基线：插件化专项 `89/89 passed`、非浏览器全量回归 `1330 tests` 通过
+     - 本阶段不再重复做的动作：插件专项重跑、模块边界失败复记
+
+**当前状态**：
+1. TODO 已经不仅能反映“现在做到哪”，也能直接指导“下一轮先做什么”。
+2. 本轮继续只做文档整理，没有新增测试执行。
+
+---
+
+---
+
+#### 220. 临时邮箱 Provider 插件化 — 记录浏览器 unittest 延后修复决策
+**时间**：2026-04-21
+
+**背景**：
+在拿到 M5 的实际回归结果后，用户明确表示：先继续按 TODO 推进，并把当前测试结果记录下来；`tests/test_account_edit_browser_flow.py` 与 `tests/test_csrf_browser_recovery.py` 这两个 Playwright unittest 的卡点后续再修复。
+
+**本次修改**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 在 T5.2 当前状态中补充一条决策口径：这 2 个 Playwright unittest 先记录结果，后续再单独修复。
+
+**当前状态**：
+1. 当前会话对 M5 的结论已经明确：
+   - 插件化专项：已通过
+   - 非浏览器全量回归：已通过
+   - 2 个 Playwright unittest：结果已记录，修复延后
+2. 本轮没有新增测试执行，仅补记用户的推进决策。
+
+---
+
+---
+
+#### 219. 临时邮箱 Provider 插件化 — 进入 M5 回归并修复模块边界失败
+**时间**：2026-04-21
+
+**背景**：
+用户明确要求开始跑全量测试并继续推进 TODO。实际执行 `python -m unittest discover -s tests -v` 后，回归没有直接得到完整结果，而是先暴露出两类真实状态：一是完整 discover 会卡在首个 Playwright 浏览器流用例；二是在排除浏览器 unittest 的回归中，存在 2 个模块边界失败。
+
+**本次实际结果**：
+1. 直接执行：
+   - `python -m unittest discover -s tests -v`
+   - 运行停在 `tests/test_account_edit_browser_flow.py::test_browser_can_edit_outlook_remark_without_reentering_credentials`
+   - 当前无法把“完整 discover 全绿”标记为已完成
+2. 浏览器 unittest 之外的全量回归（首次）：
+   - `1330 tests`，`FAILED (failures=2, skipped=7)`
+   - 两个失败均为 **模块边界违规**
+     - `outlook_web/repositories/settings.py` 导入了 `outlook_web.services.temp_mail_provider_base`
+     - `outlook_web/routes/system.py` 导入了 `outlook_web.services.temp_mail_provider_factory`
+3. 修复后再验证：
+   - `python -m unittest tests.test_module_boundaries -v` → `Ran 3 tests`，`OK`
+   - `python -m unittest discover -s tests -p "test_temp_mail_plugin_*.py" -v` → `Ran 89 tests`，`OK`
+   - 再次执行排除浏览器 unittest 的全量回归 → `Ran 1330 tests in 552.761s`，`OK (skipped=7)`
+
+**本次代码修改**：
+1. 新增 `outlook_web/temp_mail_registry.py`
+   - 将 provider 注册表下沉到中性模块，避免 repository 直接依赖 service 层
+2. 修改 `outlook_web/services/temp_mail_provider_base.py`
+   - 改为复用中性注册表模块
+3. 修改 `outlook_web/repositories/settings.py`
+   - `get_supported_temp_mail_provider_names()` 改为从中性注册表读取
+4. 修改 `outlook_web/services/temp_mail_provider_factory.py`
+   - 改为从中性注册表读取 `_REGISTRY`
+5. 修改 `outlook_web/services/temp_mail_plugin_manager.py`
+   - 改为从中性注册表读取/移除 provider
+6. 修改 `outlook_web/controllers/system.py` 与 `outlook_web/routes/system.py`
+   - `reload_plugins()` 的 service 依赖下沉到 controller，route 层只调 controller，恢复分层约定
+
+**文档回填**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - M5 改为：插件化专项、E2E 与非浏览器全量回归已通过；剩余阻塞为 2 个 Playwright unittest
+2. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
+   - 顶部状态补充非浏览器全量回归 `1330 tests` 已通过
+   - 文件变更清单补入 `outlook_web/temp_mail_registry.py`
+3. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
+   - 当前状态补入非浏览器全量回归结果
+   - 文件清单补入中性注册表模块
+4. `docs/TDD/2026-04-21-临时邮箱插件化TDD.md`
+   - 当前核对状态补入：完整 discover 卡在浏览器 unittest；非浏览器全量回归 `1330 tests` 已通过
+
+**当前状态**：
+1. 插件化专项：`89/89 passed`
+2. 模块边界失败：已修复并通过针对性验证
+3. 非浏览器全量回归：`1330 tests`，`OK (skipped=7)`
+4. 剩余阻塞：`tests/test_account_edit_browser_flow.py` 与 `tests/test_csrf_browser_recovery.py` 两个 Playwright unittest，尚未收口
+
+---
+
+---
+
+#### 218. 临时邮箱 Provider 插件化 — 修正 TD 中残留的旧测试文件口径
+**时间**：2026-04-21
+
+**背景**：
+继续只做文档回填时，再次扫描插件化主文档，发现 `docs/TD/2026-04-21-临时邮箱插件化TD.md` 中仍残留早期设计期的单文件测试名 `tests/test_temp_mail_plugin_system.py`，以及与当前工作树不完全一致的前端文件变更清单。
+
+**本次修改**：
+1. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
+   - 将“测试文件”由单文件 `tests/test_temp_mail_plugin_system.py` 改为当前真实拆分的 7 个专项测试文件：
+     - registry / factory / loader / manager / api / cli / e2e
+   - 将文件变更清单中的前端部分修正为：
+     - `templates/partials/modals.html`
+     - `templates/partials/scripts.html`
+     - `templates/index.html`
+   - 将测试文件清单修正为 `tests/test_temp_mail_plugin_*.py` 的拆分形态。
+   - 将底部测试摘要改为：当前工作树插件化测试已拆分为 7 个专项文件，共 89 个用例。
+
+**当前状态**：
+1. TD 中“测试文件结构”与“前端文件变更清单”现已与当前工作树更一致。
+2. 本轮依然没有运行新的测试命令，只继续做文档口径收口。
+
+---
+
+---
+
+#### 217. 临时邮箱 Provider 插件化 — 按用户决定先只继续文档回填
+**时间**：2026-04-21
+
+**背景**：
+在明确“按 TODO 继续推进”后，我先补齐了 M5 相关文档上下文。随后用户进一步明确：**先只继续修改文档，后面再跑全量测试**。因此本轮不执行 T4.4 浏览器级手动验收，也不实际运行 M5 全量回归，只继续把文档状态修正为当前真实进度。
+
+**本次修改**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - T4.4 当前状态改为：本会话按当前决策先不执行浏览器级手动点验。
+   - M5 目标改为：插件化专项与 E2E 已通过，当前主要剩余全量回归未执行。
+   - T5.2 补充当前状态：本会话先继续文档回填，暂不执行全量回归。
+   - T5.3 改为已完成：插件化专项全量 `89/89` 已确认通过。
+2. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
+   - M5 阶段改为：插件化专项已 `89/89 passed`，剩余为全量回归与后续如需发布前的浏览器级手动验收。
+
+**当前状态**：
+1. 文档层面已经明确区分：
+   - **已完成**：插件化专项全量、E2E、M4 代码主干
+   - **未执行**：T4.4 浏览器级手动验收、M5 全量回归
+2. 本轮没有运行新的测试命令，纯属状态回填。
+
+---
+
+---
+
+#### 216. 临时邮箱 Provider 插件化 — 继续清理顶部摘要口径
+**时间**：2026-04-21
+
+**背景**：
+在完成 M4 代码缺口修正与文档回填后，继续核对插件化主文档顶部摘要时，仍发现少量旧口径写成“当前主要剩余是 M4 落地阶段”，与当前工作树真实状态不一致。
+
+**本次修改**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 将顶部“当前主要差异”修正为：当前工作树下插件化后端、CLI 与 M4 前端代码主干已落地；后续主要剩余 M4 浏览器级手动验收与 M5 全量回归。
+2. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
+   - 将“当前实施状态”修正为：M1~M4 代码主干已落地，剩余工作聚焦于 M4 手动验收与全量回归。
+
+**当前状态**：
+1. 插件化相关主文档顶部摘要已进一步与当前工作树现状对齐。
+2. 若继续严格按 TODO 推进，下一步应在 **T4.4 浏览器级手动验收** 与 **M5 全量回归** 之间明确方向。
+
+---
+
+---
+
+#### 215. 临时邮箱 Provider 插件化 — 收口 M4 真实缺口并继续回填文档
+**时间**：2026-04-21
+
+**背景**：
+用户选择继续推进 M4 前端插件管理 UI，并要求每次行动前先充分获取上下文，同时把相关结果及时回填到会话文档与 `WORKSPACE.md`。重新核对当前工作树后，发现 M4 代码主体其实已在仓库中，但仍有一处真实缺口和多处文档口径滞后。
+
+**本次核对结论**：
+1. `templates/index.html`、`templates/partials/modals.html`、`templates/partials/scripts.html`、`static/js/features/plugins.js` 均已存在，说明插件管理卡片、模态框与脚本接入已经落地。
+2. 当前真实缺口是：插件 provider 的注入逻辑只会在 `PluginManager.loadPlugins()` 执行后生效，而该函数原先依赖用户先展开插件管理卡片；因此已安装插件不会在页面初始进入时自动出现在设置页 provider radio 与临时邮箱页 provider select 中。
+3. 另外，折叠态 badge 虽然已写入文本，但模板初始是 `display:none`，现状下不会显示“已安装数量”。
+
+**本次修改**：
+1. 修改 `static/js/features/plugins.js`
+   - 新增 `init()`，页面加载后自动执行 `loadPlugins()`，确保插件 provider 在未展开卡片时也会自动注入到页面现有 DOM。
+   - 修正 `pluginManagerBadge` 的显示逻辑，加载后显式显示 badge。
+   - 在 `_refreshProviderRadios()` / `_refreshProviderSelect()` 中保留用户当前选择，避免刷新插件列表后把当前 provider 选择意外重置。
+2. 修改文档回填实际状态
+   - `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`：将 M4 改为“代码已落地，浏览器级手动验收待做”，并把 T4.3 的实现口径修正为 `plugins.js` 注入而非 `temp_emails.js` 单独改造。
+   - `docs/FD/2026-04-21-临时邮箱插件化FD.md`：把前端模块函数名、provider 集成方式、文件变更清单修正为当前工作树实际实现。
+   - `docs/TD/2026-04-21-临时邮箱插件化TD.md`：补充“示意代码仅供参考，实际以前端现有实现为准”，并把 M4 勾选状态改为代码已落地。
+
+**当前状态**：
+1. M4 前端插件管理 UI 的代码主干已落地，且本轮补上了“页面初始自动注入插件 provider / badge 可见”的真实缺口。
+2. 浏览器级手动验收仍未在本会话执行，因此文档继续保持“实现已落地、手动验收待做”的口径。
+
+---
+
+---
+
+#### 214. 临时邮箱 Provider 插件化 — 按当前工作树重跑确认专项 89/89
+**时间**：2026-04-21
+
+**背景**：
+在用户明确要求“以我本地刚跑结果为准”后，继续核对时发现当前工作树中的 `tests/test_temp_mail_plugin_manager.py` 与 `WORKSPACE` 已经前进到更新状态。为避免继续用旧结论覆盖新代码，本轮改为直接以**当前工作树**重跑插件化专项并回填文档。
+
+**本次实际执行**：
+1. 重新核对 `tests/test_temp_mail_plugin_manager.py`
+   - `D-INST-04` 已改为使用一个格式合法但故意错误的 64 位 `sha256`
+   - `D-INST-09` 已改为仅删除 `temp_mail_providers/` 子目录，保留 `registry.json`
+2. 重新执行：
+   - `python -m pytest tests/test_temp_mail_plugin_manager.py -v --tb=short` → `31/31 passed`
+   - `python -m pytest tests/test_temp_mail_plugin_e2e.py -v --tb=short` → `6/6 passed`
+   - `python -m pytest (Get-ChildItem 'tests\\test_temp_mail_plugin_*.py' | ForEach-Object { $_.FullName }) -v --tb=short` → `89/89 passed`
+
+**结论**：
+1. 以当前工作树为准，插件化后端与 CLI 专项已达到 **89/89 passed**。
+2. 先前的 `29/31` 结论对应的是更早的一版本地视图，已不再代表当前仓库真实状态。
+3. 本轮已继续将相关会话文档回填到“当前工作树已 89/89 passed”的真实状态。
+
+---
+
+---
+
+#### 213. 临时邮箱 Provider 插件化 — M4 前端插件管理 UI
+**时间**：2026-04-21
+
+**背景**：
+后端全量 89/89 通过后，按 TODO M4 推进前端插件管理 UI 实现。
+
+**本次实现**：
+
+1. **新增 `static/js/features/plugins.js`**
+   - `PluginManager` 全局 IIFE 对象，提供完整的插件管理 UI 逻辑
+   - `loadPlugins()` → `GET /api/plugins`，渲染已安装/可安装/加载失败三态插件列表
+   - `install(name, url)` → `POST /api/plugins/install`
+   - `confirmUninstall` / `uninstall(name)` → `POST /api/plugins/{name}/uninstall`
+   - `toggleConfig(name)` → 并行拉取 schema + 当前配置，动态生成表单（支持 text/password/number/url/textarea/select/toggle 字段类型）
+   - `saveConfig(name)` → `POST /api/plugins/{name}/config`
+   - `testConnection(name)` → `POST /api/plugins/{name}/test-connection`
+   - `applyChanges()` → `POST /api/system/reload-plugins`，热刷新后自动重新加载列表
+   - `_refreshProviderRadios()` / `_refreshProviderSelect()`：安装的插件自动注入设置页 radio 组和临时邮箱页的 provider select
+    - 自定义安装 modal 控制：`openCustomInstallModal` / `closeCustomInstallModal` / `customInstall`
+
+2. **修改 `templates/index.html`**
+   - 在 `settings-tab-temp-mail` 末尾新增「插件管理」卡片（折叠态，点击展开）
+   - 含 badge 显示已安装插件数，首次展开时自动 `loadPlugins()`
+
+3. **修改 `templates/partials/modals.html`**
+   - 新增「自定义安装插件」模态框，含插件名称 + 下载 URL 两个必填项，以及安全警示文案
+
+4. **修改 `templates/partials/scripts.html`**
+   - 在最后一行追加 `plugins.js` 的加载
+
+5. **修改 `static/js/main.js`**
+   - `onTempMailProviderChange()` 新增 `cloudflare_temp_mail` 专属分支，避免选中插件 provider 时错误展示 CF Worker 面板
+
+**验证**：
+- 页面加载检查：`plugins.js`、`pluginManagerCard`、`pluginCustomInstallModal` 三项均存在于渲染 HTML 中 ✅
+- 插件化专项全量回归：89/89 passed ✅（未引入新失败）
+
+---
+
+---
+
+#### 212. 临时邮箱 Provider 插件化 — 修复 E2E 测试，插件化专项全量 89/89
+**时间**：2026-04-21
+
+**背景**：
+在完成 D 层全绿（31/31）后继续推进，发现 `tests/test_temp_mail_plugin_e2e.py` 有 3 个失败用例（H-E2E-04、H-E2E-05、H-E2E-06）。
+
+**根因分析**：
+
+1. **H-E2E-04**（`test_e2e_config_persistence`）：  
+   `install_plugin()` 写入文件但不加载插件，`read_plugin_config()` 需要 `_REGISTRY` 中存在插件（用于读取 `config_schema`），但测试缺少 `reload_plugins()` 调用 → 抛 `PLUGIN_NOT_LOADED`。  
+   **修复**：在 `install_plugin()` 之后插入 `reload_plugins()` 调用。
+
+2. **H-E2E-05**（`test_e2e_reload_with_updated_plugin`）：  
+   `from outlook_web.services.temp_mail_plugin_factory import reload_plugins` — 模块名错误（typo），实际模块为 `temp_mail_provider_factory`。  
+   **修复**：改为 `from outlook_web.services.temp_mail_provider_factory import reload_plugins`。
+
+3. **H-E2E-06**（`test_e2e_plugin_provider_business_chain`）：同 H-E2E-05，模块名 typo。  
+   **修复**：同上。
 
 **修改文件**：
-- `docs/TD/2026-04-19-数据概览大盘TD.md`（文件改动汇总表补3行 + 6.2节新增main.js改动说明）
-- `docs/FD/2026-04-19-数据概览大盘FD.md`（新增4.5节 scripts.html/main.js/i18n.js 说明）
+- `tests/test_temp_mail_plugin_e2e.py`（仅修改上述三个测试方法）
 
-#### 172. 数据概览大盘 — TDD 测试设计文档创建
+**本次测试结果**：
+- `tests/test_temp_mail_plugin_e2e.py` → `6/6 passed` ✅
+- **插件化专项全量：89/89 passed ✅**（`python -m unittest discover -s tests -p "test_temp_mail_plugin_*.py"`）
 
-**时间**：2026-04-19
+**文档更新**：
+- `docs/TDD/2026-04-21-临时邮箱插件化TDD.md`：状态更新为 89/89 全绿，新增 E2E 测试结果
+- `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`：D 层与 H 层用例全部勾选为 `[x]`，TDD 基线更新为 89/89
 
-**产出**：
-- 创建 `docs/TDD/2026-04-19-数据概览大盘TDD.md`
+---
 
-**TDD 涵盖分层**：
+---
 
-| 层级 | 测试文件 | 测试要点 |
-|------|---------|---------|
-| A. DB 迁移 | `tests/test_db_schema_v23_overview.py` | 表/索引存在、字段完整、幂等性 |
-| B. 埋点逻辑 | `tests/test_verification_extract_log.py` | 写入字段正确、duration_ms 计算、异常隔离、`_log_channel` 透传 |
-| C. Repository | `tests/test_overview_repository.py` | 5 个查询函数有数据/无数据两种边界 |
-| D. Controller/API | `tests/test_overview_api.py` | 5 个接口鉴权 + 响应 schema |
-| E. 回归 | 全量 discover | 现有 external_api/pool/audit/settings 测试不回退 |
+#### 211. 临时邮箱 Provider 插件化 — 修复 D-INST-04 与 D-INST-09，测试全绿
+**时间**：2026-04-21
 
-**关键测试矩阵**：V-01~V-04（迁移）、L-01~L-06（埋点）、R-01~R-05（Repository）、A-01~A-05（API）
+**背景**：
+`tests/test_temp_mail_plugin_manager.py` 剩余 2 个失败用例（D-INST-04、D-INST-09），目标在不修改实现文件的前提下分析根因并修复。
 
-#### 173. 数据概览大盘 — 4 个测试文件创建（TDD 红阶段）
+**根因分析**：
 
-**时间**：2026-04-19
+1. **D-INST-04**：
+   - `MOCK_REGISTRY_JSON` 中 `sha256: "abc123"` 是 6 位字符串，不符合合法 SHA256 格式（需 64 位十六进制）。
+   - 实现层的校验逻辑：只有当 sha256 字段为合法 64 位十六进制时才实际比对；`"abc123"` 被跳过。
+   - D-INST-01/08/10 同样使用 `"abc123"` 且期望成功 → 与 D-INST-04 期望失败构成夹具冲突。
+   - **修复**：在 D-INST-04 内部覆写 registry，提供合法格式（`"a" * 64`）但与实际内容不匹配的 sha256，与 D-INST-03 思路对称。
 
-**产出**（均新建，TDD 先红）：
+2. **D-INST-09**：
+   - 原代码 `shutil.rmtree(backup.parent)` 删除整个 `plugins/` 目录，连同 `registry.json` 一起删除。
+   - 该测试按字母序首先运行，此时 `_AVAILABLE_PLUGINS_CACHE` 为空，registry 缺失后 `install_plugin("mock_mgr")` 抛 `PLUGIN_NOT_FOUND`。
+   - **修复**：改为 `shutil.rmtree(backup)` 仅删除 `temp_mail_providers/` 子目录，保留 `registry.json`，测试意图"插件目录不存在时自动创建"完整覆盖，无副作用。
 
-| 文件 | 用例数 | 对应层级 | 当前状态 |
-|------|-------|---------|---------|
-| `tests/test_db_schema_v23_overview.py` | 5 | A. DB 迁移 | 🔴 红（v23 迁移未实现） |
-| `tests/test_verification_extract_log.py` | 9 | B. 埋点逻辑 | 🔴 红（`_write_extract_log` 未实现） |
-| `tests/test_overview_repository.py` | 18 | C. Repository | 🔴 红（`repositories/overview.py` 未创建） |
-| `tests/test_overview_api.py` | 13 | D. API 接口 | 🔴 红（`/api/overview/*` 未注册） |
+**修改文件**：
+- `tests/test_temp_mail_plugin_manager.py`（仅修改上述两个测试方法）
 
-**关键实现说明**：
-- 所有测试文件通过 `tests/_import_app.py` 导入 app
-- 登录接口：`POST /login`，密码 `testpass123`
-- B 层测试通过 `patch` 方式模拟内部 DB 异常，验证 `_write_extract_log` 不向外传播
-- C 层每个 `setUp` 先清理相关表，确保用例隔离
-- D 层 `OverviewApiBaseTests` 基类统一登录，所有 API 均测鉴权（401）+ 响应 schema
+**本次测试结果**：
+- `tests/test_temp_mail_plugin_manager.py` → `31/31 passed` ✅（全绿）
 
-**下一步**：实现业务代码（DB v23 迁移 → 埋点 → Repository → Controller → Blueprint）使所有测试变绿（🟢）
+**文档更新**：
+- `docs/TDD/2026-04-21-临时邮箱插件化TDD.md`：更新当前状态为 `31/31 passed`，补充 D-INST-04 和 D-INST-09 的准确场景描述
 
-#### 174. 数据概览大盘 — TODO 计划文档 + 计时方案 + AI 实现提示词
+---
 
-**时间**：2026-04-19
+---
 
-**产出**：
+#### 210. 标准模式小窗 UI 排版错乱 — BUG 分析与 TODO 拆分
+**时间**：2026-04-21
+
+**背景**：
+- 用户要求分析 `docs/BUG/2026-04-21-标准模式小窗UI排版错乱-Grid断点适配缺陷.md`
+- 该 BUG 来自 GitHub Issue #50，Owner 已确认小窗存在 UI 问题
+- **用户进一步要求**：最终效果应是“响应式的”，需考虑 PWA 适配
+
+**第一轮分析（基于 BUG 文档）**：
+
+1. **文档质量评估**：
+   - 文档结构完整，核心数学推导（四栏最小 1010px + 侧边栏 220px = 1230px 溢出阈值）逻辑自洽
+   - 代码引用（`layout.css`、`layout-manager.js`、`main.css`）经核对**引用内容存在**
+2. **第二轮深度验证（关键发现）**：
+   - `tests/layout-system/README.md` 明确标注 `layout-manager.js` / `layout.css` / `state-manager.js` 为 **Deprecated**
+   - `test_smoke_contract.py` 明确断言这些文件**不应**出现在 HTML 中
+   - **结论**：BUG 文档分析的 Grid 四栏布局系统已废弃，**不是当前生产代码**
+3. **当前生产代码实际状态**：
+   - 模板使用 `<div class="workspace workspace-mailbox">`（flex 三栏布局）
+   - CSS 定义：`.groups-column { width: 220px; flex-shrink: 0; }`、`.accounts-column { width: 280px; flex-shrink: 0; }`
+   - **实际根因**：`@media (max-width: 1024px) and (min-width: 769px)` 只处理了 sidebar（缩为 60px），但 `.workspace` 仍为 `flex-direction: row`，三栏固定宽度无自适应机制
+   - **问题区间**：800px~1024px 时，三栏内容（搜索栏、+按钮、分页）开始挤压错位
+
+**用户方向性要求**：
+- 不要只做局部断点修复
+- 要建立**完整的响应式断点体系**
+- 考虑 **PWA** 视口适配（`manifest.json`、`100dvh` 等）
+
+**本次产出**：
 
 | 文件 | 说明 |
 |------|------|
-| `session/plan.md` | 会话计划文档（TODO 列表 + 计时方案设计） |
-| `session/files/implementation-prompt.md` | 给其他 AI 使用的完整实现提示词（7 步骤、精确代码） |
+| `docs/TODO/2026-04-21-Grid断点适配缺陷修复TODO.md` | 任务拆分文档（已按实际代码重新分析，含响应式策略草案 + PWA 考虑） |
 
-**计时方案最终决定**：
+---
 
-| 方案 | 计时起点 | 计时终点 | 含义 |
-|------|---------|---------|------|
-| 选用方案 | policy 解析完成后、extraction 开始前 | `finally` 块 | 端到端提取耗时（用户视角） |
+---
 
-**`_log_channel` 取值规则**：
-- Outlook OAuth 渠道 → 从 `extract_verification_for_outlook` 返回值透传
-- AI fallback 成功 → `"ai_fallback"`
-- IMAP 通用路径 → `"imap_ssl"`
+#### 209. 用户收口输出形式：不要代写文章，只保留功能变化清单
+**时间**：2026-04-20
 
-**实现提示词覆盖范围**：
-- Step 1: DB v23 迁移（精确 SQL + 插入位置）
-- Step 2: 计时埋点（`_write_extract_log` 完整实现 + `get_verification_result` try/finally 包裹）
-- Step 3: Repository（5 个查询函数完整实现）
-- Step 4-5: Controller + Blueprint（完整代码）
-- Step 6: `app.py` Blueprint 注册（具体改动行）
-- Step 7: 前端 JS（`overview.js` 骨架 + `scripts.html`/`main.js`/`i18n.js` 精确改动）
+**本次用户要求更新**：
 
-#### 175. 数据概览大盘 — 业务实现完成，专项测试转绿
+- 不需要直接代写整篇“2.0 宣传贴”
+- 用户将自行编写文章
+- 当前输出目标调整为：**只展示从 1.x 到当前版本的功能变化清单 / 演进列表**
 
-**时间**：2026-04-19
+**当前输出策略**：
 
-**本次落地**：
+- 保留已完成的 Git 历史与版本文档梳理
+- 将结果转为更适合写文章时引用的“版本 → 功能变化”结构化清单
+- 不再输出完整宣传文案，而是输出功能演进素材本身
 
-| 模块 | 实际改动 |
-|------|---------|
-| DB | `outlook_web/db.py` 升级到 v23，新增 `verification_extract_logs`，并补齐 overview 相关兼容字段 |
-| 埋点 | `outlook_web/services/external_api.py` 新增 `_write_extract_log` 与提取耗时埋点；`verification_channel_routing.py` 透传 `_log_channel` |
-| 后端 | 新增 `repositories/overview.py`、`controllers/overview.py`、`routes/overview.py`，并在 `app.py` 注册 Blueprint |
-| 前端 | 新增 `static/js/features/overview.js`，更新 `templates/index.html`、`templates/partials/scripts.html`、`static/js/main.js`、`static/js/i18n.js`、`static/css/main.css` |
-| 兼容 | 为 overview API 测试增加 `OverviewAwareFlaskClient`，并保留 legacy dashboard DOM id |
+---
 
-**测试结果**：
-- 概览专项：`python -m unittest tests.test_db_schema_v23_overview tests.test_verification_extract_log tests.test_overview_repository tests.test_overview_api -v`
-- 结果：`Ran 49 tests ... OK`
+## 2026-04-18
 
-#### 176. 数据概览大盘 — 全量回归转绿 + 文档按实现回写
+### 操作记录
 
-**时间**：2026-04-19
+---
 
-**全量回归修正**：
+#### 208. 为 2.0 宣传贴梳理 1.x → 2.x 版本演进素材
+**时间**：2026-04-20
 
-1. 去掉 `outlook_web/services/external_api.py` 对 `flask` 的直接依赖，恢复 services 层边界约束。
-2. 在 `templates/index.html` 中补回隐藏的旧 dashboard 锚点，兼容历史 UI 测试。
-3. 将 `docs/FD/2026-04-19-数据概览大盘FD.md`、`docs/TD/2026-04-19-数据概览大盘TD.md`、`docs/TDD/2026-04-19-数据概览大盘TDD.md` 更新为“以实际实现与测试契约为准”。
+**本次目标**：
 
-**全量测试结果**：
-- 命令：`python -m unittest discover -s tests -v`
-- 结果：`Ran 1243 tests in 401.355s`
-- 状态：`OK (skipped=7)`
+- 为“2.0 版本宣传贴”准备历史功能演进素材，重点覆盖从 1.x 到当前版本的能力增长，而不是只写单次发版说明。
 
-#### 177. 本地启动与探活 — 5000 被系统保留，切换 5600 成功
+**本次上下文来源**：
 
-**时间**：2026-04-19
+1. Git tag 演进：
+   - `v1.1.0` → `v2.1.0`
+   - 早期 tag 标题直接提供阶段性主题（如 UI 重设计、多邮箱统一管理、导入导出、Telegram 推送、Refresh Token 滚动更新等）
 
-**启动排查过程**：
+2. 仓库文档：
+   - `CHANGELOG.md`
+   - `docs/DEVLOG.md`
+   - `README.md`
+   - `README.en.md`
 
-1. 按默认入口尝试启动 `python web_outlook_app.py`，应用初始化正常，但监听 `5000` 时直接失败。
-2. 错误定位为 Windows 套接字权限拒绝：`以一种访问权限不允许的方式做了一个访问套接字的尝试。`
-3. 继续排查系统端口保留范围，确认当前机器 `TCP excluded port range = 4933-5032`，其中包含 `5000`，因此 `5000` 在当前环境不可绑定。
+3. Git 历史：
+   - 最近 80 条主线提交
+   - `feat` / `fix` / `release` 关键提交，用于补齐 v1.6~v2.1 的具体功能脉络
 
-**最终处理**：
+**当前梳理出的主线能力演进**：
 
-- 经会话内确认后，改为本地监听：`127.0.0.1:5600`
-- 启动命令：`$env:HOST='127.0.0.1'; $env:PORT='5600'; python -u web_outlook_app.py`
-- 探活结果：`GET http://127.0.0.1:5600/` 返回 `200`
-- 页面标题：`登录 - Outlook 邮件管理`
-- 当前状态：`app5600` 会话保持运行中，进程监听 `127.0.0.1:5600`
+- `v1.2`：UI 全局重设计 + CI/CD 修复
+- `v1.3`：多邮箱统一管理
+- `v1.4`：账号导入导出无缝迁移
+- `v1.5.x`：Telegram 实时推送 + 去重稳定性 + Microsoft Refresh Token 滚动更新
+- `v1.6.x`：外部 API 安全层 / wait-message 异步探测 / 质量闸门清理
+- `v1.8.0`：邮箱池与对外池 API 首次完整交付
+- `v1.9.x`：双语界面、统一通知分发、演示站保护、认证后主应用前端重构
+- `v1.11`~`v1.13`：临时邮箱平台化、项目隔离、一键热更新、版本检测
+- `v1.15`~`v1.19`：AI 验证码增强、OAuth Token 工具、Webhook、项目成功复用、刷新提示与回归修复
+- `v2.0.0`：浏览器扩展正式发布
+- `v2.1.0`：数据概览大盘 + 提取链路统一观测
 
-#### 178. 数据概览大盘 — Apple 风格视觉优化（卡片 / 悬浮层）
+**补充说明**：
 
-**时间**：2026-04-19
+- 用户给出的 Notion 链接用于说明“第一版项目列表展示”的写法风格；由于当前环境无法直接深抓 Notion 页面正文，实际文案结构将以“项目列表 / 版本时间线 / 核心能力跃迁”方式复刻其展示思路，而素材内容以仓库真实历史为准。
 
-**本次范围**：
+---
 
-- 用户明确收敛范围：**只改本次新实现的数据概览大盘功能**
-- 不扩散到旧页面与全站其他 UI
+#### 207. 强制将其它分支全部对齐到 main
+**时间**：2026-04-20
 
-**本次前端优化点**：
+**本次前置判断**：
+
+- `dev` 与 `origin/dev`：无独有提交，可直接对齐
+- `alias-email-merge`：无独有提交，可直接对齐
+- `Buggithubissue`：落后 `main` 且仍有 3 个独有提交
+- `feature`：落后 `main` 且仍有 3 个独有提交
+- 用户已明确选择：**强制所有分支直接对齐 `main`**
+
+**本次执行结果**：
+
+1. 本地分支/工作树：
+   - `Buggithubissue` 工作树已 `reset --hard main`
+   - `feature` 工作树已 `reset --hard main`
+   - 本地 `alias-email-merge` 分支已创建并直接指向 `main`
+   - 本地 `dev / main / Buggithubissue / feature / alias-email-merge` 当前均为 `e4f73f5`
+
+2. 远端分支：
+   - `origin/dev`：`d384879` → `e4f73f5`
+   - `origin/alias-email-merge`：`a82c61e` → `e4f73f5`
+   - `origin/Buggithubissue`：`0daed1d` → `e4f73f5`（forced update）
+   - `origin/feature`：`eabeb03` → `e4f73f5`（forced update）
+
+**当前状态**：
+
+- 当前仓库可见的主线分支已全部统一到 `main@e4f73f5`
+- 下一步仅需将这条 `WORKSPACE.md` 记录本身也同步到所有分支，保证“分支状态”和“文档记录”再次一致
+
+---
+
+#### 206. main 已推送 CI 修复提交，四条主链路工作流全部转绿
+**时间**：2026-04-20
+
+**本次执行结果**：
+
+1. 推送结果：
+   - 首次 `git push origin main` 遇到一次传输层异常：`curl 52 Empty reply from server`
+   - 经远端 SHA 核对后确认未成功推进，再次重试推送后成功
+   - 远端 `main` 已更新到：`3e9a321 docs: 记录 main 分支 CI 修复策略`
+
+2. 本次 `3e9a321` 触发的 GitHub Actions：
+   - `Code Quality`（run `#93` / id `24649680553`）✅ success
+   - `Python Tests`（run `#95` / id `24649680543`）✅ success
+   - `SonarCloud Scan`（run `#126` / id `24649680557`）✅ success
+   - `Build and Push Docker Image`（run `#180` / id `24649680549`）✅ success
+
+3. 语义结论：
+   - 本次没有重发已公开的 `v2.1.0` tag / Release
+   - 但 `main` 分支上的 CI / CD 主链路已经恢复健康
+   - 因为 `Build and Push Docker Image` on `main` 已成功，后续 `latest/main` 镜像链路已恢复
+
+**当前状态**：
+
+- `v2.1.0` Release 保持原状，不改 tag、不改 Release 页面
+- `main` 分支 post-release 修复已完成，相关文档与 `WORKSPACE.md` 已同步到真实状态
+
+---
+
+#### 205. 用户选择只推 main 修复 CI，不重发 v2.1.0 Release
+**时间**：2026-04-20
+
+**本次用户决策**：
+
+- 不移动已公开的 `v2.1.0` tag
+- 不重发 `v2.1.0` Release
+- 仅将本地已验证通过的 CI 修复提交推送到 `main`，让后续 `main/latest` 链路恢复健康
+
+**文档同步**：
+
+- `CHANGELOG.md` 的 `Unreleased` 已补记这批“发布质量门禁修复（未重新发版）”
+- `WORKSPACE.md` 持续记录本次 post-release 修复与推送动作
+
+**当前状态**：
+
+- 下一步将把本地候选提交推送到 `main`，并核对新一轮 GitHub Actions 是否转绿。
+
+---
+
+#### 204. 本地修复 CI 门禁失败：格式化 + complexity + mypy 已全部转绿
+**时间**：2026-04-20
+
+**本次背景**：
+
+- 在确认 `v2.1.0` 的 GitHub Release 已成功、但 `Code Quality` 与 `Build and Push Docker Image` 因质量门禁失败后，继续在本地复现并修复这些失败项。
+
+**本次修复内容**：
+
+1. 格式化修复：
+   - 使用 `black` 修复 10 个文件的格式差异
+   - 使用 `isort --profile black` 修复 `outlook_web/services/temp_mail_service.py` 的 import 排序
+
+2. complexity 修复：
+   - `flake8 --max-complexity=10` 暴露 `outlook_web/services/external_api.py:get_verification_result` 复杂度为 `16`
+   - 通过拆分 helper（上下文准备、策略解析、AI 配置检查、日志收口、Outlook/通用提取执行器）收口主函数复杂度
+
+3. mypy 修复：
+   - 在 Outlook 渠道路由分支中补显式类型收窄，消除 `account Optional` 在 lambda 闭包内的类型报错
+
+**本地验证结果**：
+
+- 格式 / 静态门禁：
+  - `black --check outlook_web tests web_outlook_app.py outlook_mail_reader.py start.py` ✅
+  - `isort --check-only --profile black outlook_web tests web_outlook_app.py outlook_mail_reader.py start.py` ✅
+  - `flake8 outlook_web tests web_outlook_app.py outlook_mail_reader.py start.py --count --select=E9,F63,F7,F82 --show-source --statistics` ✅
+  - `flake8 outlook_web/repositories/settings.py outlook_web/services/external_api.py outlook_web/controllers/system.py web_outlook_app.py --count --max-complexity=10 --max-line-length=127 --statistics` ✅
+  - `mypy --config-file pyproject.toml outlook_web/repositories/settings.py outlook_web/services/external_api.py outlook_web/controllers/system.py web_outlook_app.py` ✅
+  - `bandit -r outlook_web web_outlook_app.py outlook_mail_reader.py start.py -lll` ✅（无 High severity）
+
+- 测试：
+  - 定向回归：`tests.test_verification_extract_log tests.test_overview_api tests.test_overview_repository` ✅（`Ran 43 tests`）
+  - 全量回归：`python -m unittest discover -s tests -v` ✅
+
+**当前状态**：
+
+- 当前本地代码已经满足此前失败的 CI 门禁要求。
+- 但远端已公开的 `v2.1.0` tag / Release 仍指向修复前提交；下一步需要决定是：
+  - 发布补丁版本
+  - 还是重发/重跑现有发布链路
+
+---
+
+#### 203. 核对 v2.1.0 CI/CD 实际状态，并按真实结果修正文档
+**时间**：2026-04-20
+
+**本次背景**：
+
+- 在 `v2.1.0` 已发布后，继续对 GitHub Actions 做发布后核对，确认 Release、测试、质量门禁与 Docker 发布链路是否全部与文档假设一致。
+
+**核对结果**：
+
+1. 成功项：
+   - `Create GitHub Release`（run `#17` / id `24647782184`）成功
+   - `Python Tests`（run `#94` / id `24647781295`，`head_sha=7cf7557`）成功
+   - `SonarCloud Scan`（run `#124` / id `24647845503`，`head_sha=5b65a70`）成功
+
+2. 失败项：
+   - `Code Quality`（run `#92` / id `24647781303`，`head_sha=7cf7557`）失败
+     - `Security Scan` 成功
+     - `Code Linting` 失败于 `Run Black (Code Formatter Check)`
+     - 日志关键信息：`10 files would be reformatted, 200 files would be left unchanged.`
+   - `Build and Push Docker Image`（run `#179` / id `24647782181`，tag `v2.1.0`）失败
+     - `quality-gate` 失败于 `Run formatter checks`
+     - `build-and-push` job 被 `skipped`
+     - 实际含义：Release 已创建，但 GHCR / DockerHub 的 tag 镜像发布并未完成
+
+3. 额外确认：
+   - 当前 `Code Quality` / `Python Tests` / `Build and Push Docker Image` 工作流均有 `paths` 过滤
+   - 因此后续仅修改文档或 `WORKSPACE.md` 的 push，不会自动重跑这些工作流；不能拿 docs-only push 的状态替代 release commit / tag 的真实结果
+
+**已同步修正文档**：
+
+- `CHANGELOG.md`
+- `docs/DEVLOG.md`
+- `RELEASE.md`
+- `WORKSPACE.md`
+
+**当前状态**：
+
+- 文档已与 `v2.1.0` 的真实发布状态对齐：Release 成功、Python Tests 成功、Sonar 成功，但 Code Quality 与 Docker 发布链路失败。
+- 下一步如需让整个 CI/CD 真正转绿，需要处理 Black 格式化差异并重新触发相关工作流。
+
+---
+
+#### 202. v2.1.0 已发布到 GitHub Release，3 个正式产物已上传
+**时间**：2026-04-20
+
+**本次执行结果**：
+
+1. Git 提交流程：
+   - `dev` 新增 release commit：`7cf7557 chore: 准备 v2.1.0 发布`
+   - 主工作树 `main` 已执行 `merge --ff-only dev`，本地 `main` / `dev` 再次对齐
+
+2. 正式发布：
+   - 已创建并推送 tag：`v2.1.0`
+   - 已推送远端 `main`
+   - GitHub Release 地址：
+     - `https://github.com/ZeroPointSix/outlookEmailPlus/releases/tag/v2.1.0`
+
+3. Release 附件：
+   - `browser-extension-v0.2.0.zip`
+   - `outlook-email-plus-v2.1.0-docker.tar`
+   - `outlookEmailPlus-v2.1.0-src.zip`
+
+**补充说明**：
+
+- tag push 后远端 Release 已自动创建；随后补传了本地构建完成的 3 个正式产物。
+
+**当前状态**：
+
+- `v2.1.0` 已完成本地版本收口、远端主分支推送、tag 推送与 GitHub Release 附件上传。
+- 下一步仅剩把这条 `WORKSPACE.md` 发布记录提交并推送到 `main`，作为发布后的仓库现场同步。
+
+---
+
+#### 201. v2.1.0 版本准备完成 — 版本锚点、全量测试与发布产物已就绪
+**时间**：2026-04-20
+
+**本次背景**：
+
+- 在 `main` / `dev` 已对齐、用户明确版本号选定为 `v2.1.0` 后，开始进入正式发版前的版本准备与产物构建阶段。
+
+**本次执行结果**：
+
+1. 版本锚点统一升级：
+   - `outlook_web/__init__.py`：`2.0.0` → `2.1.0`
+   - `README.md` / `README.en.md`：当前稳定版本与版本亮点同步到 `v2.1.0`
+   - `CHANGELOG.md` / `docs/DEVLOG.md`：新增 `v2.1.0` 发布记录
+   - `tests/test_version_update.py`：版本断言同步到 `2.1.0 / v2.1.0`
+   - `package.json` / `package-lock.json`：NPM 元数据版本同步到 `2.1.0`
+   - `browser-extension/manifest.json`：扩展版本 `0.1.0` → `0.2.0`
+
+2. 全量测试：
+   - 命令：`python -m unittest discover -s tests -v`
+   - 结果：`Ran 1243 tests in 302.912s`
+   - 状态：`OK (skipped=7)`
+
+3. 发布产物构建：
+   - 初次执行前发现本机 Docker Engine 未启动；后续通过启动 Docker Desktop 恢复引擎可用。
+   - 构建命令：`docker build -t outlook-email-plus:v2.1.0 .`
+   - 生成产物：
+     - `dist/outlook-email-plus-v2.1.0-docker.tar`（177,893,376 bytes）
+       - `sha256:108042af3e740b607efc0b4a305a07a9f0f3433805be21b9c95b68eb1a19e497`
+     - `dist/outlookEmailPlus-v2.1.0-src.zip`（4,335,587 bytes）
+       - `sha256:2d93c6102eb85651524571c2b9cbfd2fa6805066c8d3b0d5a057ef7e4b35df56`
+     - `dist/browser-extension-v0.2.0.zip`（38,097 bytes）
+       - `sha256:a237c1796c662e8c5bba205dfea0db8017812478f499c66b4f11d2e4e6416033`
+
+**当前状态**：
+
+- `v2.1.0` 的版本文件、测试结果与本地 release assets 已全部就绪。
+- 下一步进入 release commit、`main` 快进、push/tag 与 GitHub Release 创建。
+
+---
+
+#### 200. 本地 main 工作树脏改动纳入管理 — 用户确认连同扩展 zip 一并纳入
+**时间**：2026-04-20
+
+**本次背景**：
+
+- 在复核出本地 `main` 工作树的 5 个 tracked 改动均为注释补充后，用户进一步明确：
+  - 不仅要把这些注释改动纳入管理
+  - `browser-extension.zip` 也要一起纳入版本管理
+
+**本次用户决策**：
+
+1. 允许将以下 5 个 tracked 文件的本地注释补充正式提交：
+   - `outlook_web/controllers/emails.py`
+   - `outlook_web/repositories/overview.py`
+   - `outlook_web/services/external_api.py`
+   - `outlook_web/services/temp_mail_service.py`
+   - `outlook_web/services/verification_extract_log.py`
+2. 允许将未跟踪文件 `browser-extension.zip` 一并纳入
+
+**当前状态**：
+
+- 下一步将基于这一用户授权，把上述文件连同本条记录一起正式提交到本地 `main`
+
+---
+
+#### 199. 本地 main 工作树脏改动复核 — 当前观察到的是注释补充，不是逻辑变更
+**时间**：2026-04-20
+
+**本次背景**：
+
+- 在准备发版前，用户要求重新判断本地 `main` 工作树里的未提交内容是否可以纳入后续管理
+
+**复核结果**：
+
+1. 当前 `main` 工作树仍显示脏文件：
+   - `outlook_web/controllers/emails.py`
+   - `outlook_web/repositories/overview.py`
+   - `outlook_web/services/external_api.py`
+   - `outlook_web/services/temp_mail_service.py`
+   - `outlook_web/services/verification_extract_log.py`
+   - `browser-extension.zip`（未跟踪）
+2. 对 5 个 tracked 文件逐个 `git diff` 后确认：
+   - 当前差异均为**中文解释性注释补充**
+   - 未看到业务逻辑、控制流、字段、SQL、返回结构或错误语义变化
+3. 因此当前判断是：
+   - 这批 tracked 脏改动更接近“本地注释增强”
+   - 不是新的功能/修复逻辑改动
+   - 但它们依然会让 `main` 工作树处于“不干净”状态，因此按 `RELEASE.md` 口径，正式发版前仍需显式处理
+
+---
+
+#### 198. 仅本地重跑全量并提交记录 — 本轮不执行 push
+**时间**：2026-04-20
+
+**本次背景**：
+
+- 用户明确调整流程：**不要推送**，只需要重新跑一遍测试，然后把本次实际结果做本地提交
+
+**执行结果**：
+
+1. 执行：
+   - `python -m unittest discover -s tests -v`
+2. 结果：
+   - `Ran 1243 tests in 286.360s`
+   - `OK (skipped=7)`
+3. 本次策略：
+   - 仅更新工作记录并做**本地 commit**
+   - 不执行 `git push`
+
+---
+
+#### 197. main / dev 对齐后再次全量测试 — 当前同步提交继续全绿
+**时间**：2026-04-20
+
+**本次背景**：
+
+- 在 `main` 与 `dev` 最终对齐到同一个提交 `31b68d2` 后，用户要求再跑一波全量测试
+
+**执行结果**：
+
+1. 先确认：
+   - `dev` HEAD：`31b68d2`
+   - `main` HEAD：`31b68d2`
+2. 执行：
+   - `python -m unittest discover -s tests -v`
+3. 结果：
+   - `Ran 1243 tests in 294.792s`
+   - `OK (skipped=7)`
+
+**当前结论**：
+
+- 当前 `main` / `dev` 同步提交 `31b68d2` 仍然是全量绿
+- 随后在核对 `main` 工作树状态时，观察到其本地仍有以下未提交内容：
+  - `outlook_web/controllers/emails.py`
+  - `outlook_web/repositories/overview.py`
+  - `outlook_web/services/external_api.py`
+  - `outlook_web/services/temp_mail_service.py`
+  - `outlook_web/services/verification_extract_log.py`
+  - `browser-extension.zip`（未跟踪）
+- 这些内容不是这次“再次全量测试”产生的测试结果文件；本次未修改它们
+
+---
+
+#### 196. main 工作树合并 dev — 受 worktree 约束，改在主工作树快进完成
+**时间**：2026-04-20
+
+**本次背景**：
+
+- 在 `dev` 完成提交、同步 `main -> dev`、并确认全量测试通过后，用户要求继续把当前内容真正合到 `main`
+
+**实际处理过程**：
+
+1. 先尝试在当前 `dev` 工作树内执行：
+   - `git switch main && git merge --ff-only dev`
+2. 结果失败，原因不是冲突，而是 **git worktree 限制**：
+   - `main` 已经在另一个工作树 `E:\\hushaokang\\Data-code\\outlookEmail` 被检出
+3. 读取 `git worktree list --porcelain` 后，确认：
+   - 当前会话工作树：`...\\EnsoAi\\outlookEmail\\dev`（分支 `dev`）
+   - 主工作树：`E:\\hushaokang\\Data-code\\outlookEmail`（分支 `main`）
+4. 随后直接在 `main` 工作树里执行：
+   - `git -C "E:\\hushaokang\\Data-code\\outlookEmail" merge --ff-only dev`
+5. 合并结果：
+   - `Updating a82c61e..a4afc61`
+   - `Fast-forward`
+
+**结果**：
+
+- `main` 已成功快进到 `a4afc61`
+- 也就是说，当前 `main` 已包含：
+  - `ec6adbf` `feat: 完成数据概览大盘与插件联调收口`
+  - `a4afc61` `docs: 记录合并 main 与测试结果`
+- 主工作树当前仍有一个未跟踪文件：`browser-extension.zip`
+  - 本次未修改它
+  - 它没有阻止本次 `main <- dev` 的 fast-forward
+
+---
+
+#### 195. 本地提交 + 合并 main + 全量测试 — dev 当前已完成同步验证
+**时间**：2026-04-20
+
+**本次背景**：
+
+- 用户确认 overview 当前效果已可接受，要求开始走“本地提交 → 合并 main → 跑测试”的流程
+
+**实际执行结果**：
+
+1. 当前分支：`dev`
+2. 先本地提交当前改动：
+   - commit：`ec6adbf`
+   - message：`feat: 完成数据概览大盘与插件联调收口`
+3. 再执行 `main -> dev` 合并：
+   - 命令：`git merge --no-ff --no-edit main`
+   - 结果：`Already up to date.`
+   - 说明：当前 `dev` 之前已经同步过本地 `main`
+4. 最后跑全量测试：
+   - 命令：`python -m unittest discover -s tests -v`
+   - 结果：`Ran 1243 tests in 320.846s`
+   - 状态：`OK (skipped=7)`
+
+**当前状态**：
+
+- 当前工作已完成一次本地提交
+- `main -> dev` 合并已确认无需额外 merge commit
+- 全量测试通过
+
+---
+
+#### 194. overview 二次人工验收补漏 — `刷新` / `邮箱池` 词条缺失
+**时间**：2026-04-20
+
+**现场反馈**：
+
+- 用户再次刷新页面后，overview 页头与 Tab 大部分已切到英文
+- 但仍残留两处中文：
+  - 按钮：`刷新`
+  - Tab：`邮箱池`
+
+**根因**：
+
+- 页头与 Tab 文本同步逻辑已生效
+- 但 `static/js/i18n.js` 里当时还缺少：
+  - `刷新`
+  - `邮箱池`
+
+**本次修复**：
+
+1. `static/js/i18n.js`
+   - 新增：
+     - `刷新` → `Refresh`
+     - `邮箱池` → `Mailbox Pool`
+   - 顺手把 `最近刷新：` 调整为 `Last refresh: `，补齐英文冒号后的空格
+2. `docs/FD/2026-04-19-数据概览大盘FD.md`
+   - 补记二次人工验收发现的漏词条已补齐
+3. `docs/TD/2026-04-19-数据概览大盘TD.md`
+   - 补记 `i18n.js` 本轮新增 `刷新` / `邮箱池`
+
+**当前状态**：
+
+- 服务仍运行在 `http://127.0.0.1:5600`
+- 当前可继续刷新页面做第三轮人工验收
+
+---
+
+#### 193. overview 人工验收回收问题 — 页头与 Tab 模板文案未接 i18n，同步修复后重启服务
+**时间**：2026-04-20
+
+**用户现场反馈**：
+
+- 用户打开最新页面后，实际看到：
+  - `玻璃态概览面板`
+  - `数据概览`
+  - `细腻卡片视图`
+  - `最近刷新：4/20/2026，10:37:47`
+  - `总览 / 验证码提取 / 对外API / 邮箱池 / 系统活动`
+- 这说明 overview 主体虽然已接入 i18n，但**页头与 Tab 按钮仍依赖模板初始中文**，没有走同一套翻译刷新流程
+
+**本次修复**：
 
 1. `templates/index.html`
-   - 给 overview 头部增加 `ov-page-eyebrow`、`ov-page-title-row`、`ov-page-badge`
-   - 将刷新按钮纳入 overview 专属视觉样式
+   - 为 overview 页头标题、badge、副标题、最近刷新标签、Tab 文案补充 DOM 锚点
+   - Tab 文案改为 icon + `.ov-tab-label` 结构，便于前端单独刷新文字
 2. `static/js/features/overview.js`
-   - 引入 `renderDataCard(options)` 与 `renderHoverNote(text)`，统一所有概览卡片结构
-   - 为 KPI 卡片、数据卡片、柱图增加更细腻的 hover 说明内容
-   - 将表格、柱图、时间线输出结构同步升级
-3. `static/css/main.css`
-   - 将 overview shell / KPI card / data card 统一为毛玻璃 + 柔和阴影 + 大圆角的 Apple 风格
-   - 新增 `ov-hover-note` 自定义悬浮层，替代土味提示体验
-   - 将 `data-table` 调整为行级卡片感；将 `timeline` 调整为玻璃时间线卡片；为柱图补充 `bar-popover`
+   - 新增 `syncOverviewStaticText()`
+   - 在 `initOverview()` 与 `ui-language-changed` 事件里同步刷新：
+     - eyebrow
+     - page title
+     - badge
+     - subtitle
+     - refresh label
+     - 5 个 Tab 文案
+   - 这样 overview 页头、Tab 与主体 KPI/卡片共用同一套 i18n 刷新口径
+3. `static/js/i18n.js`
+   - 补齐 `玻璃态概览面板`、`细腻卡片视图`、`最近刷新：`、`总览`、`对外 API` 等缺失词条
+4. `docs/FD/2026-04-19-数据概览大盘FD.md`
+   - 补记 overview 页头与 Tab 模板静态文案也已纳入翻译同步
+5. `docs/TD/2026-04-19-数据概览大盘TD.md`
+   - 补记 `syncOverviewStaticText()` 与 `templates/index.html` 的 DOM 锚点改动
 
-**文档回写**：
+**运行态处理**：
 
-- `docs/FD/2026-04-19-数据概览大盘FD.md`
-- `docs/TD/2026-04-19-数据概览大盘TD.md`
+- 停掉旧的 5600 进程后，重新以前台 shell 方式拉起最新服务
+- 当前最新会话：`app5600live`
+- 当前地址：`http://127.0.0.1:5600`
 
-以上文档已同步补充当前实际视觉实现：overview 采用 Apple 风格玻璃卡片体系与统一 hover 浮层。
+---
 
-#### 179. 数据概览大盘 — 配色收敛到项目暖色体系
-
-**时间**：2026-04-19
-
-**本次只改配色，不动结构**：
-
-1. 保留 overview 已完成的玻璃卡片 / hover 浮层 / 表格卡片 / 时间线卡片结构。
-2. 不切到冷白蓝灰路线，继续贴合项目原有暖色基底。
-3. 将 overview 配色整体降饱和，收敛为 **暖米 / 茶棕 / 香槟金**，减少此前偏生硬的高饱和橙感。
-
-**实际修改文件**：
-
-- `static/css/main.css`
-- `docs/FD/2026-04-19-数据概览大盘FD.md`
-- `docs/TD/2026-04-19-数据概览大盘TD.md`
-
-**结果**：
-
-- 数据概览大盘与主项目现有配色融合度更高
-- 仍保留 Apple 风格玻璃感，但不再显得跳脱
-
-#### 180. 数据概览大盘 — 修复提取后数据不刷新的假实时问题
-
-**时间**：2026-04-19
-
-**用户反馈**：
-
-- 重新提取后，概览页数据没有刷新
-- 用户要求展示真实数据库状态，而不是前端缓存出来的旧值
-
-**根因定位**：
-
-1. `static/js/features/overview.js` 在命中缓存时直接渲染，重新进入 dashboard 也不会强制重拉。
-2. 验证码提取成功后，前端没有通知 overview 相关缓存失效。
-
-**本次修复**：
-
-- `static/js/features/overview.js`
-  - 新增 `invalidateOverviewCache(tabIds)`
-  - 新增全局 `notifyOverviewDataChanged(tabIds, reason)`
-  - 进入 dashboard 时对当前 Tab 强制重拉一次真实后端数据
-  - 监听 `overview-data-changed`，在概览页可见时立即重拉当前 Tab
-- `static/js/features/groups.js`
-  - 在服务端提取成功后，主动通知 overview 失效 `summary` / `verification` / `activity` 缓存
-
-**文档回写**：
-
-- `docs/FD/2026-04-19-数据概览大盘FD.md`
-- `docs/TD/2026-04-19-数据概览大盘TD.md`
-
-**结果**：
-
-- 数据概览页不再只吃旧缓存
-- 提取成功后，概览页能够更快反映数据库里的真实新数据
-
-#### 181. 数据概览大盘 — “外部 UI / 统一监控面板”链路澄清与文档修正
-
-**时间**：2026-04-19
+#### 192. 本地服务重启用于人工验收 — 5600 已加载本轮 overview i18n 改动
+**时间**：2026-04-20
 
 **本次背景**：
 
-- 用户再次澄清：问题不是浏览器扩展，而是**正常前端 UI 使用提取验证码功能后，统一监控面板里的概览没有增加**。
-- 因此前一次把问题解释成“外部 UI / 浏览器扩展触发”的结论不准确，本次按实际代码重新核对并修正文档。
+- 用户要求直接启动最新服务，准备开始人工验收 overview 页面
 
-**再次核对后的事实**：
+**实际处理过程**：
 
-1. overview 的相关统计读取自 `verification_extract_logs`，因此面板数据是否增加，最终取决于提取动作有没有写入这张表。
-2. 当前主应用正常提取按钮由 `static/js/features/groups.js` 调用 `/api/emails/<email>/extract-verification`；临时邮箱则调用 `/api/temp-emails/<email>/extract-verification`。
-3. 这两条主应用旧接口当前没有统一复用 `outlook_web/services/external_api.py:get_verification_result()` 的 v23 埋点逻辑。
-4. `notifyOverviewDataChanged(...)` 当前只负责让前端缓存失效并重新请求 overview API；如果底层 `verification_extract_logs` 没新增，统一监控面板即使重拉也不会涨。
-5. 因此，当前真实根因不是只有“页面没有刷新”，而是**正常前端提取链路本身没有把统计写进 overview 依赖的日志表**。
+1. 先确认旧的 `app5600` 运行态与 `127.0.0.1:5600` 监听情况。
+2. 为确保人工验收看到的是**最新 i18n 改动**，先停止旧的 `app5600` 会话。
+3. 尝试用 detached 方式重新启动：
+   - 命令：`python -c "import os; os.environ['HOST']='127.0.0.1'; os.environ['PORT']='5600'; import web_outlook_app; web_outlook_app.main()"`
+   - 结果：进程立即退出，`5600` 无监听，首页探活返回 `502`
+4. 回退到此前已验证稳定的前台 shell 方式重新启动同一命令。
 
-**三条线路现状矩阵**：
+**最新探活结果**：
 
-| 线路 | 当前接口 | 是否写 `verification_extract_logs` | 总控板当前是否可见 |
-|------|----------|-----------------------------------|------------------|
-| 浏览器 AIUI / 扩展伴生面板 | `/api/external/verification-code` / `/api/external/verification-link` | ✅ | ✅（下一次重拉后可见） |
-| 对外 API 调用方 | `/api/external/verification-code` / `/api/external/verification-link` | ✅ | ✅（下一次重拉后可见） |
-| 主应用前端 UI（普通账号） | `/api/emails/<email>/extract-verification` | ❌ | ❌ |
-| 主应用前端 UI（临时邮箱） | `/api/temp-emails/<email>/extract-verification` | ❌ | ❌ |
+- 监听地址：`127.0.0.1:5600`
+- 监听进程：`python`（PID `25808`）
+- 首页探活：`GET http://127.0.0.1:5600/` → `302`
+- 跳转位置：`/login`
+- 当前状态：最新服务已运行，可直接开始人工验收
 
-**文档修正**：
+---
 
-- `docs/FD/2026-04-19-数据概览大盘FD.md`
-  - 增补“术语对齐”，明确本次讨论的是主应用正常前端提取按钮
-  - 将“当前刷新边界”修正为：缓存失效只是表层，真正断点在旧提取接口未写 `verification_extract_logs`
-  - 将触发场景覆盖改为按实际代码区分“已接入 / 未接入”链路
-  - 新增“三条线路与总控板可见性”矩阵
-- `docs/TD/2026-04-19-数据概览大盘TD.md`
-  - 修正“`get_verification_result()` 是所有提取路径唯一入口”的错误表述
-  - 补充 `api_extract_verification()` / `api_extract_temp_email_verification()` 仍走旧链路、未接入 v23 埋点
-  - 明确 `notifyOverviewDataChanged(...)` 只会触发重拉，不会补写统计日志
-  - 记录后续优先方向：先统一内部提取入口，再考虑低频定期重拉
-  - 新增“三条提取线路接入情况”矩阵
+#### 191. 数据概览大盘 i18n 收口 — overview 可见文案统一接入翻译层
+**时间**：2026-04-20
+
+**本次背景**：
+
+- 用户继续追 overview 的 i18n 问题，明确指出重点是翻译收口；其中“7 日调用趋势”本身不需要改功能逻辑
+
+**本次代码改动**：
+
+1. `static/js/features/overview.js`
+   - 新增 `ovT()` / `ovLocale()` / `ovLabelValue()` helper
+   - KPI 标题、note、卡片标题、badge、表头、空态、loading/error 文案统一通过翻译层输出
+   - `summary` 中直接拼接 HTML 的 `ov-kv` 标签文本也补接翻译
+   - 数字、时间格式改为跟随当前 UI 语言切换 `zh-CN` / `en-US`
+   - `timeline` / `channel` / `pool action` 等后端机器值增加展示层格式化，避免直接裸露 `verification_extract`、`notification:*`、`success/failed` 等码值
+   - 继续收口中文界面里的残留英文短词：`Top`、`Claim`、`Complete`、`Release`、`Expire`
+2. `static/js/i18n.js`
+   - 补齐 overview 相关词条，包括：
+     - KPI / 卡片标题
+     - table header / badge / empty state
+     - hover note 长文案
+     - pool / external / activity 里的短标签
+     - timeline / channel / status 展示用词条
+3. `docs/FD/2026-04-19-数据概览大盘FD.md`
+   - 补记当前真实前端约束：overview 可见文案统一经 `translateAppTextLocal(...)`
+4. `docs/TD/2026-04-19-数据概览大盘TD.md`
+   - 补记 `overview.js` / `i18n.js` 的 i18n 收口实现
 
 **本次范围**：
 
-- 仅修正文档与工作记录
-- 未改业务代码
+- 仅处理 overview 页面可见文案与 locale 感知格式化
+- 未改“7 日调用趋势”本身的数据逻辑
 
-#### 182. 数据概览大盘 — 前端 UI 两条旧提取接口接入共享埋点链路
-
-**时间**：2026-04-19
-
-**本次实现目标**：
-
-- 让主应用前端 UI 的普通账号提取、临时邮箱提取，也进入总控板依赖的 `verification_extract_logs`
-- 保持浏览器 AIUI / 对外 API / 主应用前端 UI 三条线路最终都能被 overview 看到
-
-**实际代码改动**：
-
-1. `outlook_web/controllers/emails.py`
-   - `api_extract_verification()` 改为复用 `external_api.py:get_verification_result()`
-   - 普通账号前端提取现在与 external/shared 提取路径共用同一套埋点逻辑
-2. `outlook_web/services/verification_extract_log.py`
-   - 新增共享日志 helper
-   - 提供提取结果归一化与安全写库能力
-3. `outlook_web/services/external_api.py`
-   - 改为复用新的共享日志 helper
-4. `outlook_web/services/temp_mail_service.py`
-   - 临时邮箱提取加入日志写入
-   - 使用**负数 `temp_emails.id`** 作为 `verification_extract_logs.account_id` 的哨兵值
-5. `outlook_web/repositories/overview.py`
-   - recent 查询按 `account_id` 正负号分别回连 `accounts` / `temp_emails`
-   - 从而让临时邮箱提取记录也能在 overview recent 数据里正确显示邮箱地址
-
-**接入结果矩阵（实现后）**：
-
-| 线路 | 当前接口 | 是否写 `verification_extract_logs` | 总控板当前是否可见 |
-|------|----------|-----------------------------------|------------------|
-| 浏览器 AIUI / 扩展伴生面板 | `/api/external/verification-code` / `/api/external/verification-link` | ✅ | ✅（下一次重拉后可见） |
-| 对外 API 调用方 | `/api/external/verification-code` / `/api/external/verification-link` | ✅ | ✅（下一次重拉后可见） |
-| 主应用前端 UI（普通账号） | `/api/emails/<email>/extract-verification` | ✅ | ✅ |
-| 主应用前端 UI（临时邮箱） | `/api/temp-emails/<email>/extract-verification` | ✅ | ✅ |
-
-**文档回写**：
-
-- `docs/FD/2026-04-19-数据概览大盘FD.md`
-  - 改为当前实际状态：主应用前端 UI 两条提取接口均已接入日志表
-  - 补充 `account_id` 正负号语义
-- `docs/TD/2026-04-19-数据概览大盘TD.md`
-  - 补充普通账号统一到 `get_verification_result()`、临时邮箱走负 id 哨兵方案
-  - 更新三条线路接入矩阵为当前实现状态
-
-#### 183. 本地服务重启与探活 — 5600 已加载最新埋点实现
-
-**时间**：2026-04-19
-
-**本次操作**：
-
-1. 停止旧的 `app5600` 会话。
-2. 重新以 `HOST=127.0.0.1`、`PORT=5600` 启动 `python -u web_outlook_app.py`。
-3. 确认新的监听进程已占用 `127.0.0.1:5600`。
-4. 重新探活首页，确认应用已加载当前代码版本。
-
-**探活结果**：
-
-- 监听进程：`python`（PID `42332`）
-- 访问地址：`http://127.0.0.1:5600`
-- 首页探活：`GET /` → 跳转到 `/login`
-- 登录页标题：`登录 - Outlook 邮件管理`
-- 当前状态：本地服务已重启完成，可直接基于最新实现查看效果
-
-#### 184. 浏览器插件反馈收尾 — 记录“API 无效”待排查 Bug
-
-**时间**：2026-04-19
-
-**用户反馈**：
-
-- 今日收尾前新增一个浏览器插件侧问题：
-  - 浏览器插件在接入外部 API 后，会提示 **“API 无效”**
-
-**本次处理**：
-
-1. 不对该问题提前下技术结论。
-2. 先按实际用户反馈把它记录为**待排查已知 Bug**。
-3. 将该反馈补记到浏览器扩展相关技术文档，便于下次会话直接接着排查。
-
-**已同步文档**：
-
-- `docs/TD/2026-04-18-浏览器扩展邮箱池快捷操作面板TD.md`
-  - 补记：2026-04-19 会话内，用户实际反馈插件接入外部 API 后出现“API 无效”提示，当前尚未完成根因定位
-
-**当前状态**：
-
-- Bug 已记录
-- 今日未继续展开技术排查
-- 可在下次会话中直接以此为入口继续定位
-
-#### 185. 浏览器插件“API 无效”修复 — 复制按钮改为复制真实 API Key
-
-**时间**：2026-04-20
-
-**根因定位**：
-
-1. 主应用“API 安全”设置页加载已保存的对外 API Key 时，前端输入框显示的是脱敏值。
-2. 原有 `copyExternalApiKey()` 直接复制输入框当前内容，因此复制到剪贴板的并不是真实明文。
-3. 浏览器插件把这个脱敏字符串作为 `X-API-Key` 调用 `/api/external/*`，后端就会返回“API Key 缺失或无效”。
-
-**本次修复**：
-
-- `outlook_web/controllers/settings.py`
-  - 新增 `api_get_external_api_key_plaintext()`
-  - 仅登录态可访问
-  - 返回当前真实对外 API Key 明文
-  - 追加审计日志：`copy_external_api_key`
-- `outlook_web/routes/settings.py`
-  - 注册 `GET /api/settings/external-api-key/plaintext`
-- `static/js/main.js`
-  - `copyExternalApiKey()` 改为：
-    - 若当前输入框是用户刚输入的明文，则直接复制
-    - 若当前输入框是已保存后的脱敏值，则先请求后端明文接口，再复制真实 Key
-    - 明文只用于本次复制，不回填到输入框长期展示
-- `docs/TD/2026-04-18-浏览器扩展邮箱池快捷操作面板TD.md`
-  - 将该问题从“待排查”更新为已定位、已修复
-- `browser-extension/README.md`
-  - 更新配置说明与故障排查，明确应通过主应用复制按钮获取真实明文 Key
-
-**结果**：
-
-- 主应用“复制对外 API Key”按钮现在会复制正确的真实 Key
-- 浏览器插件不再因为复制到脱敏值而天然报“API 无效”
-
-#### 186. 浏览器插件第二类前置条件补记 — external pool / pool_access
-
-**时间**：2026-04-20
-
-**继续排查结论**：
-
-1. 浏览器插件的第一个真实业务请求不是验证码接口，而是 `POST /api/external/pool/claim-random`。
-2. 这条链路除了要求 `X-API-Key` 正确，还要求：
-   - 主应用已开启 `external pool`
-   - 如果使用的是多 Key，则该 Key 还必须具备 `pool_access`
-3. 因此，后续如果用户仍反馈“插件不可用”，第二优先检查项不该再只盯着 API Key 本身，而应同时检查 `external pool` 和 `pool_access` 配置。
-
-**本次文档回写**：
-
-- `browser-extension/README.md`
-  - 增补扩展可用的真实前置条件
-  - 新增两条故障排查：
-    - `功能 external_pool 当前未启用`
-    - `当前 API Key 无权访问 external pool`
-- `docs/FD/2026-04-18-浏览器扩展邮箱池快捷操作面板FD.md`
-  - 增补浏览器扩展依赖 `external pool` / `pool_access` 的前置条件说明
-- `docs/TD/2026-04-18-浏览器扩展邮箱池快捷操作面板TD.md`
-  - 将当前会话补记升级为“两类真实问题来源”说明
-
-**当前判断**：
-
-- 复制脱敏值的问题已经修掉
-- 第二类真实失败来源是配置前置条件不足，而不是同一个 API Key bug 的重复出现
-
-#### 187. 本地服务重启与探活 — 127.0.0.1:5600 前台启动成功
-
-**时间**：2026-04-20
-
-**本次背景**：
-
-- 用户要求重新启动本地服务并做实际探活
-- 先前尝试用 detached 方式启动时，进程仍回落到 `0.0.0.0:5000`，再次撞上当前 Windows 环境的保留端口
-
-**实际排查与处理**：
-
-1. 确认 `127.0.0.1:5600` 初始时没有监听进程
-2. 读取 detached 启动日志，确认失败原因仍然是：
-   - 实际绑定地址回落到 `0.0.0.0:5000`
-   - `5000` 在当前机器不可绑定
-3. 改为前台可见方式启动，并在 Python 进程内显式注入：
-   - `HOST=127.0.0.1`
-   - `PORT=5600`
-4. 服务成功启动后，再做监听与首页探活
-
-**探活结果**：
-
-- 监听地址：`127.0.0.1:5600`
-- 监听进程：`python`（PID `21644`）
-- 首页访问结果：`GET http://127.0.0.1:5600/` → `200`
-- 最终 URL：`http://127.0.0.1:5600/login`
-- 页面标题：`登录 - Outlook 邮件管理`
-
-**当前状态**：
-
-- 本地服务已成功运行在 `http://127.0.0.1:5600`
-- 当前使用的是前台 shell 会话 `app5600`
-
-#### 188. 运行日志分析 — 调度重叠告警由慢 IMAP 握手超时触发
-
-**时间**：2026-04-20
-
-**本次背景**：
-
-- 用户要求在服务成功启动后，继续读取运行日志并分析“为什么有时候会突然提前报错”
-
-**读取到的关键日志**：
-
-1. `Execution of job "统一通知分发 ..." skipped: maximum number of running instances reached (1)`
-2. `IMAP fetch error ... _ssl.c:1011: The handshake operation timed out`
-3. `[notification_dispatch] grouped fetch failed ... err=_ssl.c:1011: The handshake operation timed out`
-
-**结合代码后的结论**：
-
-1. `统一通知分发` Job 在 `outlook_web/services/scheduler.py` 中配置为：
-   - 固定间隔执行
-   - `max_instances=1`
-   - `coalesce=True`
-2. `run_notification_dispatch_job()` 在 `outlook_web/services/notification_dispatch.py` 中会遍历活跃通知源，并为账号源调用 IMAP / Graph 拉信。
-3. 对 IMAP 账号，底层实际走 `telegram_push._fetch_new_emails_imap()`，其中 `imaplib.IMAP4_SSL(..., timeout=15)` 存在网络握手等待。
-4. 当某个账号（本次日志中为一个已掩码的 Gmail IMAP 账号）在 SSL 握手阶段超时后：
-   - 当前这一轮通知分发执行时间被拖长
-   - 下一次定时间隔到来时，由于 `max_instances=1`，APScheduler 会直接记录“maximum number of running instances reached”并跳过重叠执行
-5. 因此这里看到的“突然报错”本质上是**下游 IMAP 网络/握手超时导致的上游调度重叠告警**，不是应用启动失败，也不是 overview / 浏览器插件改动引入的新异常。
-
-**当前判断**：
-
-- `maximum number of running instances reached` 更偏向**保护性告警**
-- 真正值得继续追的是对应 IMAP 账号为什么会在握手阶段频繁超时（网络、代理、邮箱服务端、账号配置等）
-- 当前这类日志不会阻止 Web 主服务监听，也不会影响登录页可访问性；主服务已确认仍正常运行在 `127.0.0.1:5600`
-
-#### 189. 数据概览专项回归 — 修复 `_get_db_for_log` 兼容锚点后重新转绿
-
-**时间**：2026-04-20
-
-**本次背景**：
-
-- 用户要求继续回到看板 TODO，重新验证数据概览大盘功能
-- 重新执行 overview 专项测试时，发现 1 个真实回归错误
-
-**首次失败现象**：
-
-- 用例：`tests.test_verification_extract_log.VerificationExtractLogWriteTests.test_write_extract_log_exception_does_not_propagate_to_caller`
-- 错误：`external_api.py` 中缺少 `_get_db_for_log`
-- 触发原因：此前将验证码提取日志写入逻辑抽到共享 helper 后，`external_api._write_extract_log()` 仍在，但测试依赖的兼容 patch 点 `_get_db_for_log` 被不小心丢失
-
-**本次修复**：
-
-1. `outlook_web/services/external_api.py`
-   - 补回 `_get_db_for_log()`
-   - `external_api._write_extract_log()` 改为先通过 `_get_db_for_log()` 取连接，再调用共享写库 helper
-   - 继续保持内部异常吞掉、不影响主流程
-2. `outlook_web/services/verification_extract_log.py`
-   - `write_verification_extract_log()` 新增可选 `db` 注入参数
-   - 这样既保留共享实现，又能兼容 `external_api` 侧测试锚点
-
-**复跑结果**：
-
-- 命令：
-  - `python -m unittest tests.test_db_schema_v23_overview tests.test_verification_extract_log tests.test_overview_repository tests.test_overview_api -v`
-- 结果：
-  - `Ran 49 tests in 4.862s`
-  - `OK`
-
-**当前状态**：
-
-- 数据概览大盘 4 组专项测试已重新转绿
-- 当前运行中的本地服务仍保持在 `http://127.0.0.1:5600`
+---
 
 #### 190. 全量回归复跑 — 修复 Web 提取兼容语义后恢复全绿
-
 **时间**：2026-04-20
 
 **本次背景**：
@@ -2673,598 +2594,616 @@ fix: 修复标准模式小窗 UI 排版错乱（Issue #50）- 响应式断点适
 - 全量仓库回归：绿
 - 本地服务仍运行在 `http://127.0.0.1:5600`
 
-#### 191. 数据概览大盘 i18n 收口 — overview 可见文案统一接入翻译层
+---
 
+#### 189. 数据概览专项回归 — 修复 `_get_db_for_log` 兼容锚点后重新转绿
 **时间**：2026-04-20
 
 **本次背景**：
 
-- 用户继续追 overview 的 i18n 问题，明确指出重点是翻译收口；其中“7 日调用趋势”本身不需要改功能逻辑
+- 用户要求继续回到看板 TODO，重新验证数据概览大盘功能
+- 重新执行 overview 专项测试时，发现 1 个真实回归错误
 
-**本次代码改动**：
+**首次失败现象**：
 
-1. `static/js/features/overview.js`
-   - 新增 `ovT()` / `ovLocale()` / `ovLabelValue()` helper
-   - KPI 标题、note、卡片标题、badge、表头、空态、loading/error 文案统一通过翻译层输出
-   - `summary` 中直接拼接 HTML 的 `ov-kv` 标签文本也补接翻译
-   - 数字、时间格式改为跟随当前 UI 语言切换 `zh-CN` / `en-US`
-   - `timeline` / `channel` / `pool action` 等后端机器值增加展示层格式化，避免直接裸露 `verification_extract`、`notification:*`、`success/failed` 等码值
-   - 继续收口中文界面里的残留英文短词：`Top`、`Claim`、`Complete`、`Release`、`Expire`
-2. `static/js/i18n.js`
-   - 补齐 overview 相关词条，包括：
-     - KPI / 卡片标题
-     - table header / badge / empty state
-     - hover note 长文案
-     - pool / external / activity 里的短标签
-     - timeline / channel / status 展示用词条
-3. `docs/FD/2026-04-19-数据概览大盘FD.md`
-   - 补记当前真实前端约束：overview 可见文案统一经 `translateAppTextLocal(...)`
-4. `docs/TD/2026-04-19-数据概览大盘TD.md`
-   - 补记 `overview.js` / `i18n.js` 的 i18n 收口实现
-
-**本次范围**：
-
-- 仅处理 overview 页面可见文案与 locale 感知格式化
-- 未改“7 日调用趋势”本身的数据逻辑
-
-#### 192. 本地服务重启用于人工验收 — 5600 已加载本轮 overview i18n 改动
-
-**时间**：2026-04-20
-
-**本次背景**：
-
-- 用户要求直接启动最新服务，准备开始人工验收 overview 页面
-
-**实际处理过程**：
-
-1. 先确认旧的 `app5600` 运行态与 `127.0.0.1:5600` 监听情况。
-2. 为确保人工验收看到的是**最新 i18n 改动**，先停止旧的 `app5600` 会话。
-3. 尝试用 detached 方式重新启动：
-   - 命令：`python -c "import os; os.environ['HOST']='127.0.0.1'; os.environ['PORT']='5600'; import web_outlook_app; web_outlook_app.main()"`
-   - 结果：进程立即退出，`5600` 无监听，首页探活返回 `502`
-4. 回退到此前已验证稳定的前台 shell 方式重新启动同一命令。
-
-**最新探活结果**：
-
-- 监听地址：`127.0.0.1:5600`
-- 监听进程：`python`（PID `25808`）
-- 首页探活：`GET http://127.0.0.1:5600/` → `302`
-- 跳转位置：`/login`
-- 当前状态：最新服务已运行，可直接开始人工验收
-
-#### 193. overview 人工验收回收问题 — 页头与 Tab 模板文案未接 i18n，同步修复后重启服务
-
-**时间**：2026-04-20
-
-**用户现场反馈**：
-
-- 用户打开最新页面后，实际看到：
-  - `玻璃态概览面板`
-  - `数据概览`
-  - `细腻卡片视图`
-  - `最近刷新：4/20/2026，10:37:47`
-  - `总览 / 验证码提取 / 对外API / 邮箱池 / 系统活动`
-- 这说明 overview 主体虽然已接入 i18n，但**页头与 Tab 按钮仍依赖模板初始中文**，没有走同一套翻译刷新流程
+- 用例：`tests.test_verification_extract_log.VerificationExtractLogWriteTests.test_write_extract_log_exception_does_not_propagate_to_caller`
+- 错误：`external_api.py` 中缺少 `_get_db_for_log`
+- 触发原因：此前将验证码提取日志写入逻辑抽到共享 helper 后，`external_api._write_extract_log()` 仍在，但测试依赖的兼容 patch 点 `_get_db_for_log` 被不小心丢失
 
 **本次修复**：
 
-1. `templates/index.html`
-   - 为 overview 页头标题、badge、副标题、最近刷新标签、Tab 文案补充 DOM 锚点
-   - Tab 文案改为 icon + `.ov-tab-label` 结构，便于前端单独刷新文字
-2. `static/js/features/overview.js`
-   - 新增 `syncOverviewStaticText()`
-   - 在 `initOverview()` 与 `ui-language-changed` 事件里同步刷新：
-     - eyebrow
-     - page title
-     - badge
-     - subtitle
-     - refresh label
-     - 5 个 Tab 文案
-   - 这样 overview 页头、Tab 与主体 KPI/卡片共用同一套 i18n 刷新口径
-3. `static/js/i18n.js`
-   - 补齐 `玻璃态概览面板`、`细腻卡片视图`、`最近刷新：`、`总览`、`对外 API` 等缺失词条
-4. `docs/FD/2026-04-19-数据概览大盘FD.md`
-   - 补记 overview 页头与 Tab 模板静态文案也已纳入翻译同步
-5. `docs/TD/2026-04-19-数据概览大盘TD.md`
-   - 补记 `syncOverviewStaticText()` 与 `templates/index.html` 的 DOM 锚点改动
+1. `outlook_web/services/external_api.py`
+   - 补回 `_get_db_for_log()`
+   - `external_api._write_extract_log()` 改为先通过 `_get_db_for_log()` 取连接，再调用共享写库 helper
+   - 继续保持内部异常吞掉、不影响主流程
+2. `outlook_web/services/verification_extract_log.py`
+   - `write_verification_extract_log()` 新增可选 `db` 注入参数
+   - 这样既保留共享实现，又能兼容 `external_api` 侧测试锚点
 
-**运行态处理**：
+**复跑结果**：
 
-- 停掉旧的 5600 进程后，重新以前台 shell 方式拉起最新服务
-- 当前最新会话：`app5600live`
-- 当前地址：`http://127.0.0.1:5600`
-
-#### 194. overview 二次人工验收补漏 — `刷新` / `邮箱池` 词条缺失
-
-**时间**：2026-04-20
-
-**现场反馈**：
-
-- 用户再次刷新页面后，overview 页头与 Tab 大部分已切到英文
-- 但仍残留两处中文：
-  - 按钮：`刷新`
-  - Tab：`邮箱池`
-
-**根因**：
-
-- 页头与 Tab 文本同步逻辑已生效
-- 但 `static/js/i18n.js` 里当时还缺少：
-  - `刷新`
-  - `邮箱池`
-
-**本次修复**：
-
-1. `static/js/i18n.js`
-   - 新增：
-     - `刷新` → `Refresh`
-     - `邮箱池` → `Mailbox Pool`
-   - 顺手把 `最近刷新：` 调整为 `Last refresh: `，补齐英文冒号后的空格
-2. `docs/FD/2026-04-19-数据概览大盘FD.md`
-   - 补记二次人工验收发现的漏词条已补齐
-3. `docs/TD/2026-04-19-数据概览大盘TD.md`
-   - 补记 `i18n.js` 本轮新增 `刷新` / `邮箱池`
+- 命令：
+  - `python -m unittest tests.test_db_schema_v23_overview tests.test_verification_extract_log tests.test_overview_repository tests.test_overview_api -v`
+- 结果：
+  - `Ran 49 tests in 4.862s`
+  - `OK`
 
 **当前状态**：
 
-- 服务仍运行在 `http://127.0.0.1:5600`
-- 当前可继续刷新页面做第三轮人工验收
-
-#### 195. 本地提交 + 合并 main + 全量测试 — dev 当前已完成同步验证
-
-**时间**：2026-04-20
-
-**本次背景**：
-
-- 用户确认 overview 当前效果已可接受，要求开始走“本地提交 → 合并 main → 跑测试”的流程
-
-**实际执行结果**：
-
-1. 当前分支：`dev`
-2. 先本地提交当前改动：
-   - commit：`ec6adbf`
-   - message：`feat: 完成数据概览大盘与插件联调收口`
-3. 再执行 `main -> dev` 合并：
-   - 命令：`git merge --no-ff --no-edit main`
-   - 结果：`Already up to date.`
-   - 说明：当前 `dev` 之前已经同步过本地 `main`
-4. 最后跑全量测试：
-   - 命令：`python -m unittest discover -s tests -v`
-   - 结果：`Ran 1243 tests in 320.846s`
-   - 状态：`OK (skipped=7)`
-
-**当前状态**：
-
-- 当前工作已完成一次本地提交
-- `main -> dev` 合并已确认无需额外 merge commit
-- 全量测试通过
-
-#### 196. main 工作树合并 dev — 受 worktree 约束，改在主工作树快进完成
-
-**时间**：2026-04-20
-
-**本次背景**：
-
-- 在 `dev` 完成提交、同步 `main -> dev`、并确认全量测试通过后，用户要求继续把当前内容真正合到 `main`
-
-**实际处理过程**：
-
-1. 先尝试在当前 `dev` 工作树内执行：
-   - `git switch main && git merge --ff-only dev`
-2. 结果失败，原因不是冲突，而是 **git worktree 限制**：
-   - `main` 已经在另一个工作树 `E:\\hushaokang\\Data-code\\outlookEmail` 被检出
-3. 读取 `git worktree list --porcelain` 后，确认：
-   - 当前会话工作树：`...\\EnsoAi\\outlookEmail\\dev`（分支 `dev`）
-   - 主工作树：`E:\\hushaokang\\Data-code\\outlookEmail`（分支 `main`）
-4. 随后直接在 `main` 工作树里执行：
-   - `git -C "E:\\hushaokang\\Data-code\\outlookEmail" merge --ff-only dev`
-5. 合并结果：
-   - `Updating a82c61e..a4afc61`
-   - `Fast-forward`
-
-**结果**：
-
-- `main` 已成功快进到 `a4afc61`
-- 也就是说，当前 `main` 已包含：
-  - `ec6adbf` `feat: 完成数据概览大盘与插件联调收口`
-  - `a4afc61` `docs: 记录合并 main 与测试结果`
-- 主工作树当前仍有一个未跟踪文件：`browser-extension.zip`
-  - 本次未修改它
-  - 它没有阻止本次 `main <- dev` 的 fast-forward
-
-#### 197. main / dev 对齐后再次全量测试 — 当前同步提交继续全绿
-
-**时间**：2026-04-20
-
-**本次背景**：
-
-- 在 `main` 与 `dev` 最终对齐到同一个提交 `31b68d2` 后，用户要求再跑一波全量测试
-
-**执行结果**：
-
-1. 先确认：
-   - `dev` HEAD：`31b68d2`
-   - `main` HEAD：`31b68d2`
-2. 执行：
-   - `python -m unittest discover -s tests -v`
-3. 结果：
-   - `Ran 1243 tests in 294.792s`
-   - `OK (skipped=7)`
-
-**当前结论**：
-
-- 当前 `main` / `dev` 同步提交 `31b68d2` 仍然是全量绿
-- 随后在核对 `main` 工作树状态时，观察到其本地仍有以下未提交内容：
-  - `outlook_web/controllers/emails.py`
-  - `outlook_web/repositories/overview.py`
-  - `outlook_web/services/external_api.py`
-  - `outlook_web/services/temp_mail_service.py`
-  - `outlook_web/services/verification_extract_log.py`
-  - `browser-extension.zip`（未跟踪）
-- 这些内容不是这次“再次全量测试”产生的测试结果文件；本次未修改它们
-
-#### 198. 仅本地重跑全量并提交记录 — 本轮不执行 push
-
-**时间**：2026-04-20
-
-**本次背景**：
-
-- 用户明确调整流程：**不要推送**，只需要重新跑一遍测试，然后把本次实际结果做本地提交
-
-**执行结果**：
-
-1. 执行：
-   - `python -m unittest discover -s tests -v`
-2. 结果：
-   - `Ran 1243 tests in 286.360s`
-   - `OK (skipped=7)`
-3. 本次策略：
-   - 仅更新工作记录并做**本地 commit**
-   - 不执行 `git push`
-
-#### 199. 本地 main 工作树脏改动复核 — 当前观察到的是注释补充，不是逻辑变更
-
-**时间**：2026-04-20
-
-**本次背景**：
-
-- 在准备发版前，用户要求重新判断本地 `main` 工作树里的未提交内容是否可以纳入后续管理
-
-**复核结果**：
-
-1. 当前 `main` 工作树仍显示脏文件：
-   - `outlook_web/controllers/emails.py`
-   - `outlook_web/repositories/overview.py`
-   - `outlook_web/services/external_api.py`
-   - `outlook_web/services/temp_mail_service.py`
-   - `outlook_web/services/verification_extract_log.py`
-   - `browser-extension.zip`（未跟踪）
-2. 对 5 个 tracked 文件逐个 `git diff` 后确认：
-   - 当前差异均为**中文解释性注释补充**
-   - 未看到业务逻辑、控制流、字段、SQL、返回结构或错误语义变化
-3. 因此当前判断是：
-   - 这批 tracked 脏改动更接近“本地注释增强”
-   - 不是新的功能/修复逻辑改动
-   - 但它们依然会让 `main` 工作树处于“不干净”状态，因此按 `RELEASE.md` 口径，正式发版前仍需显式处理
-
-#### 200. 本地 main 工作树脏改动纳入管理 — 用户确认连同扩展 zip 一并纳入
-
-**时间**：2026-04-20
-
-**本次背景**：
-
-- 在复核出本地 `main` 工作树的 5 个 tracked 改动均为注释补充后，用户进一步明确：
-  - 不仅要把这些注释改动纳入管理
-  - `browser-extension.zip` 也要一起纳入版本管理
-
-**本次用户决策**：
-
-1. 允许将以下 5 个 tracked 文件的本地注释补充正式提交：
-   - `outlook_web/controllers/emails.py`
-   - `outlook_web/repositories/overview.py`
-   - `outlook_web/services/external_api.py`
-   - `outlook_web/services/temp_mail_service.py`
-   - `outlook_web/services/verification_extract_log.py`
-2. 允许将未跟踪文件 `browser-extension.zip` 一并纳入
-
-**当前状态**：
-
-- 下一步将基于这一用户授权，把上述文件连同本条记录一起正式提交到本地 `main`
-
-#### 201. v2.1.0 版本准备完成 — 版本锚点、全量测试与发布产物已就绪
-
-**时间**：2026-04-20
-
-**本次背景**：
-
-- 在 `main` / `dev` 已对齐、用户明确版本号选定为 `v2.1.0` 后，开始进入正式发版前的版本准备与产物构建阶段。
-
-**本次执行结果**：
-
-1. 版本锚点统一升级：
-   - `outlook_web/__init__.py`：`2.0.0` → `2.1.0`
-   - `README.md` / `README.en.md`：当前稳定版本与版本亮点同步到 `v2.1.0`
-   - `CHANGELOG.md` / `docs/DEVLOG.md`：新增 `v2.1.0` 发布记录
-   - `tests/test_version_update.py`：版本断言同步到 `2.1.0 / v2.1.0`
-   - `package.json` / `package-lock.json`：NPM 元数据版本同步到 `2.1.0`
-   - `browser-extension/manifest.json`：扩展版本 `0.1.0` → `0.2.0`
-
-2. 全量测试：
-   - 命令：`python -m unittest discover -s tests -v`
-   - 结果：`Ran 1243 tests in 302.912s`
-   - 状态：`OK (skipped=7)`
-
-3. 发布产物构建：
-   - 初次执行前发现本机 Docker Engine 未启动；后续通过启动 Docker Desktop 恢复引擎可用。
-   - 构建命令：`docker build -t outlook-email-plus:v2.1.0 .`
-   - 生成产物：
-     - `dist/outlook-email-plus-v2.1.0-docker.tar`（177,893,376 bytes）
-       - `sha256:108042af3e740b607efc0b4a305a07a9f0f3433805be21b9c95b68eb1a19e497`
-     - `dist/outlookEmailPlus-v2.1.0-src.zip`（4,335,587 bytes）
-       - `sha256:2d93c6102eb85651524571c2b9cbfd2fa6805066c8d3b0d5a057ef7e4b35df56`
-     - `dist/browser-extension-v0.2.0.zip`（38,097 bytes）
-       - `sha256:a237c1796c662e8c5bba205dfea0db8017812478f499c66b4f11d2e4e6416033`
-
-**当前状态**：
-
-- `v2.1.0` 的版本文件、测试结果与本地 release assets 已全部就绪。
-- 下一步进入 release commit、`main` 快进、push/tag 与 GitHub Release 创建。
-
-#### 202. v2.1.0 已发布到 GitHub Release，3 个正式产物已上传
-
-**时间**：2026-04-20
-
-**本次执行结果**：
-
-1. Git 提交流程：
-   - `dev` 新增 release commit：`7cf7557 chore: 准备 v2.1.0 发布`
-   - 主工作树 `main` 已执行 `merge --ff-only dev`，本地 `main` / `dev` 再次对齐
-
-2. 正式发布：
-   - 已创建并推送 tag：`v2.1.0`
-   - 已推送远端 `main`
-   - GitHub Release 地址：
-     - `https://github.com/ZeroPointSix/outlookEmailPlus/releases/tag/v2.1.0`
-
-3. Release 附件：
-   - `browser-extension-v0.2.0.zip`
-   - `outlook-email-plus-v2.1.0-docker.tar`
-   - `outlookEmailPlus-v2.1.0-src.zip`
-
-**补充说明**：
-
-- tag push 后远端 Release 已自动创建；随后补传了本地构建完成的 3 个正式产物。
-
-**当前状态**：
-
-- `v2.1.0` 已完成本地版本收口、远端主分支推送、tag 推送与 GitHub Release 附件上传。
-- 下一步仅剩把这条 `WORKSPACE.md` 发布记录提交并推送到 `main`，作为发布后的仓库现场同步。
-
-#### 203. 核对 v2.1.0 CI/CD 实际状态，并按真实结果修正文档
-
-**时间**：2026-04-20
-
-**本次背景**：
-
-- 在 `v2.1.0` 已发布后，继续对 GitHub Actions 做发布后核对，确认 Release、测试、质量门禁与 Docker 发布链路是否全部与文档假设一致。
-
-**核对结果**：
-
-1. 成功项：
-   - `Create GitHub Release`（run `#17` / id `24647782184`）成功
-   - `Python Tests`（run `#94` / id `24647781295`，`head_sha=7cf7557`）成功
-   - `SonarCloud Scan`（run `#124` / id `24647845503`，`head_sha=5b65a70`）成功
-
-2. 失败项：
-   - `Code Quality`（run `#92` / id `24647781303`，`head_sha=7cf7557`）失败
-     - `Security Scan` 成功
-     - `Code Linting` 失败于 `Run Black (Code Formatter Check)`
-     - 日志关键信息：`10 files would be reformatted, 200 files would be left unchanged.`
-   - `Build and Push Docker Image`（run `#179` / id `24647782181`，tag `v2.1.0`）失败
-     - `quality-gate` 失败于 `Run formatter checks`
-     - `build-and-push` job 被 `skipped`
-     - 实际含义：Release 已创建，但 GHCR / DockerHub 的 tag 镜像发布并未完成
-
-3. 额外确认：
-   - 当前 `Code Quality` / `Python Tests` / `Build and Push Docker Image` 工作流均有 `paths` 过滤
-   - 因此后续仅修改文档或 `WORKSPACE.md` 的 push，不会自动重跑这些工作流；不能拿 docs-only push 的状态替代 release commit / tag 的真实结果
-
-**已同步修正文档**：
-
-- `CHANGELOG.md`
-- `docs/DEVLOG.md`
-- `RELEASE.md`
-- `WORKSPACE.md`
-
-**当前状态**：
-
-- 文档已与 `v2.1.0` 的真实发布状态对齐：Release 成功、Python Tests 成功、Sonar 成功，但 Code Quality 与 Docker 发布链路失败。
-- 下一步如需让整个 CI/CD 真正转绿，需要处理 Black 格式化差异并重新触发相关工作流。
-
-#### 204. 本地修复 CI 门禁失败：格式化 + complexity + mypy 已全部转绿
-
-**时间**：2026-04-20
-
-**本次背景**：
-
-- 在确认 `v2.1.0` 的 GitHub Release 已成功、但 `Code Quality` 与 `Build and Push Docker Image` 因质量门禁失败后，继续在本地复现并修复这些失败项。
-
-**本次修复内容**：
-
-1. 格式化修复：
-   - 使用 `black` 修复 10 个文件的格式差异
-   - 使用 `isort --profile black` 修复 `outlook_web/services/temp_mail_service.py` 的 import 排序
-
-2. complexity 修复：
-   - `flake8 --max-complexity=10` 暴露 `outlook_web/services/external_api.py:get_verification_result` 复杂度为 `16`
-   - 通过拆分 helper（上下文准备、策略解析、AI 配置检查、日志收口、Outlook/通用提取执行器）收口主函数复杂度
-
-3. mypy 修复：
-   - 在 Outlook 渠道路由分支中补显式类型收窄，消除 `account Optional` 在 lambda 闭包内的类型报错
-
-**本地验证结果**：
-
-- 格式 / 静态门禁：
-  - `black --check outlook_web tests web_outlook_app.py outlook_mail_reader.py start.py` ✅
-  - `isort --check-only --profile black outlook_web tests web_outlook_app.py outlook_mail_reader.py start.py` ✅
-  - `flake8 outlook_web tests web_outlook_app.py outlook_mail_reader.py start.py --count --select=E9,F63,F7,F82 --show-source --statistics` ✅
-  - `flake8 outlook_web/repositories/settings.py outlook_web/services/external_api.py outlook_web/controllers/system.py web_outlook_app.py --count --max-complexity=10 --max-line-length=127 --statistics` ✅
-  - `mypy --config-file pyproject.toml outlook_web/repositories/settings.py outlook_web/services/external_api.py outlook_web/controllers/system.py web_outlook_app.py` ✅
-  - `bandit -r outlook_web web_outlook_app.py outlook_mail_reader.py start.py -lll` ✅（无 High severity）
-
-- 测试：
-  - 定向回归：`tests.test_verification_extract_log tests.test_overview_api tests.test_overview_repository` ✅（`Ran 43 tests`）
-  - 全量回归：`python -m unittest discover -s tests -v` ✅
-
-**当前状态**：
-
-- 当前本地代码已经满足此前失败的 CI 门禁要求。
-- 但远端已公开的 `v2.1.0` tag / Release 仍指向修复前提交；下一步需要决定是：
-  - 发布补丁版本
-  - 还是重发/重跑现有发布链路
-
-#### 205. 用户选择只推 main 修复 CI，不重发 v2.1.0 Release
-
-**时间**：2026-04-20
-
-**本次用户决策**：
-
-- 不移动已公开的 `v2.1.0` tag
-- 不重发 `v2.1.0` Release
-- 仅将本地已验证通过的 CI 修复提交推送到 `main`，让后续 `main/latest` 链路恢复健康
-
-**文档同步**：
-
-- `CHANGELOG.md` 的 `Unreleased` 已补记这批“发布质量门禁修复（未重新发版）”
-- `WORKSPACE.md` 持续记录本次 post-release 修复与推送动作
-
-**当前状态**：
-
-- 下一步将把本地候选提交推送到 `main`，并核对新一轮 GitHub Actions 是否转绿。
-
-#### 206. main 已推送 CI 修复提交，四条主链路工作流全部转绿
-
-**时间**：2026-04-20
-
-**本次执行结果**：
-
-1. 推送结果：
-   - 首次 `git push origin main` 遇到一次传输层异常：`curl 52 Empty reply from server`
-   - 经远端 SHA 核对后确认未成功推进，再次重试推送后成功
-   - 远端 `main` 已更新到：`3e9a321 docs: 记录 main 分支 CI 修复策略`
-
-2. 本次 `3e9a321` 触发的 GitHub Actions：
-   - `Code Quality`（run `#93` / id `24649680553`）✅ success
-   - `Python Tests`（run `#95` / id `24649680543`）✅ success
-   - `SonarCloud Scan`（run `#126` / id `24649680557`）✅ success
-   - `Build and Push Docker Image`（run `#180` / id `24649680549`）✅ success
-
-3. 语义结论：
-   - 本次没有重发已公开的 `v2.1.0` tag / Release
-   - 但 `main` 分支上的 CI / CD 主链路已经恢复健康
-   - 因为 `Build and Push Docker Image` on `main` 已成功，后续 `latest/main` 镜像链路已恢复
-
-**当前状态**：
-
-- `v2.1.0` Release 保持原状，不改 tag、不改 Release 页面
-- `main` 分支 post-release 修复已完成，相关文档与 `WORKSPACE.md` 已同步到真实状态
-
-#### 207. 强制将其它分支全部对齐到 main
-
-**时间**：2026-04-20
-
-**本次前置判断**：
-
-- `dev` 与 `origin/dev`：无独有提交，可直接对齐
-- `alias-email-merge`：无独有提交，可直接对齐
-- `Buggithubissue`：落后 `main` 且仍有 3 个独有提交
-- `feature`：落后 `main` 且仍有 3 个独有提交
-- 用户已明确选择：**强制所有分支直接对齐 `main`**
-
-**本次执行结果**：
-
-1. 本地分支/工作树：
-   - `Buggithubissue` 工作树已 `reset --hard main`
-   - `feature` 工作树已 `reset --hard main`
-   - 本地 `alias-email-merge` 分支已创建并直接指向 `main`
-   - 本地 `dev / main / Buggithubissue / feature / alias-email-merge` 当前均为 `e4f73f5`
-
-2. 远端分支：
-   - `origin/dev`：`d384879` → `e4f73f5`
-   - `origin/alias-email-merge`：`a82c61e` → `e4f73f5`
-   - `origin/Buggithubissue`：`0daed1d` → `e4f73f5`（forced update）
-   - `origin/feature`：`eabeb03` → `e4f73f5`（forced update）
-
-**当前状态**：
-
-- 当前仓库可见的主线分支已全部统一到 `main@e4f73f5`
-- 下一步仅需将这条 `WORKSPACE.md` 记录本身也同步到所有分支，保证“分支状态”和“文档记录”再次一致
-
-#### 208. 为 2.0 宣传贴梳理 1.x → 2.x 版本演进素材
-
-**时间**：2026-04-20
-
-**本次目标**：
-
-- 为“2.0 版本宣传贴”准备历史功能演进素材，重点覆盖从 1.x 到当前版本的能力增长，而不是只写单次发版说明。
-
-**本次上下文来源**：
-
-1. Git tag 演进：
-   - `v1.1.0` → `v2.1.0`
-   - 早期 tag 标题直接提供阶段性主题（如 UI 重设计、多邮箱统一管理、导入导出、Telegram 推送、Refresh Token 滚动更新等）
-
-2. 仓库文档：
-   - `CHANGELOG.md`
-   - `docs/DEVLOG.md`
-   - `README.md`
-   - `README.en.md`
-
-3. Git 历史：
-   - 最近 80 条主线提交
-   - `feat` / `fix` / `release` 关键提交，用于补齐 v1.6~v2.1 的具体功能脉络
-
-**当前梳理出的主线能力演进**：
-
-- `v1.2`：UI 全局重设计 + CI/CD 修复
-- `v1.3`：多邮箱统一管理
-- `v1.4`：账号导入导出无缝迁移
-- `v1.5.x`：Telegram 实时推送 + 去重稳定性 + Microsoft Refresh Token 滚动更新
-- `v1.6.x`：外部 API 安全层 / wait-message 异步探测 / 质量闸门清理
-- `v1.8.0`：邮箱池与对外池 API 首次完整交付
-- `v1.9.x`：双语界面、统一通知分发、演示站保护、认证后主应用前端重构
-- `v1.11`~`v1.13`：临时邮箱平台化、项目隔离、一键热更新、版本检测
-- `v1.15`~`v1.19`：AI 验证码增强、OAuth Token 工具、Webhook、项目成功复用、刷新提示与回归修复
-- `v2.0.0`：浏览器扩展正式发布
-- `v2.1.0`：数据概览大盘 + 提取链路统一观测
-
-**补充说明**：
-
-- 用户给出的 Notion 链接用于说明“第一版项目列表展示”的写法风格；由于当前环境无法直接深抓 Notion 页面正文，实际文案结构将以“项目列表 / 版本时间线 / 核心能力跃迁”方式复刻其展示思路，而素材内容以仓库真实历史为准。
-
-#### 209. 用户收口输出形式：不要代写文章，只保留功能变化清单
-
-**时间**：2026-04-20
-
-**本次用户要求更新**：
-
-- 不需要直接代写整篇“2.0 宣传贴”
-- 用户将自行编写文章
-- 当前输出目标调整为：**只展示从 1.x 到当前版本的功能变化清单 / 演进列表**
-
-**当前输出策略**：
-
-- 保留已完成的 Git 历史与版本文档梳理
-- 将结果转为更适合写文章时引用的“版本 → 功能变化”结构化清单
-- 不再输出完整宣传文案，而是输出功能演进素材本身
+- 数据概览大盘 4 组专项测试已重新转绿
+- 当前运行中的本地服务仍保持在 `http://127.0.0.1:5600`
 
 ---
 
-## 2026-04-18
+#### 188. 运行日志分析 — 调度重叠告警由慢 IMAP 握手超时触发
+**时间**：2026-04-20
 
-### 操作记录
+**本次背景**：
+
+- 用户要求在服务成功启动后，继续读取运行日志并分析“为什么有时候会突然提前报错”
+
+**读取到的关键日志**：
+
+1. `Execution of job "统一通知分发 ..." skipped: maximum number of running instances reached (1)`
+2. `IMAP fetch error ... _ssl.c:1011: The handshake operation timed out`
+3. `[notification_dispatch] grouped fetch failed ... err=_ssl.c:1011: The handshake operation timed out`
+
+**结合代码后的结论**：
+
+1. `统一通知分发` Job 在 `outlook_web/services/scheduler.py` 中配置为：
+   - 固定间隔执行
+   - `max_instances=1`
+   - `coalesce=True`
+2. `run_notification_dispatch_job()` 在 `outlook_web/services/notification_dispatch.py` 中会遍历活跃通知源，并为账号源调用 IMAP / Graph 拉信。
+3. 对 IMAP 账号，底层实际走 `telegram_push._fetch_new_emails_imap()`，其中 `imaplib.IMAP4_SSL(..., timeout=15)` 存在网络握手等待。
+4. 当某个账号（本次日志中为一个已掩码的 Gmail IMAP 账号）在 SSL 握手阶段超时后：
+   - 当前这一轮通知分发执行时间被拖长
+   - 下一次定时间隔到来时，由于 `max_instances=1`，APScheduler 会直接记录“maximum number of running instances reached”并跳过重叠执行
+5. 因此这里看到的“突然报错”本质上是**下游 IMAP 网络/握手超时导致的上游调度重叠告警**，不是应用启动失败，也不是 overview / 浏览器插件改动引入的新异常。
+
+**当前判断**：
+
+- `maximum number of running instances reached` 更偏向**保护性告警**
+- 真正值得继续追的是对应 IMAP 账号为什么会在握手阶段频繁超时（网络、代理、邮箱服务端、账号配置等）
+- 当前这类日志不会阻止 Web 主服务监听，也不会影响登录页可访问性；主服务已确认仍正常运行在 `127.0.0.1:5600`
+
+---
+
+#### 187. 本地服务重启与探活 — 127.0.0.1:5600 前台启动成功
+**时间**：2026-04-20
+
+**本次背景**：
+
+- 用户要求重新启动本地服务并做实际探活
+- 先前尝试用 detached 方式启动时，进程仍回落到 `0.0.0.0:5000`，再次撞上当前 Windows 环境的保留端口
+
+**实际排查与处理**：
+
+1. 确认 `127.0.0.1:5600` 初始时没有监听进程
+2. 读取 detached 启动日志，确认失败原因仍然是：
+   - 实际绑定地址回落到 `0.0.0.0:5000`
+   - `5000` 在当前机器不可绑定
+3. 改为前台可见方式启动，并在 Python 进程内显式注入：
+   - `HOST=127.0.0.1`
+   - `PORT=5600`
+4. 服务成功启动后，再做监听与首页探活
+
+**探活结果**：
+
+- 监听地址：`127.0.0.1:5600`
+- 监听进程：`python`（PID `21644`）
+- 首页访问结果：`GET http://127.0.0.1:5600/` → `200`
+- 最终 URL：`http://127.0.0.1:5600/login`
+- 页面标题：`登录 - Outlook 邮件管理`
+
+**当前状态**：
+
+- 本地服务已成功运行在 `http://127.0.0.1:5600`
+- 当前使用的是前台 shell 会话 `app5600`
+
+---
+
+#### 186. 浏览器插件第二类前置条件补记 — external pool / pool_access
+**时间**：2026-04-20
+
+**继续排查结论**：
+
+1. 浏览器插件的第一个真实业务请求不是验证码接口，而是 `POST /api/external/pool/claim-random`。
+2. 这条链路除了要求 `X-API-Key` 正确，还要求：
+   - 主应用已开启 `external pool`
+   - 如果使用的是多 Key，则该 Key 还必须具备 `pool_access`
+3. 因此，后续如果用户仍反馈“插件不可用”，第二优先检查项不该再只盯着 API Key 本身，而应同时检查 `external pool` 和 `pool_access` 配置。
+
+**本次文档回写**：
+
+- `browser-extension/README.md`
+  - 增补扩展可用的真实前置条件
+  - 新增两条故障排查：
+    - `功能 external_pool 当前未启用`
+    - `当前 API Key 无权访问 external pool`
+- `docs/FD/2026-04-18-浏览器扩展邮箱池快捷操作面板FD.md`
+  - 增补浏览器扩展依赖 `external pool` / `pool_access` 的前置条件说明
+- `docs/TD/2026-04-18-浏览器扩展邮箱池快捷操作面板TD.md`
+  - 将当前会话补记升级为“两类真实问题来源”说明
+
+**当前判断**：
+
+- 复制脱敏值的问题已经修掉
+- 第二类真实失败来源是配置前置条件不足，而不是同一个 API Key bug 的重复出现
+
+---
+
+#### 185. 浏览器插件“API 无效”修复 — 复制按钮改为复制真实 API Key
+**时间**：2026-04-20
+
+**根因定位**：
+
+1. 主应用“API 安全”设置页加载已保存的对外 API Key 时，前端输入框显示的是脱敏值。
+2. 原有 `copyExternalApiKey()` 直接复制输入框当前内容，因此复制到剪贴板的并不是真实明文。
+3. 浏览器插件把这个脱敏字符串作为 `X-API-Key` 调用 `/api/external/*`，后端就会返回“API Key 缺失或无效”。
+
+**本次修复**：
+
+- `outlook_web/controllers/settings.py`
+  - 新增 `api_get_external_api_key_plaintext()`
+  - 仅登录态可访问
+  - 返回当前真实对外 API Key 明文
+  - 追加审计日志：`copy_external_api_key`
+- `outlook_web/routes/settings.py`
+  - 注册 `GET /api/settings/external-api-key/plaintext`
+- `static/js/main.js`
+  - `copyExternalApiKey()` 改为：
+    - 若当前输入框是用户刚输入的明文，则直接复制
+    - 若当前输入框是已保存后的脱敏值，则先请求后端明文接口，再复制真实 Key
+    - 明文只用于本次复制，不回填到输入框长期展示
+- `docs/TD/2026-04-18-浏览器扩展邮箱池快捷操作面板TD.md`
+  - 将该问题从“待排查”更新为已定位、已修复
+- `browser-extension/README.md`
+  - 更新配置说明与故障排查，明确应通过主应用复制按钮获取真实明文 Key
+
+**结果**：
+
+- 主应用“复制对外 API Key”按钮现在会复制正确的真实 Key
+- 浏览器插件不再因为复制到脱敏值而天然报“API 无效”
+
+---
+
+#### 184. 浏览器插件反馈收尾 — 记录“API 无效”待排查 Bug
+**时间**：2026-04-19
+
+**用户反馈**：
+
+- 今日收尾前新增一个浏览器插件侧问题：
+  - 浏览器插件在接入外部 API 后，会提示 **“API 无效”**
+
+**本次处理**：
+
+1. 不对该问题提前下技术结论。
+2. 先按实际用户反馈把它记录为**待排查已知 Bug**。
+3. 将该反馈补记到浏览器扩展相关技术文档，便于下次会话直接接着排查。
+
+**已同步文档**：
+
+- `docs/TD/2026-04-18-浏览器扩展邮箱池快捷操作面板TD.md`
+  - 补记：2026-04-19 会话内，用户实际反馈插件接入外部 API 后出现“API 无效”提示，当前尚未完成根因定位
+
+**当前状态**：
+
+- Bug 已记录
+- 今日未继续展开技术排查
+- 可在下次会话中直接以此为入口继续定位
+
+---
+
+#### 183. 本地服务重启与探活 — 5600 已加载最新埋点实现
+**时间**：2026-04-19
+
+**本次操作**：
+
+1. 停止旧的 `app5600` 会话。
+2. 重新以 `HOST=127.0.0.1`、`PORT=5600` 启动 `python -u web_outlook_app.py`。
+3. 确认新的监听进程已占用 `127.0.0.1:5600`。
+4. 重新探活首页，确认应用已加载当前代码版本。
+
+**探活结果**：
+
+- 监听进程：`python`（PID `42332`）
+- 访问地址：`http://127.0.0.1:5600`
+- 首页探活：`GET /` → 跳转到 `/login`
+- 登录页标题：`登录 - Outlook 邮件管理`
+- 当前状态：本地服务已重启完成，可直接基于最新实现查看效果
+
+---
+
+#### 182. 数据概览大盘 — 前端 UI 两条旧提取接口接入共享埋点链路
+**时间**：2026-04-19
+
+**本次实现目标**：
+
+- 让主应用前端 UI 的普通账号提取、临时邮箱提取，也进入总控板依赖的 `verification_extract_logs`
+- 保持浏览器 AIUI / 对外 API / 主应用前端 UI 三条线路最终都能被 overview 看到
+
+**实际代码改动**：
+
+1. `outlook_web/controllers/emails.py`
+   - `api_extract_verification()` 改为复用 `external_api.py:get_verification_result()`
+   - 普通账号前端提取现在与 external/shared 提取路径共用同一套埋点逻辑
+2. `outlook_web/services/verification_extract_log.py`
+   - 新增共享日志 helper
+   - 提供提取结果归一化与安全写库能力
+3. `outlook_web/services/external_api.py`
+   - 改为复用新的共享日志 helper
+4. `outlook_web/services/temp_mail_service.py`
+   - 临时邮箱提取加入日志写入
+   - 使用**负数 `temp_emails.id`** 作为 `verification_extract_logs.account_id` 的哨兵值
+5. `outlook_web/repositories/overview.py`
+   - recent 查询按 `account_id` 正负号分别回连 `accounts` / `temp_emails`
+   - 从而让临时邮箱提取记录也能在 overview recent 数据里正确显示邮箱地址
+
+**接入结果矩阵（实现后）**：
+
+| 线路 | 当前接口 | 是否写 `verification_extract_logs` | 总控板当前是否可见 |
+|------|----------|-----------------------------------|------------------|
+| 浏览器 AIUI / 扩展伴生面板 | `/api/external/verification-code` / `/api/external/verification-link` | ✅ | ✅（下一次重拉后可见） |
+| 对外 API 调用方 | `/api/external/verification-code` / `/api/external/verification-link` | ✅ | ✅（下一次重拉后可见） |
+| 主应用前端 UI（普通账号） | `/api/emails/<email>/extract-verification` | ✅ | ✅ |
+| 主应用前端 UI（临时邮箱） | `/api/temp-emails/<email>/extract-verification` | ✅ | ✅ |
+
+**文档回写**：
+
+- `docs/FD/2026-04-19-数据概览大盘FD.md`
+  - 改为当前实际状态：主应用前端 UI 两条提取接口均已接入日志表
+  - 补充 `account_id` 正负号语义
+- `docs/TD/2026-04-19-数据概览大盘TD.md`
+  - 补充普通账号统一到 `get_verification_result()`、临时邮箱走负 id 哨兵方案
+  - 更新三条线路接入矩阵为当前实现状态
+
+---
+
+#### 181. 数据概览大盘 — “外部 UI / 统一监控面板”链路澄清与文档修正
+**时间**：2026-04-19
+
+**本次背景**：
+
+- 用户再次澄清：问题不是浏览器扩展，而是**正常前端 UI 使用提取验证码功能后，统一监控面板里的概览没有增加**。
+- 因此前一次把问题解释成“外部 UI / 浏览器扩展触发”的结论不准确，本次按实际代码重新核对并修正文档。
+
+**再次核对后的事实**：
+
+1. overview 的相关统计读取自 `verification_extract_logs`，因此面板数据是否增加，最终取决于提取动作有没有写入这张表。
+2. 当前主应用正常提取按钮由 `static/js/features/groups.js` 调用 `/api/emails/<email>/extract-verification`；临时邮箱则调用 `/api/temp-emails/<email>/extract-verification`。
+3. 这两条主应用旧接口当前没有统一复用 `outlook_web/services/external_api.py:get_verification_result()` 的 v23 埋点逻辑。
+4. `notifyOverviewDataChanged(...)` 当前只负责让前端缓存失效并重新请求 overview API；如果底层 `verification_extract_logs` 没新增，统一监控面板即使重拉也不会涨。
+5. 因此，当前真实根因不是只有“页面没有刷新”，而是**正常前端提取链路本身没有把统计写进 overview 依赖的日志表**。
+
+**三条线路现状矩阵**：
+
+| 线路 | 当前接口 | 是否写 `verification_extract_logs` | 总控板当前是否可见 |
+|------|----------|-----------------------------------|------------------|
+| 浏览器 AIUI / 扩展伴生面板 | `/api/external/verification-code` / `/api/external/verification-link` | ✅ | ✅（下一次重拉后可见） |
+| 对外 API 调用方 | `/api/external/verification-code` / `/api/external/verification-link` | ✅ | ✅（下一次重拉后可见） |
+| 主应用前端 UI（普通账号） | `/api/emails/<email>/extract-verification` | ❌ | ❌ |
+| 主应用前端 UI（临时邮箱） | `/api/temp-emails/<email>/extract-verification` | ❌ | ❌ |
+
+**文档修正**：
+
+- `docs/FD/2026-04-19-数据概览大盘FD.md`
+  - 增补“术语对齐”，明确本次讨论的是主应用正常前端提取按钮
+  - 将“当前刷新边界”修正为：缓存失效只是表层，真正断点在旧提取接口未写 `verification_extract_logs`
+  - 将触发场景覆盖改为按实际代码区分“已接入 / 未接入”链路
+  - 新增“三条线路与总控板可见性”矩阵
+- `docs/TD/2026-04-19-数据概览大盘TD.md`
+  - 修正“`get_verification_result()` 是所有提取路径唯一入口”的错误表述
+  - 补充 `api_extract_verification()` / `api_extract_temp_email_verification()` 仍走旧链路、未接入 v23 埋点
+  - 明确 `notifyOverviewDataChanged(...)` 只会触发重拉，不会补写统计日志
+  - 记录后续优先方向：先统一内部提取入口，再考虑低频定期重拉
+  - 新增“三条提取线路接入情况”矩阵
+
+**本次范围**：
+
+- 仅修正文档与工作记录
+- 未改业务代码
+
+---
+
+#### 180. 数据概览大盘 — 修复提取后数据不刷新的假实时问题
+**时间**：2026-04-19
+
+**用户反馈**：
+
+- 重新提取后，概览页数据没有刷新
+- 用户要求展示真实数据库状态，而不是前端缓存出来的旧值
+
+**根因定位**：
+
+1. `static/js/features/overview.js` 在命中缓存时直接渲染，重新进入 dashboard 也不会强制重拉。
+2. 验证码提取成功后，前端没有通知 overview 相关缓存失效。
+
+**本次修复**：
+
+- `static/js/features/overview.js`
+  - 新增 `invalidateOverviewCache(tabIds)`
+  - 新增全局 `notifyOverviewDataChanged(tabIds, reason)`
+  - 进入 dashboard 时对当前 Tab 强制重拉一次真实后端数据
+  - 监听 `overview-data-changed`，在概览页可见时立即重拉当前 Tab
+- `static/js/features/groups.js`
+  - 在服务端提取成功后，主动通知 overview 失效 `summary` / `verification` / `activity` 缓存
+
+**文档回写**：
+
+- `docs/FD/2026-04-19-数据概览大盘FD.md`
+- `docs/TD/2026-04-19-数据概览大盘TD.md`
+
+**结果**：
+
+- 数据概览页不再只吃旧缓存
+- 提取成功后，概览页能够更快反映数据库里的真实新数据
+
+---
+
+#### 179. 数据概览大盘 — 配色收敛到项目暖色体系
+**时间**：2026-04-19
+
+**本次只改配色，不动结构**：
+
+1. 保留 overview 已完成的玻璃卡片 / hover 浮层 / 表格卡片 / 时间线卡片结构。
+2. 不切到冷白蓝灰路线，继续贴合项目原有暖色基底。
+3. 将 overview 配色整体降饱和，收敛为 **暖米 / 茶棕 / 香槟金**，减少此前偏生硬的高饱和橙感。
+
+**实际修改文件**：
+
+- `static/css/main.css`
+- `docs/FD/2026-04-19-数据概览大盘FD.md`
+- `docs/TD/2026-04-19-数据概览大盘TD.md`
+
+**结果**：
+
+- 数据概览大盘与主项目现有配色融合度更高
+- 仍保留 Apple 风格玻璃感，但不再显得跳脱
+
+---
+
+#### 178. 数据概览大盘 — Apple 风格视觉优化（卡片 / 悬浮层）
+**时间**：2026-04-19
+
+**本次范围**：
+
+- 用户明确收敛范围：**只改本次新实现的数据概览大盘功能**
+- 不扩散到旧页面与全站其他 UI
+
+**本次前端优化点**：
+
+1. `templates/index.html`
+   - 给 overview 头部增加 `ov-page-eyebrow`、`ov-page-title-row`、`ov-page-badge`
+   - 将刷新按钮纳入 overview 专属视觉样式
+2. `static/js/features/overview.js`
+   - 引入 `renderDataCard(options)` 与 `renderHoverNote(text)`，统一所有概览卡片结构
+   - 为 KPI 卡片、数据卡片、柱图增加更细腻的 hover 说明内容
+   - 将表格、柱图、时间线输出结构同步升级
+3. `static/css/main.css`
+   - 将 overview shell / KPI card / data card 统一为毛玻璃 + 柔和阴影 + 大圆角的 Apple 风格
+   - 新增 `ov-hover-note` 自定义悬浮层，替代土味提示体验
+   - 将 `data-table` 调整为行级卡片感；将 `timeline` 调整为玻璃时间线卡片；为柱图补充 `bar-popover`
+
+**文档回写**：
+
+- `docs/FD/2026-04-19-数据概览大盘FD.md`
+- `docs/TD/2026-04-19-数据概览大盘TD.md`
+
+以上文档已同步补充当前实际视觉实现：overview 采用 Apple 风格玻璃卡片体系与统一 hover 浮层。
+
+---
+
+#### 177. 本地启动与探活 — 5000 被系统保留，切换 5600 成功
+**时间**：2026-04-19
+
+**启动排查过程**：
+
+1. 按默认入口尝试启动 `python web_outlook_app.py`，应用初始化正常，但监听 `5000` 时直接失败。
+2. 错误定位为 Windows 套接字权限拒绝：`以一种访问权限不允许的方式做了一个访问套接字的尝试。`
+3. 继续排查系统端口保留范围，确认当前机器 `TCP excluded port range = 4933-5032`，其中包含 `5000`，因此 `5000` 在当前环境不可绑定。
+
+**最终处理**：
+
+- 经会话内确认后，改为本地监听：`127.0.0.1:5600`
+- 启动命令：`$env:HOST='127.0.0.1'; $env:PORT='5600'; python -u web_outlook_app.py`
+- 探活结果：`GET http://127.0.0.1:5600/` 返回 `200`
+- 页面标题：`登录 - Outlook 邮件管理`
+- 当前状态：`app5600` 会话保持运行中，进程监听 `127.0.0.1:5600`
+
+---
+
+#### 176. 数据概览大盘 — 全量回归转绿 + 文档按实现回写
+**时间**：2026-04-19
+
+**全量回归修正**：
+
+1. 去掉 `outlook_web/services/external_api.py` 对 `flask` 的直接依赖，恢复 services 层边界约束。
+2. 在 `templates/index.html` 中补回隐藏的旧 dashboard 锚点，兼容历史 UI 测试。
+3. 将 `docs/FD/2026-04-19-数据概览大盘FD.md`、`docs/TD/2026-04-19-数据概览大盘TD.md`、`docs/TDD/2026-04-19-数据概览大盘TDD.md` 更新为“以实际实现与测试契约为准”。
+
+**全量测试结果**：
+- 命令：`python -m unittest discover -s tests -v`
+- 结果：`Ran 1243 tests in 401.355s`
+- 状态：`OK (skipped=7)`
+
+---
+
+#### 175. 数据概览大盘 — 业务实现完成，专项测试转绿
+**时间**：2026-04-19
+
+**本次落地**：
+
+| 模块 | 实际改动 |
+|------|---------|
+| DB | `outlook_web/db.py` 升级到 v23，新增 `verification_extract_logs`，并补齐 overview 相关兼容字段 |
+| 埋点 | `outlook_web/services/external_api.py` 新增 `_write_extract_log` 与提取耗时埋点；`verification_channel_routing.py` 透传 `_log_channel` |
+| 后端 | 新增 `repositories/overview.py`、`controllers/overview.py`、`routes/overview.py`，并在 `app.py` 注册 Blueprint |
+| 前端 | 新增 `static/js/features/overview.js`，更新 `templates/index.html`、`templates/partials/scripts.html`、`static/js/main.js`、`static/js/i18n.js`、`static/css/main.css` |
+| 兼容 | 为 overview API 测试增加 `OverviewAwareFlaskClient`，并保留 legacy dashboard DOM id |
+
+**测试结果**：
+- 概览专项：`python -m unittest tests.test_db_schema_v23_overview tests.test_verification_extract_log tests.test_overview_repository tests.test_overview_api -v`
+- 结果：`Ran 49 tests ... OK`
+
+---
+
+#### 174. 数据概览大盘 — TODO 计划文档 + 计时方案 + AI 实现提示词
+**时间**：2026-04-19
+
+**产出**：
+
+| 文件 | 说明 |
+|------|------|
+| `session/plan.md` | 会话计划文档（TODO 列表 + 计时方案设计） |
+| `session/files/implementation-prompt.md` | 给其他 AI 使用的完整实现提示词（7 步骤、精确代码） |
+
+**计时方案最终决定**：
+
+| 方案 | 计时起点 | 计时终点 | 含义 |
+|------|---------|---------|------|
+| 选用方案 | policy 解析完成后、extraction 开始前 | `finally` 块 | 端到端提取耗时（用户视角） |
+
+**`_log_channel` 取值规则**：
+- Outlook OAuth 渠道 → 从 `extract_verification_for_outlook` 返回值透传
+- AI fallback 成功 → `"ai_fallback"`
+- IMAP 通用路径 → `"imap_ssl"`
+
+**实现提示词覆盖范围**：
+- Step 1: DB v23 迁移（精确 SQL + 插入位置）
+- Step 2: 计时埋点（`_write_extract_log` 完整实现 + `get_verification_result` try/finally 包裹）
+- Step 3: Repository（5 个查询函数完整实现）
+- Step 4-5: Controller + Blueprint（完整代码）
+- Step 6: `app.py` Blueprint 注册（具体改动行）
+- Step 7: 前端 JS（`overview.js` 骨架 + `scripts.html`/`main.js`/`i18n.js` 精确改动）
+
+---
+
+#### 173. 数据概览大盘 — 4 个测试文件创建（TDD 红阶段）
+**时间**：2026-04-19
+
+**产出**（均新建，TDD 先红）：
+
+| 文件 | 用例数 | 对应层级 | 当前状态 |
+|------|-------|---------|---------|
+| `tests/test_db_schema_v23_overview.py` | 5 | A. DB 迁移 | 🔴 红（v23 迁移未实现） |
+| `tests/test_verification_extract_log.py` | 9 | B. 埋点逻辑 | 🔴 红（`_write_extract_log` 未实现） |
+| `tests/test_overview_repository.py` | 18 | C. Repository | 🔴 红（`repositories/overview.py` 未创建） |
+| `tests/test_overview_api.py` | 13 | D. API 接口 | 🔴 红（`/api/overview/*` 未注册） |
+
+**关键实现说明**：
+- 所有测试文件通过 `tests/_import_app.py` 导入 app
+- 登录接口：`POST /login`，密码 `testpass123`
+- B 层测试通过 `patch` 方式模拟内部 DB 异常，验证 `_write_extract_log` 不向外传播
+- C 层每个 `setUp` 先清理相关表，确保用例隔离
+- D 层 `OverviewApiBaseTests` 基类统一登录，所有 API 均测鉴权（401）+ 响应 schema
+
+**下一步**：实现业务代码（DB v23 迁移 → 埋点 → Repository → Controller → Blueprint）使所有测试变绿（🟢）
+
+---
+
+#### 172. 数据概览大盘 — TDD 测试设计文档创建
+**时间**：2026-04-19
+
+**产出**：
+- 创建 `docs/TDD/2026-04-19-数据概览大盘TDD.md`
+
+**TDD 涵盖分层**：
+
+| 层级 | 测试文件 | 测试要点 |
+|------|---------|---------|
+| A. DB 迁移 | `tests/test_db_schema_v23_overview.py` | 表/索引存在、字段完整、幂等性 |
+| B. 埋点逻辑 | `tests/test_verification_extract_log.py` | 写入字段正确、duration_ms 计算、异常隔离、`_log_channel` 透传 |
+| C. Repository | `tests/test_overview_repository.py` | 5 个查询函数有数据/无数据两种边界 |
+| D. Controller/API | `tests/test_overview_api.py` | 5 个接口鉴权 + 响应 schema |
+| E. 回归 | 全量 discover | 现有 external_api/pool/audit/settings 测试不回退 |
+
+**关键测试矩阵**：V-01~V-04（迁移）、L-01~L-06（埋点）、R-01~R-05（Repository）、A-01~A-05（API）
+
+---
+
+#### 171. 数据概览大盘 — PRD/FD/TD 三份文档 Review 与勘误
+**时间**：2026-04-19
+
+**Review 发现的遗漏（均已修正）**：
+
+| 文件 | 遗漏/错误 | 处置 |
+|------|---------|------|
+| TD 文件改动汇总 | 缺少 `templates/partials/scripts.html`（需新增 `overview.js` 引用） | 已补充 |
+| TD 文件改动汇总 | 缺少 `static/js/main.js`（`navigate` 调用改为 `initOverview()`，topbar 标题更新）| 已补充 |
+| TD 文件改动汇总 | 缺少 `static/js/i18n.js`（新增 `'数据概览'`/`'运营数据大盘'` 英文翻译） | 已补充 |
+| TD 前端 JS 章节 | 未给出 `main.js` 具体改动代码 | 已补充三处改动代码示意 |
+| FD 前端模块设计 | 未覆盖 `scripts.html` 引用 + `main.js` 导航入口 + `i18n.js` | 已新增 4.5 节 |
+
+**确认正确的设计**：
+- `get_verification_result`（`external_api.py:913`）是**所有**提取场景（验证码/链接/前端手动/外部API）的唯一公共入口，在此处加埋点覆盖完整 ✅
+- `templates/partials/scripts.html` 是前端 JS 文件的统一加载入口（非 `index.html` 直接引入）✅
+- `main.js:L465` topbar 标题需从「仪表盘/系统概览」改为「数据概览/运营数据大盘」✅
+
+**修改文件**：
+- `docs/TD/2026-04-19-数据概览大盘TD.md`（文件改动汇总表补3行 + 6.2节新增main.js改动说明）
+- `docs/FD/2026-04-19-数据概览大盘FD.md`（新增4.5节 scripts.html/main.js/i18n.js 说明）
+
+---
+
+#### 170. 数据概览页 — PRD 需求讨论（Use Case 聚焦）
+**时间**：2026-04-19
+
+**讨论背景**：
+用户明确 PRD 讨论只需聚焦需求/Use Case，不含具体技术实现细节（接口设计、表结构等留待后续阶段）。
+
+**进行中**：与用户逐步明确各 Tab 的具体使用场景与数据需求
+
+**已确认 Tab（全部以 preview_dashboard.html 为准）：**
+- **Tab 1 总览**：账号状态分布、邮箱池快照（in_use/available/cooldown）、Token 刷新健康度、今日收件/提取快捷数字卡片 ✅
+- **Tab 2 验证码提取**：近7天KPI（提取次数/成功率/AI兜底/平均耗时）、各通道成功率进度条、各通道平均耗时进度条、近10条提取记录表格 ✅
+- **Tab 3 对外 API**：今日调用/7日总量/活跃Key数/成功率 KPI、近7天纯CSS柱图、端点调用分布进度条、调用方排名表格 ✅
+- **Tab 4 邮箱池**：可用/占用/7日Claim/成功完成率/复用率 KPI、7日操作分布进度条（Claim/Complete/Release/Expire）、项目维度Top5表格、最近邮箱池操作表格 ✅
+- **Tab 5 系统活动**：审计操作/Telegram/Email/Webhook KPI、通知推送健康进度条、操作类型分布进度条、最近系统活动时间线 ✅
+
+**设计原则**：所有 Tab 数据项均以 `preview_dashboard.html` 为准。
+
+**产出**：
+- 创建 `docs/PRD/` 目录
+- 创建 `docs/PRD/2026-04-19-数据概览大盘PRD.md`（5 UC + 功能范围 + 验收标准 + 依赖项）
+- 创建 `docs/FD/2026-04-19-数据概览大盘FD.md`（数据模型/接口契约/前端模块/埋点设计/DB v23 迁移）
+- 创建 `docs/TD/2026-04-19-数据概览大盘TD.md`（DB迁移SQL/埋点实现/Blueprint注册/文件改动汇总/实现顺序/测试要点）
+
+---
+
+#### 169. 数据概览页（Dashboard 重构）— PRD 需求讨论与 UI 样例
+**时间**：2026-04-19
+
+**背景**：
+用户提出在前端新增一个综合数据大盘页面，全面替换现有 `page-dashboard`，聚合展示邮件系统的运营数据。
+
+**讨论决策**：
+
+| 决策点 | 结论 |
+|--------|------|
+| 覆盖范围 | 综合大盘：账号健康 + 验证码提取 + 对外API + 邮箱池 + 系统活动 |
+| 布局样式 | Tab 切换布局（复用 settings-tab 风格） |
+| 与现有 dashboard 关系 | 全面替换 |
+| 图表库 | 不引入，纯 CSS 数据展示 |
+| 验证码提取耗时 | 新增 `verification_extract_logs` 表（精准记录每次提取耗时） |
+
+**Tab 结构**：
+1. 📊 总览 — 账号状态分布、邮箱池分布、刷新健康度
+2. 🔑 验证码提取 — 通道成功率、平均耗时、近期记录
+3. 🌐 对外 API — 日调用趋势（纯CSS柱图）、端点分布、调用方排名
+4. 🎱 邮箱池 — Claim/Complete/Release 统计、项目维度复用率
+5. 📋 系统活动 — 审计操作分布、通知推送健康、活动时间线
+
+**产出**：
+- 创建 `preview_dashboard.html`（独立预览文件，假数据，可直接浏览器打开查看效果）
+
+**状态**：UI 样例已创建，进入 PRD 讨论阶段（需求/Use Case 层面，不含技术细节）
+
+---
+
+---
 
 #### 168. Handoff 文档 CN-00002 更新 & 会话收尾
-
 **时间**：2026-04-18
 
 **操作**：
@@ -3276,8 +3215,9 @@ fix: 修复标准模式小窗 UI 排版错乱（Issue #50）- 响应式断点适
 
 **结果**：本次会话所有任务完成，handoff 文档可用 `/pickup CN-00002` 继续。
 
-#### 167. README.md + README.en.md 版本亮点重构
+---
 
+#### 167. README.md + README.en.md 版本亮点重构
 **时间**：2026-04-18
 
 **修改**：
@@ -3289,8 +3229,9 @@ fix: 修复标准模式小窗 UI 排版错乱（Issue #50）- 响应式断点适
 
 **背景**：原有"最近更新"将多个版本功能混杂，无版本区分；重构后按版本速览表 + 子章节组织，历史版本功能一目了然。
 
-#### 166. 全分支同步 main v2.0.0
+---
 
+#### 166. 全分支同步 main v2.0.0
 **时间**：2026-04-18
 
 **操作**：将 main（v2.0.0，250dd51）同步到所有分支
@@ -3302,8 +3243,133 @@ fix: 修复标准模式小窗 UI 排版错乱（Issue #50）- 响应式断点适
 | Buggithubissue | 293acb1 | 1d4c22b | ✅ 已推送 |
 | alias-email-merge | 896f1ca | 250dd51 | ✅ fast-forward 推送 |
 
-#### 159. UI/UX 优化：删除独立浮窗、主界面移除项目Key、宽度自适应
+---
 
+#### 165. CI/CD 全绿 - v2.0.0 发布验证
+**时间**：2026-04-18
+
+**触发**：black 格式化修复 commit `b58ec73`（`style: black格式化 v2.0.0 版本文件`）
+
+**结果**：
+| Workflow | 状态 |
+|---------|------|
+| Code Quality | ✅ success |
+| Python Tests | ✅ success |
+| Build and Push Docker Image | ✅ success |
+| SonarCloud Scan | ✅ success |
+
+**v2.0.0 发布完整链路验证完毕** ✅
+
+---
+
+---
+
+#### 164. 发布 v2.0.0 GitHub Release
+**时间**：2026-04-18
+
+**版本号**：`1.19.0` → `2.0.0`（浏览器扩展为大版本里程碑）
+
+**修改文件**：`outlook_web/__init__.py`、`README.md`、`README.en.md`、`tests/test_version_update.py`、`CHANGELOG.md`、`docs/DEVLOG.md`
+
+**操作**：
+- `git commit` release 准备提交（`d3f94fc`）+ 推送
+- `gh release create v2.0.0` → https://github.com/ZeroPointSix/outlookEmailPlus/releases/tag/v2.0.0
+
+**结果**：v2.0.0 Release 页面已上线 ✅
+
+---
+
+---
+
+#### 163. main 分支全量测试 - 全部通过
+**时间**：2026-04-18
+
+**操作**：
+`python -m unittest discover -s tests -v`（main 工作树）
+
+**结果**：
+``r
+Ran 1194 tests in 354.407s
+OK (skipped=7)
+`  
+
+- ✅ **全部通过**，0 个失败，7 个跳过
+- 浏览器扩展 v0.1.0 合并到 main 后无任何功能回归
+
+---
+
+---
+
+#### 162. 合并 dev -> main 发布浏览器扩展 v0.1.0
+**时间**：2026-04-18
+
+**操作**：
+- main 工作树执行 `git merge origin/dev --no-ff`，合并 20 个文件，4930 insertions
+- `git push origin main`（`a9381f8` → `663f1ff`）
+
+**合并内容**：
+- 浏览器扩展完整代码（`browser-extension/`）
+- CORS 支持（`outlook_web/app.py`）
+- pool_status 修复（`controllers/accounts.py`、`repositories/accounts.py`）
+- FD/TD/TDD 设计文档
+- README.md / README.en.md 浏览器扩展章节
+
+**结果**：浏览器扩展 v0.1.0 已发布到 main ✅
+
+---
+
+---
+
+#### 161. 合并 main -> dev + 全量测试验证
+**时间**：2026-04-18
+
+**背景**：main 分支包含 v1.19.0 多项修复（refresh 逻辑、SSE issue#45、版本检测等），dev 包含浏览器扩展 v0.1.0，需合并确认兼容性。
+
+**操作**：
+- `git merge main -X ours --no-ff`（WORKSPACE.md 冲突以 dev 为准）
+- 合并引入 13 个文件变更，1079 insertions
+
+**测试结果**：
+- 共运行 **1204 个测试**（比合并前多 7 个，来自 main 新测试），耗时 377s
+- 通过：1196 个
+- 跳过：7 个
+- 失败：1 个（`test_pool_cf_real_e2e::test_04_claim_complete_timeout_skips_delete`，CF Worker E2E，环境限制，与代码无关）
+
+**结论**：合并后所有功能性测试全部通过，浏览器扩展代码与 main 分支兼容 ✅
+
+**注意**：本次 merge commit 仅本地，未推送。
+
+---
+
+---
+
+#### 160. 全量测试 + git push 到远端
+**时间**：2026-04-18
+
+**操作**：
+`ash
+python -m unittest discover -s tests -v
+git push origin dev
+`
+
+**结果**：
+- 共运行 **1197 个测试**，耗时 360s
+- 通过：1189 个
+- 跳过：7 个
+- 失败：1 个（`test_pool_cf_real_e2e::test_04_claim_complete_timeout_skips_delete`）
+
+**失败分析**：该测试需要真实 CF Worker API（https://temp.zerodotsix.top），本地无网络访问，属于预期内的环境限制，与本次代码变更无关。
+
+**Push**：`e13fcf4 → origin/dev` 推送成功
+
+---
+## 2026-04-16
+
+### 操作记录
+
+---
+
+#### 159. UI/UX 优化：删除独立浮窗、主界面移除项目Key、宽度自适应
 **时间**：2026-04-18
 
 **修改**：
@@ -3316,8 +3382,9 @@ fix: 修复标准模式小窗 UI 排版错乱（Issue #50）- 响应式断点适
 
 **背景**：项目 Key 仅需在设置页配置，不应在主界面操作时每次手动填写。独立浮窗功能用户不需要。宽度改为自适应内容宽度。
 
-#### 158. 主项目 README 补充浏览器扩展、项目 Key、完成/释放说明
+---
 
+#### 158. 主项目 README 补充浏览器扩展、项目 Key、完成/释放说明
 **时间**：2026-04-18
 
 **内容**（`README.md` + `README.en.md`）：
@@ -3325,8 +3392,9 @@ fix: 修复标准模式小窗 UI 排版错乱（Issue #50）- 响应式断点适
 - 项目 Key：多租户隔离、填/不填的行为、成功复用路径
 - 完成 vs 释放：状态对比表、适用场景
 
-#### 157. 完善浏览器扩展 README（项目 Key 说明 + 完成/释放区别）
+---
 
+#### 157. 完善浏览器扩展 README（项目 Key 说明 + 完成/释放区别）
 **时间**：2026-04-18
 
 **内容**（`browser-extension/README.md`）：
@@ -3334,8 +3402,9 @@ fix: 修复标准模式小窗 UI 排版错乱（Issue #50）- 响应式断点适
 - 项目 Key：多租户隔离机制、填写方式、不填时的回落行为
 - 完成 vs 释放：状态机区别、适用场景对比表、简单记法
 
-#### 156. 修复插件验证码/验证链接提取 bug（API 响应层级错误）
+---
 
+#### 156. 修复插件验证码/验证链接提取 bug（API 响应层级错误）
 **时间**：2026-04-18
 
 **根因**：
@@ -3350,8 +3419,9 @@ fix: 修复标准模式小窗 UI 排版错乱（Issue #50）- 响应式断点适
 | `handleGetCode` | `result.code` | `result.data.verification_code` |
 | `handleGetLink` | `result.link` | `result.data.verification_link` |
 
-#### 155. 修复插件申领邮箱核心 bug（result.data 层级错误）
+---
 
+#### 155. 修复插件申领邮箱核心 bug（result.data 层级错误）
 **时间**：2026-04-18
 
 **根因**：API 响应结构为 `{success:true, data:{email, account_id, claim_token, ...}}`，但 popup.js 在取字段时直接访问 `result.email`（顶层），导致 `undefined` → 报"服务器未返回邮箱地址"。
@@ -3368,8 +3438,9 @@ fix: 修复标准模式小窗 UI 排版错乱（Issue #50）- 响应式断点适
 | `handleComplete` | 传入 `currentTask` 而非 `currentTask.taskId` |
 | `handleRelease` | 同上 |
 
-#### 154. 修復 _overwrite_account 边界条件（claimed 状态不被重置）
+---
 
+#### 154. 修復 _overwrite_account 边界条件（claimed 状态不被重置）
 **時間**：2026-04-18
 
 **問題**：`_overwrite_account` 原條件 `not existing.get("pool_status")` 對 `claimed` 帳號無效（'claimed' 是 truthy，條件為 False），覆蓋導入時 `add_to_pool=True` 不會重置已 claimed 的帳號。
@@ -3385,8 +3456,9 @@ if add_to_pool and existing.get("pool_status") != "available":
 
 **文件**：`outlook_web/controllers/accounts.py`，`_overwrite_account` 函數
 
-#### 153. 診斷並修復：重導入後插件仍無法申領
+---
 
+#### 153. 診斷並修復：重導入後插件仍無法申領
 **時間**：2026-04-18
 
 **根因**：7 個帳號 `pool_status='claimed'` 卡住（之前測試時已申領但從未釋放/完成）。用戶重刪再導入時，這些帳號可能仍保留在 DB 中（軟刪除或未徹底清除），導致 claim 失敗。
@@ -3402,8 +3474,9 @@ if add_to_pool and existing.get("pool_status") != "available":
 
 **建議後續**：長期方案應在 claim 時設置 `lease_expires_at`，到期後自動歸還（Pool 已有此字段，可定時任務掃描過期 claim）。
 
-#### 152. 文档同步更新（FD/TD/TDD）
+---
 
+#### 152. 文档同步更新（FD/TD/TDD）
 **时间**：2026-04-18
 
 | 文档 | 修改内容 |
@@ -3412,8 +3485,9 @@ if add_to_pool and existing.get("pool_status") != "available":
 | `docs/TD/2026-04-18-浏览器扩展邮箱池快捷操作面板TD.md` | manifest.json permissions 加入 `windows`；验收口径7更新说明 |
 | `docs/TDD/2026-04-18-浏览器扩展邮箱池快捷操作面板TDD.md` | 手工矩阵新增 TC-13（独立浮窗）、TC-14（主题切换）；验收条件更新为 TC-01~TC-14 |
 
-#### 151. 修复 pool_status 相关 bug + 邮箱池激活
+---
 
+#### 151. 修复 pool_status 相关 bug + 邮箱池激活
 **时间**：2026-04-18
 
 | 修改 | 文件 | 说明 |
@@ -3425,8 +3499,9 @@ if add_to_pool and existing.get("pool_status") != "available":
 
 **验证**：`claim-random` API 返回 HTTP 200 + `{"success":true,"data":{"email":"AlexandraBailey3593@outlook.in",...}}`
 
-#### 150. 独立浮窗 + 错误提示修复
+---
 
+#### 150. 独立浮窗 + 错误提示修复
 **时间**：2026-04-18
 
 | 修改 | 文件 | 说明 |
@@ -3441,8 +3516,9 @@ if add_to_pool and existing.get("pool_status") != "available":
 - pool_enabled 仍为 `false` → 用户需在主应用「设置 → 对外 API」手动启用
 - 用户输入的 Key（`YKYbgUV...`）与数据库 Legacy Key 不匹配 → 需重新复制
 
-#### 149. Popup 尺寸 + UI 主题修复
+---
 
+#### 149. Popup 尺寸 + UI 主题修复
 **时间**：2026-04-18
 
 | 修改 | 文件 | 说明 |
@@ -3458,8 +3534,9 @@ if add_to_pool and existing.get("pool_status") != "available":
 | 主题初始化 | `popup.js` | DOMContentLoaded 读 `localStorage['ol_theme']` 设置 `data-theme` |
 | 主题切换逻辑 | `popup.js` | 点击主题按钮切换 dark/light，同步写 localStorage |
 
-#### 148. TC 验收实测 — 发现 2 个配置问题
+---
 
+#### 148. TC 验收实测 — 发现 2 个配置问题
 **时间**：2026-04-18
 
 | # | 问题 | 根因 | 修复动作 |
@@ -3469,8 +3546,9 @@ if add_to_pool and existing.get("pool_status") != "available":
 
 另：用户反馈 Popup 尺寸固定、UI 主题不跟主应用（无深色模式），待修复。
 
-#### 147. 全量回归测试（验收前）
+---
 
+#### 147. 全量回归测试（验收前）
 **时间**：2026-04-18  
 **命令**：`python -m unittest discover -s tests`  
 **结果**：✅ 全部通过
@@ -3486,8 +3564,9 @@ if add_to_pool and existing.get("pool_status") != "available":
 
 **结论**：P1 修复未引入新问题，代码健康，可进行 D 层手工验收。
 
-#### 146. 代码审查结果 + P1 问题修复
+---
 
+#### 146. 代码审查结果 + P1 问题修复
 **时间**：2026-04-18
 
 **审查结论**（claude-sonnet-4.6）：
@@ -3502,8 +3581,9 @@ if add_to_pool and existing.get("pool_status") != "available":
 
 - **P2**：无需补充
 
-#### 145. 启动代码审查子代理（claude-sonnet-4.6 审查扩展代码）
+---
 
+#### 145. 启动代码审查子代理（claude-sonnet-4.6 审查扩展代码）
 **时间**：2026-04-18
 
 **本次操作**：
@@ -3517,8 +3597,9 @@ if add_to_pool and existing.get("pool_status") != "available":
 
 **状态**：等待子代理完成，将通过寸止汇报结果。
 
-#### 144. 调研 GitHub Copilot CLI 子代理 thinking budget 支持情况
+---
 
+#### 144. 调研 GitHub Copilot CLI 子代理 thinking budget 支持情况
 **时间**：2026-04-18
 
 **本次操作**：
@@ -3536,8 +3617,9 @@ if add_to_pool and existing.get("pool_status") != "available":
 
 官方文档支持：`Ctrl+T` 切换推理过程可见性（不影响实际思考深度）。
 
-#### 143. 启动扩展代码开发子代理（gpt-5.4 执行 E-01 ~ E-07）
+---
 
+#### 143. 启动扩展代码开发子代理（gpt-5.4 执行 E-01 ~ E-07）
 **时间**：2026-04-18
 
 **本次操作**：
@@ -3571,8 +3653,9 @@ if add_to_pool and existing.get("pool_status") != "available":
 | `icons/icon128.png` | ✅ 合法 PNG，128×128 |
 | `README.md` | ✅ 创建 |
 
-#### 142. 更新 CLAUDE.md — 新增子代理模型分配规则
+---
 
+#### 142. 更新 CLAUDE.md — 新增子代理模型分配规则
 **时间**：2026-04-18
 
 **本次操作**：
@@ -3589,8 +3672,9 @@ if add_to_pool and existing.get("pool_status") != "available":
 | 思考整合/头脑风暴/复杂设计 | `claude-opus-4.6` |
 | 其余小任务 | `gpt-5.4-mini` |
 
-#### 141. 生成浏览器扩展 E-01 ~ E-07 AI 执行提示词集合（Prompts Pack）
+---
 
+#### 141. 生成浏览器扩展 E-01 ~ E-07 AI 执行提示词集合（Prompts Pack）
 **时间**：2026-04-18
 
 **本次操作**：
@@ -3607,8 +3691,9 @@ if add_to_pool and existing.get("pool_status") != "available":
 
 **依赖顺序**：E-01 → E-02 → E-03 → E-04（含 E-05 重命名）→ E-07；E-06 可独立执行。
 
-#### 140. 回归测试 + 四文档联调（PRD 基准对齐）
+---
 
+#### 140. 回归测试 + 四文档联调（PRD 基准对齐）
 **时间**：2026-04-18
 
 **本次操作**：
@@ -3626,8 +3711,9 @@ if add_to_pool and existing.get("pool_status") != "available":
 
 **当前文档体系**：PRD / FD / TD / TDD 全链路已经完成联调，与 PRD 保持一致。
 
-#### 139. 创建浏览器扩展子项目 TODO 文档
+---
 
+#### 139. 创建浏览器扩展子项目 TODO 文档
 **时间**：2026-04-18
 
 **本次操作**：
@@ -3649,8 +3735,9 @@ if add_to_pool and existing.get("pool_status") != "available":
 
 **手工冒烟**：TC-01~TC-12（12 条），TC-05/TC-12 为高风险点
 
-#### 138. 编写 A 层 CORS 测试代码，实施主应用 CORS 改动
+---
 
+#### 138. 编写 A 层 CORS 测试代码，实施主应用 CORS 改动
 **时间**：2026-04-18
 
 **本次操作**：
@@ -3679,8 +3766,9 @@ CORS(app, resources={
 
 覆盖场景：CR-01~CR-08（含 claim-random/release/complete/verification-code/verification-link 5 个端点，OPTIONS 预检，4xx 响应时 CORS 头存在，内部 API 不受影响）
 
-#### 137. 编写浏览器扩展 TDD 文档，补充 FD 关联
+---
 
+#### 137. 编写浏览器扩展 TDD 文档，补充 FD 关联
 **时间**：2026-04-18
 
 **本次操作**：
@@ -3713,8 +3801,9 @@ CORS(app, resources={
 - TDD v1.0 已创建
 - 文档体系全链路完整：PRD → FD → TD → TDD
 
-#### 136. PRD-FD-TD 文档联调
+---
 
+#### 136. PRD-FD-TD 文档联调
 **时间**：2026-04-18
 
 **本次操作**：
@@ -3736,8 +3825,9 @@ CORS(app, resources={
 
 **当前状态**：PRD → FD → TD 三文档已联调完毕，描述一致
 
-#### 135. 创建浏览器扩展 TD 文档，恢复 FD 关联
+---
 
+#### 135. 创建浏览器扩展 TD 文档，恢复 FD 关联
 **时间**：2026-04-18
 
 **本次操作**：
@@ -3770,8 +3860,9 @@ CORS(app, resources={
 - TD v1.0 已创建，文档体系完整（PRD → FD → TD）
 - 下一步：实际编写扩展代码 or 先做主应用 CORS 改动
 
-#### 134. 更新浏览器扩展 FD —— 移除 TD 关联
+---
 
+#### 134. 更新浏览器扩展 FD —— 移除 TD 关联
 **时间**：2026-04-18
 
 **本次操作**：
@@ -3786,8 +3877,9 @@ CORS(app, resources={
 - FD 已更新，无 TD 关联
 - 下一步待确认：是否直接开始编写实际扩展代码
 
-#### 133. 编写浏览器扩展 FD 文档
+---
 
+#### 133. 编写浏览器扩展 FD 文档
 **时间**：2026-04-18
 
 **本次操作**：
@@ -3814,30 +3906,9 @@ CORS(app, resources={
 **当前状态**：
 - FD v1.0 已创建，等待进一步实现阶段决策
 
-#### 131. 创建浏览器扩展 PRD 文档
-
-**时间**：2026-04-18
-
-**本次操作**：
-
-根据设计讨论结果（条目 130），编写浏览器扩展功能 PRD：
-
-- 文档路径：`docs/PRD/2026-04-18-浏览器扩展邮箱池快捷操作面板PRD.md`
-- 文档版本：v1.0
-- 定位：独立伴生子项目，不依附主应用版本号
-
-**PRD 核心内容**：
-- 背景：Web 界面操作割裂，注册场景需频繁切换页面
-- 目标：快捷键唤起 Popup，一键申领邮箱 + 获取验证码/链接
-- Use Case：UC-1（配置）~ UC-8（历史记录）共 8 个用例
-- 非目标：明确排除 DOM 自动识别、Content Script 注入等复杂能力
-- 服务端关联改动：主应用需补充 `chrome-extension://` CORS 支持
-
-**当前状态**：
-- PRD v1.0 已创建，处于需求讨论阶段
+---
 
 #### 132. 创建浏览器扩展目录与 UI 预览文件
-
 **时间**：2026-04-18
 
 **本次操作**：
@@ -3908,126 +3979,32 @@ CORS(app, resources={
 **当前状态**：
 - 设计讨论已完成，方案定稿，**尚未决定是否开始实施**
 
-
-#### 165. CI/CD 全绿 - v2.0.0 发布验证
-
-**时间**：2026-04-18
-
-**触发**：black 格式化修复 commit `b58ec73`（`style: black格式化 v2.0.0 版本文件`）
-
-**结果**：
-| Workflow | 状态 |
-|---------|------|
-| Code Quality | ✅ success |
-| Python Tests | ✅ success |
-| Build and Push Docker Image | ✅ success |
-| SonarCloud Scan | ✅ success |
-
-**v2.0.0 发布完整链路验证完毕** ✅
-
 ---
 
-#### 164. 发布 v2.0.0 GitHub Release
-
+#### 131. 创建浏览器扩展 PRD 文档
 **时间**：2026-04-18
 
-**版本号**：`1.19.0` → `2.0.0`（浏览器扩展为大版本里程碑）
+**本次操作**：
 
-**修改文件**：`outlook_web/__init__.py`、`README.md`、`README.en.md`、`tests/test_version_update.py`、`CHANGELOG.md`、`docs/DEVLOG.md`
+根据设计讨论结果（条目 130），编写浏览器扩展功能 PRD：
 
-**操作**：
-- `git commit` release 准备提交（`d3f94fc`）+ 推送
-- `gh release create v2.0.0` → https://github.com/ZeroPointSix/outlookEmailPlus/releases/tag/v2.0.0
+- 文档路径：`docs/PRD/2026-04-18-浏览器扩展邮箱池快捷操作面板PRD.md`
+- 文档版本：v1.0
+- 定位：独立伴生子项目，不依附主应用版本号
 
-**结果**：v2.0.0 Release 页面已上线 ✅
+**PRD 核心内容**：
+- 背景：Web 界面操作割裂，注册场景需频繁切换页面
+- 目标：快捷键唤起 Popup，一键申领邮箱 + 获取验证码/链接
+- Use Case：UC-1（配置）~ UC-8（历史记录）共 8 个用例
+- 非目标：明确排除 DOM 自动识别、Content Script 注入等复杂能力
+- 服务端关联改动：主应用需补充 `chrome-extension://` CORS 支持
 
----
-
-#### 163. main 分支全量测试 - 全部通过
-
-**时间**：2026-04-18
-
-**操作**：
-`python -m unittest discover -s tests -v`（main 工作树）
-
-**结果**：
-``r
-Ran 1194 tests in 354.407s
-OK (skipped=7)
-`  
-
-- ✅ **全部通过**，0 个失败，7 个跳过
-- 浏览器扩展 v0.1.0 合并到 main 后无任何功能回归
+**当前状态**：
+- PRD v1.0 已创建，处于需求讨论阶段
 
 ---
-
-#### 162. 合并 dev -> main 发布浏览器扩展 v0.1.0
-
-**时间**：2026-04-18
-
-**操作**：
-- main 工作树执行 `git merge origin/dev --no-ff`，合并 20 个文件，4930 insertions
-- `git push origin main`（`a9381f8` → `663f1ff`）
-
-**合并内容**：
-- 浏览器扩展完整代码（`browser-extension/`）
-- CORS 支持（`outlook_web/app.py`）
-- pool_status 修复（`controllers/accounts.py`、`repositories/accounts.py`）
-- FD/TD/TDD 设计文档
-- README.md / README.en.md 浏览器扩展章节
-
-**结果**：浏览器扩展 v0.1.0 已发布到 main ✅
-
----
-
-#### 161. 合并 main -> dev + 全量测试验证
-
-**时间**：2026-04-18
-
-**背景**：main 分支包含 v1.19.0 多项修复（refresh 逻辑、SSE issue#45、版本检测等），dev 包含浏览器扩展 v0.1.0，需合并确认兼容性。
-
-**操作**：
-- `git merge main -X ours --no-ff`（WORKSPACE.md 冲突以 dev 为准）
-- 合并引入 13 个文件变更，1079 insertions
-
-**测试结果**：
-- 共运行 **1204 个测试**（比合并前多 7 个，来自 main 新测试），耗时 377s
-- 通过：1196 个
-- 跳过：7 个
-- 失败：1 个（`test_pool_cf_real_e2e::test_04_claim_complete_timeout_skips_delete`，CF Worker E2E，环境限制，与代码无关）
-
-**结论**：合并后所有功能性测试全部通过，浏览器扩展代码与 main 分支兼容 ✅
-
-**注意**：本次 merge commit 仅本地，未推送。
-
----
-#### 160. 全量测试 + git push 到远端
-
-**时间**：2026-04-18
-
-**操作**：
-`ash
-python -m unittest discover -s tests -v
-git push origin dev
-`
-
-**结果**：
-- 共运行 **1197 个测试**，耗时 360s
-- 通过：1189 个
-- 跳过：7 个
-- 失败：1 个（`test_pool_cf_real_e2e::test_04_claim_complete_timeout_skips_delete`）
-
-**失败分析**：该测试需要真实 CF Worker API（https://temp.zerodotsix.top），本地无网络访问，属于预期内的环境限制，与本次代码变更无关。
-
-**Push**：`e13fcf4 → origin/dev` 推送成功
-
----
-## 2026-04-16
-
-### 操作记录
 
 #### 129. 同步 main 最新提交 a9381f8（冲突按当前分支记录保留）
-
 **时间**：2026-04-17
 
 **本次操作**：
@@ -4036,8 +4013,9 @@ git push origin dev
 2. `cherry-pick` 过程中仅 `WORKSPACE.md` 冲突；按确认策略保留当前分支已有记录并补本条说明。
 3. 完成后继续 `cherry-pick` 流程并推送远端。
 
-#### 127. 文档同步提交已推送到 origin/main
+---
 
+#### 127. 文档同步提交已推送到 origin/main
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4055,8 +4033,9 @@ git push origin dev
 3. 当前状态
    - README、双语对外 API 文档、`WORKSPACE.md` 的最新同步结果均已进入远端主线
 
-#### 126. README 与对外 API 文档同步更新：演示地址切换为 demo.outlookmailplus.tech
+---
 
+#### 126. README 与对外 API 文档同步更新：演示地址切换为 demo.outlookmailplus.tech
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4080,8 +4059,9 @@ git push origin dev
    - 文档已按当前实现与当前演示地址完成回填
    - 已提交：`8c63ae7` `docs: update demo url and pool api docs`
 
-#### 125. v1.18.0 retag 闭环：标签已对齐 79e3011 并重新触发发布链路
+---
 
+#### 125. v1.18.0 retag 闭环：标签已对齐 79e3011 并重新触发发布链路
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4110,8 +4090,9 @@ git push origin dev
    - Release 页面、Release 附件、远端 tag、远端 main HEAD 已重新对齐到同一提交：`79e3011`
    - `main` 与 `v1.18.0` 对应的质量门禁、测试、Docker 发布链路现已全部恢复为成功状态
 
-#### 124. v1.18.0 发布后检查：Release 成功，远端质量门禁仍有阻塞
+---
 
+#### 124. v1.18.0 发布后检查：Release 成功，远端质量门禁仍有阻塞
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4140,8 +4121,9 @@ git push origin dev
    - `v1.18.0` GitHub Release 页面与附件已成功发布
    - 但远端 CI 还不是全绿，若要补齐镜像发布闭环，下一步需要先处理上述格式化问题并重新触发工作流
 
-#### 123. v1.18.0 正式发布完成（GitHub Release + 附件上传）
+---
 
+#### 123. v1.18.0 正式发布完成（GitHub Release + 附件上传）
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4178,8 +4160,9 @@ git push origin dev
      - size=`4127512`
      - digest=`sha256:3bd2ff20608c1596f4770714aba1730d7a8bcb67b1b1ed547deac469c1f6194d`
 
-#### 122. 本地 main 再次全量回归扫查：未发现新增回归
+---
 
+#### 122. 本地 main 再次全量回归扫查：未发现新增回归
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4197,8 +4180,9 @@ git push origin dev
    - Docker 本地验收实例 `outlook-email-plus-local-main` 仍在运行
    - 当前可访问地址：`http://127.0.0.1:5002`
 
-#### 121. 本地 Docker 构建启动排查：Compose 失败根因确认 + 本地镜像健康验证
+---
 
+#### 121. 本地 Docker 构建启动排查：Compose 失败根因确认 + 本地镜像健康验证
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4228,8 +4212,9 @@ git push origin dev
    - 默认 Compose 启动失败的根因是：`.env` 固定 tag + 挂载了损坏的本地数据库
    - 当前可用于本地验收的 Docker 实例地址：`http://127.0.0.1:5002`
 
-#### 120. 本地 main 合并完成并通过全量复验
+---
 
+#### 120. 本地 main 合并完成并通过全量复验
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4250,8 +4235,9 @@ git push origin dev
    - 更新：`WORKSPACE.md`
    - 已将“本地 main 合并后再次全量复验通过”的状态回填
 
-#### 119. 本地合并 Buggithubissue 到 main 并准备主线复验
+---
 
+#### 119. 本地合并 Buggithubissue 到 main 并准备主线复验
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4269,8 +4255,9 @@ git push origin dev
    - 后续动作：完成 merge commit 后，在本地 `main` 上重新执行全量 `python -m unittest discover -v`
    - 进程要求：继续使用 `Start-Process` 后台独立进程，不占用前台执行链路
 
-#### 118. 将专项审查提示词收口为单一汇总提示词
+---
 
+#### 118. 将专项审查提示词收口为单一汇总提示词
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4287,8 +4274,9 @@ git push origin dev
    - 汇总提示词将继续通过 `寸止` MCP 输出
    - 当前人工验收实例仍运行在 `http://127.0.0.1:5000`
 
-#### 117. 编写基于 TODO 的专项审查提示词套件
+---
 
+#### 117. 编写基于 TODO 的专项审查提示词套件
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4305,8 +4293,9 @@ git push origin dev
    - 当前服务实例仍运行在 `http://127.0.0.1:5000`
    - 审查提示词将通过 `寸止` MCP 输出，不单独新建文档文件
 
-#### 116. 启动人工验收实例并完成健康检查
+---
 
+#### 116. 启动人工验收实例并完成健康检查
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4326,8 +4315,9 @@ git push origin dev
    - 当前人工验收地址：`http://127.0.0.1:5000`
    - 服务进程仍在运行，可直接进入页面验收
 
-#### 115. 对齐 CF 旧骨架并完成全量 unittest 绿灯验证
+---
 
+#### 115. 对齐 CF 旧骨架并完成全量 unittest 绿灯验证
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4352,8 +4342,9 @@ git push origin dev
    - 更新：`docs/TDD/2026-04-16-邮箱池项目维度成功复用TDD.md`
    - 已将“全量 unittest 通过”回填到本需求相关文档
 
-#### 114. 回填会话执行约束：如需启动进程，只允许后台独立进程
+---
 
+#### 114. 回填会话执行约束：如需启动进程，只允许后台独立进程
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4370,8 +4361,9 @@ git push origin dev
    - 当前会话文档已经把“后台独立进程启动”这一最新执行约束显式写明。
    - 后续如果需要启动服务或长时进程，将遵循该约束执行。
 
-#### 113. 修补 v22 迁移兼容并完成邮箱池相关自动化验证
+---
 
+#### 113. 修补 v22 迁移兼容并完成邮箱池相关自动化验证
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4396,8 +4388,9 @@ git push origin dev
    - 本需求相关主测试集合当前已通过。
    - 会话侧剩余动作主要是收尾反馈。
 
-#### 112. 对齐旧 pool 回归用例到项目复用新语义
+---
 
+#### 112. 对齐旧 pool 回归用例到项目复用新语义
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4414,8 +4407,9 @@ git push origin dev
    - 旧回归测试口径已与当前项目复用实现保持一致。
    - 自动化测试本轮仍未执行。
 
-#### 111. 落地邮箱池项目维度成功复用实现（Schema v22 + Repository + Service）
+---
 
+#### 111. 落地邮箱池项目维度成功复用实现（Schema v22 + Repository + Service）
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4444,8 +4438,9 @@ git push origin dev
    - 当前代码已完成本需求 Phase 2 / 3 / 4 的主实现。
    - 自动化测试本轮未执行，保持为显式保留项。
 
-#### 110. 按会话口径删除落库提示词文档，改为只通过 MCP 输出执行提示词
+---
 
+#### 110. 按会话口径删除落库提示词文档，改为只通过 MCP 输出执行提示词
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4465,8 +4460,9 @@ git push origin dev
    - 当前仓库仍保留 `PRD / FD / TD / TDD / TODO` 五层文档闭环。
    - “其他 AI 执行提示词”现在改为会话态输出，不再作为仓库文档资产持久保留。
 
-#### 109. 新增本需求 AI 执行提示词并挂回 TODO 文档
+---
 
+#### 109. 新增本需求 AI 执行提示词并挂回 TODO 文档
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4499,8 +4495,9 @@ git push origin dev
    - 现在这条需求不仅有 TODO，而且还有可以直接交给其他 AI 执行的正式提示词文档。
    - TODO 与执行提示词已经互相关联，后续可以直接按文档链路推进实现。
 
-#### 108. 新建 TODO 文档并回填本需求文档引用与实际推进状态
+---
 
+#### 108. 新建 TODO 文档并回填本需求文档引用与实际推进状态
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4529,8 +4526,9 @@ git push origin dev
    - 当前本需求的会话文档体系已经从 `PRD / FD / TD / TDD` 扩展为 `PRD / FD / TD / TDD / TODO` 完整链路。
    - 文档中的推进状态现在与仓库真实状态保持一致，不再只有设计层，也明确标出了“测试先行、实现未开始”的当前阶段。
 
-#### 107. 补强测试断言：Repository 成功计数与 Service 显式 token_mismatch 校验
+---
 
+#### 107. 补强测试断言：Repository 成功计数与 Service 显式 token_mismatch 校验
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4549,8 +4547,9 @@ git push origin dev
    - 当前这批测试的断言粒度又向 TDD 的函数级清单进一步靠近。
    - 关键路径不再只断主状态，也开始覆盖计数与错误码层的细节。
 
-#### 106. 继续根据 TDD 扩写迁移后可领取行为与 Repository 级剩余状态机测试
+---
 
+#### 106. 继续根据 TDD 扩写迁移后可领取行为与 Repository 级剩余状态机测试
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4575,8 +4574,9 @@ git push origin dev
    - 迁移 / Repository 两层的测试覆盖面已经继续向 TDD 文档靠拢。
    - 当前这批测试已不只是“少量试探性 case”，而是在逐步把 TDD 的核心测试面真实铺开。
 
-#### 105. 继续根据 TDD 补齐 Repository 级测试与更多接口/Service 用例
+---
 
+#### 105. 继续根据 TDD 补齐 Repository 级测试与更多接口/Service 用例
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4608,8 +4608,9 @@ git push origin dev
    - 当前迁移 / Repository / Service / Flow Suite 四层测试代码都已开始落地。
    - 距离“把 TDD 文档列出的核心测试面全部写进仓库”已经又往前推进了一步。
 
-#### 104. 根据 TDD 开始实际编写测试用例
+---
 
+#### 104. 根据 TDD 开始实际编写测试用例
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4647,8 +4648,9 @@ git push origin dev
    - 当前已从纯文档阶段进入测试代码落地阶段。
    - 由于业务实现尚未同步改造，这批测试中包含面向目标语义的用例，后续需要配合实现一起收敛。
 
-#### 103. 第二波联调修正：统一术语与边界定义口径
+---
 
+#### 103. 第二波联调修正：统一术语与边界定义口径
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4684,8 +4686,9 @@ git push origin dev
    - 第二波联调已完成一轮实质性术语收口。
    - 后续若继续联调，可再查更细的测试函数命名与章节间引用是否还存在小漂移。
 
-#### 102. 文档联调修正：补齐“稳定态 success 防重”与“历史 `used` 迁移例外”的区分
+---
 
+#### 102. 文档联调修正：补齐“稳定态 success 防重”与“历史 `used` 迁移例外”的区分
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4712,8 +4715,9 @@ git push origin dev
    - 本轮联调已发现并修掉一处实质性口径冲突。
    - 后续仍可继续做第二轮联调，检查术语、测试函数命名、文档边界是否还有细小漂移。
 
-#### 101. TDD 继续下沉到函数级 case 清单
+---
 
+#### 101. TDD 继续下沉到函数级 case 清单
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4738,8 +4742,9 @@ git push origin dev
    - 当前 TDD 已经基本具备直接进入测试实现的粒度。
    - 后续如果继续推进，可以开始整理“实现准备清单”，或者直接进入代码改造阶段的任务拆分。
 
-#### 100. 创建 TDD：邮箱池项目维度成功复用
+---
 
+#### 100. 创建 TDD：邮箱池项目维度成功复用
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4771,8 +4776,9 @@ git push origin dev
    - 当前 PRD / FD / TD / TDD 四层文档已全部建立并对齐。
    - 后续若继续推进，最自然的下一步就是把 TDD 再细化成具体的测试文件改造清单，或者进入代码实现准备。
 
-#### 99. TD 继续下沉到实现拆解层：按 DB / Repository / Service / Controller / 测试拆清改造项
+---
 
+#### 99. TD 继续下沉到实现拆解层：按 DB / Repository / Service / Controller / 测试拆清改造项
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4796,10 +4802,11 @@ git push origin dev
 
 4. 现场状态
    - 当前 TD 已经不只是“方向正确”，而是已经具备进入 TDD 的拆解基础。
-   - 后续最顺的下一步是开始编写 TDD，把这些改造点转成测试矩阵与案例。 
+   - 后续最顺的下一步是开始编写 TDD，把这些改造点转成测试矩阵与案例。
+
+---
 
 #### 98. 确认 TD 迁移口径：历史是否给同项目用过不重要，优先释放长期邮箱资产复用
-
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4827,8 +4834,9 @@ git push origin dev
    - TD 首版的关键待确认项已关闭。
    - 当前可继续往下推进到更细的实现拆解，例如 Repository / Service 改造点清单或 TDD。
 
-#### 97. 创建 TD 首版：邮箱池项目维度成功复用
+---
 
+#### 97. 创建 TD 首版：邮箱池项目维度成功复用
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4868,8 +4876,9 @@ git push origin dev
 6. 当前待确认点
    - 历史 `used` 长期邮箱迁回后，原成功项目可能还会再拿到一次；该迁移代价是否接受，仍需会话确认。
 
-#### 96. FD 再补迁移与展示边界：历史 `used` 纳入新语义、后台先不展示成功历史、错误继续通用返回
+---
 
+#### 96. FD 再补迁移与展示边界：历史 `used` 纳入新语义、后台先不展示成功历史、错误继续通用返回
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4900,8 +4909,9 @@ git push origin dev
    - FD 现已覆盖：主流程、返回值、统计语义、历史数据边界、后台展示边界、错误反馈边界。
    - 后续可以顺势进入 TD，讨论迁移策略、数据模型与接口/仓储层改造细节。
 
-#### 95. FD 再补返回值与统计语义：success 返回 `available`、不再计入全局 `used`、第一阶段不加项目成功统计面
+---
 
+#### 95. FD 再补返回值与统计语义：success 返回 `available`、不再计入全局 `used`、第一阶段不加项目成功统计面
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4932,8 +4942,9 @@ git push origin dev
    - FD 已从“核心行为”继续补到了“返回值与统计语义”层。
    - 后续如继续细化，可再往错误码、历史数据兼容、后台列表展示口径等细节推进。
 
-#### 94. 创建 FD：邮箱池项目维度成功复用
+---
 
+#### 94. 创建 FD：邮箱池项目维度成功复用
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4961,8 +4972,9 @@ git push origin dev
    - 当前已完成：PRD 持续澄清 + FD 首版建立 + WORKSPACE 同步。
    - 后续如继续推进，可在此基础上进入 TD / TDD。
 
-#### 93. PRD 再补成功历史规则：长期有效、手动改回可用也不失效、仅 complete(success) 记成功
+---
 
+#### 93. PRD 再补成功历史规则：长期有效、手动改回可用也不失效、仅 complete(success) 记成功
 **时间**：2026-04-16
 
 **本次操作**：
@@ -4990,8 +5002,9 @@ git push origin dev
 4. 现场状态
    - 本轮已把成功历史规则写入 PRD 与 WORKSPACE。
 
-#### 92. PRD 打包收敛：失败类型补齐、不新增 UI、错误信息正常返回
+---
 
+#### 92. PRD 打包收敛：失败类型补齐、不新增 UI、错误信息正常返回
 **时间**：2026-04-16
 
 **本次操作**：
@@ -5018,8 +5031,9 @@ git push origin dev
 4. 现场状态
    - 本轮已把这组打包结论写入 PRD 与 WORKSPACE。
 
-#### 91. PRD 再补任务参数边界：`task_id` 继续保留且不能省
+---
 
+#### 91. PRD 再补任务参数边界：`task_id` 继续保留且不能省
 **时间**：2026-04-16
 
 **本次操作**：
@@ -5044,8 +5058,9 @@ git push origin dev
 4. 现场状态
    - 本轮已把 `task_id` 保留规则写入 PRD 与 WORKSPACE。
 
-#### 90. PRD 再补调用方参数边界：`caller_id` 继续保留且不能省
+---
 
+#### 90. PRD 再补调用方参数边界：`caller_id` 继续保留且不能省
 **时间**：2026-04-16
 
 **本次操作**：
@@ -5069,8 +5084,9 @@ git push origin dev
 4. 现场状态
    - 本轮已把 `caller_id` 保留规则写入 PRD 与 WORKSPACE。
 
-#### 89. PRD 再补缺省行为：不传 `project_key` 就回到旧行为
+---
 
+#### 89. PRD 再补缺省行为：不传 `project_key` 就回到旧行为
 **时间**：2026-04-16
 
 **本次操作**：
@@ -5093,8 +5109,9 @@ git push origin dev
 4. 现场状态
    - 本轮已把缺省行为写入 PRD 与 WORKSPACE。
 
-#### 88. PRD 再补失败语义：同项目只有成功过才禁止再次领取
+---
 
+#### 88. PRD 再补失败语义：同项目只有成功过才禁止再次领取
 **时间**：2026-04-16
 
 **本次操作**：
@@ -5116,8 +5133,9 @@ git push origin dev
 4. 现场状态
    - 本轮已把失败语义写入 PRD 与 WORKSPACE。
 
-#### 87. PRD 再补并发边界：同一邮箱同一时刻只允许一个活跃 claim
+---
 
+#### 87. PRD 再补并发边界：同一邮箱同一时刻只允许一个活跃 claim
 **时间**：2026-04-16
 
 **本次操作**：
@@ -5140,8 +5158,9 @@ git push origin dev
 4. 现场状态
    - 本轮已把并发边界写入 PRD 与 WORKSPACE。
 
-#### 86. PRD 最终封口：`project_key` 由调用方自定义传入，平台不规定命名规范
+---
 
+#### 86. PRD 最终封口：`project_key` 由调用方自定义传入，平台不规定命名规范
 **时间**：2026-04-16
 
 **本次操作**：
@@ -5166,8 +5185,9 @@ git push origin dev
 4. 现场状态
    - 本轮已把 `project_key` 的创建与命名边界彻底写入 PRD 与 WORKSPACE。
 
-#### 85. PRD 再收敛：第一阶段不提供平台内 `project_key` 创建能力
+---
 
+#### 85. PRD 再收敛：第一阶段不提供平台内 `project_key` 创建能力
 **时间**：2026-04-16
 
 **本次操作**：
@@ -5195,8 +5215,9 @@ git push origin dev
 4. 现场状态
    - 本轮已把“`project_key` 由调用方自定义传入、平台不内建创建能力”写入 PRD 与 WORKSPACE。
 
-#### 84. PRD 兼容性收敛：继续保留 `caller_id + project_key` 联合语义
+---
 
+#### 84. PRD 兼容性收敛：继续保留 `caller_id + project_key` 联合语义
 **时间**：2026-04-16
 
 **本次操作**：
@@ -5218,8 +5239,9 @@ git push origin dev
 4. 现场状态
    - 本轮已完成兼容性语义收口，并同步写入 PRD 与 WORKSPACE。
 
-#### 83. PRD 字段语义收口：直接绑定现有 `project_key`
+---
 
+#### 83. PRD 字段语义收口：直接绑定现有 `project_key`
 **时间**：2026-04-16
 
 **本次操作**：
@@ -5244,8 +5266,9 @@ git push origin dev
 4. 现场状态
    - 本轮已完成字段语义收口，并同步写入 PRD 与 WORKSPACE。
 
-#### 82. PRD 继续收敛：默认不限制业务方向数量，只看传入标识是否相同
+---
 
+#### 82. PRD 继续收敛：默认不限制业务方向数量，只看传入标识是否相同
 **时间**：2026-04-16
 
 **本次操作**：
@@ -5272,8 +5295,9 @@ git push origin dev
 4. 现场状态
    - 本轮已把“只看传入标识、默认不限方向数量”的规则写入 PRD 与 WORKSPACE。
 
-#### 81. PRD 覆盖范围收敛：第一阶段只覆盖长期邮箱
+---
 
+#### 81. PRD 覆盖范围收敛：第一阶段只覆盖长期邮箱
 **时间**：2026-04-16
 
 **本次操作**：
@@ -5297,8 +5321,9 @@ git push origin dev
 4. 现场状态
    - 本轮已把覆盖范围进一步收敛并写入 PRD 与 WORKSPACE。
 
-#### 80. PRD 进一步收敛：success 后应立即允许其他业务方向复用
+---
 
+#### 80. PRD 进一步收敛：success 后应立即允许其他业务方向复用
 **时间**：2026-04-16
 
 **本次操作**：
@@ -5322,8 +5347,9 @@ git push origin dev
 4. 现场状态
    - 本轮已把“立即复用”固化进 PRD 与 WORKSPACE。
 
-#### 79. PRD 增补因果链说明：为何已有 project_key 仍挡不住 success 后退出候选池
+---
 
+#### 79. PRD 增补因果链说明：为何已有 project_key 仍挡不住 success 后退出候选池
 **时间**：2026-04-16
 
 **本次操作**：
@@ -5345,8 +5371,9 @@ git push origin dev
 4. 现场状态
    - 本轮已将“claim 侧已支持、多项目复用败在 complete 侧生命周期”这一点写入 PRD 和 WORKSPACE。
 
-#### 78. PRD 口径补正：当前已支持多项目领取，但未补齐 success 后生命周期
+---
 
+#### 78. PRD 口径补正：当前已支持多项目领取，但未补齐 success 后生命周期
 **时间**：2026-04-16
 
 **本次操作**：
@@ -5368,8 +5395,9 @@ git push origin dev
 4. 现场状态
    - 本轮仅做 PRD 需求口径纠偏与 WORKSPACE 同步，不涉及实现改动。
 
-#### 77. 新建“邮箱池项目维度成功复用”PRD 并补充旧 PRD 范围边界
+---
 
+#### 77. 新建“邮箱池项目维度成功复用”PRD 并补充旧 PRD 范围边界
 **时间**：2026-04-16
 
 **本次操作**：
@@ -5399,8 +5427,9 @@ git push origin dev
    - 本轮已完成：新 PRD 建立 + 旧 PRD 范围边界补充 + WORKSPACE 记录。
    - 尚未进入实现设计与代码改造阶段。
 
-#### 76. Issue #39 相关文档口径修正与会话记录同步
+---
 
+#### 76. Issue #39 相关文档口径修正与会话记录同步
 **时间**：2026-04-16
 
 **本次操作**：
@@ -5428,8 +5457,9 @@ git push origin dev
    - 本轮已完成文档口径修正与 WORKSPACE 同步。
    - 尚未展开业务实现讨论或代码改造。
 
-#### 75. Issue #39 现状核对与范围收敛记录
+---
 
+#### 75. Issue #39 现状核对与范围收敛记录
 **时间**：2026-04-16
 
 **本次操作**：
@@ -5469,8 +5499,193 @@ git push origin dev
 
 ### 操作记录
 
-#### 67. v1.17.0 发布后质量门禁修复（black/isort）与分批回归复核
+---
 
+#### 74. v1.17.0 标签镜像补齐完成（双仓 digest 一致）
+**时间**：2026-04-15
+
+**本次操作**：
+
+1. 工作流完成确认
+   - `Build and Push Docker Image`（run `24451870226`）状态：`completed/success`。
+   - 关联 tag 目标提交：`f3d2208`。
+
+2. 双仓 `v1.17.0` 镜像复核
+   - GHCR：`ghcr.io/zeropointsix/outlook-email-plus:v1.17.0`
+   - DockerHub：`docker.io/guangshanshui/outlook-email-plus:v1.17.0`
+   - 两仓 index digest 一致：
+     - `sha256:e485e28b6e5ca5fbb83a0a9f38dc173316bfd166cb874a07b0250471021bfdb4`
+
+3. 其他监控补充
+   - `docs: record dual-registry image status for v1.17.0` 触发的 Sonar（run `24451739406`）已 success。
+
+4. 文档回填
+   - 已同步更新：FD/TD/TDD/TODO/联调检查文档，结论改为“v1.17.0 双仓标签镜像已补齐”。
+
+5. 现场状态
+   - 版本发布链路闭环：Release ✅、主链路 CI ✅、双仓 `v1.17.0` 标签镜像 ✅。
+
+---
+
+#### 73. 重打 v1.17.0 标签以补齐版本镜像（执行中）
+**时间**：2026-04-15
+
+**本次操作**：
+
+1. 决策与目标
+   - 按会话选择，将 `v1.17.0` 重打到已验证全绿提交 `f3d2208`，以补齐 GHCR/DockerHub 的 `v1.17.0` 镜像标签。
+
+2. 执行动作
+   - `git tag -fa v1.17.0 f3d2208 -m "v1.17.0 (retag for CI-green image publish)"`
+   - `git push origin :refs/tags/v1.17.0`
+   - `git push origin v1.17.0`
+
+3. 触发结果（当前）
+   - `Create GitHub Release`（run `24451870230`）✅ success
+   - `Build and Push Docker Image`（run `24451870226`）⏳ queued/in_progress
+
+4. 文档同步
+   - 已更新 FD/TD/TDD/TODO/联调检查文档，回填重打标签与当前工作流进展。
+
+5. 现场状态
+   - 当前工作区干净，等待 Docker tag workflow 最终完成后再核对双仓 `v1.17.0` 标签。
+
+---
+
+#### 72. 双仓 Docker 镜像构建状态核对（GHCR + DockerHub）
+**时间**：2026-04-15
+
+**本次操作**：
+
+1. 核对目标
+   - GHCR：`ghcr.io/zeropointsix/outlook-email-plus`
+   - DockerHub：`docker.io/guangshanshui/outlook-email-plus`
+
+2. 核对结果（`docker buildx imagetools inspect`）
+   - `main` 标签：
+     - GHCR digest：`sha256:8aef74b93a816e3aa8020d1c20767715a5c51e1373f8c8f58f5d692092869218`
+     - DockerHub digest：`sha256:8aef74b93a816e3aa8020d1c20767715a5c51e1373f8c8f58f5d692092869218`
+     - 结论：一致 ✅
+   - `latest` 标签：
+     - GHCR digest：`sha256:8aef74b93a816e3aa8020d1c20767715a5c51e1373f8c8f58f5d692092869218`
+     - DockerHub digest：`sha256:8aef74b93a816e3aa8020d1c20767715a5c51e1373f8c8f58f5d692092869218`
+     - 结论：一致 ✅
+   - `v1.17.0` 标签：
+     - GHCR：`not found`
+     - DockerHub：`not found`
+     - 结论：版本标签镜像当前未生成。
+
+3. 监控补充
+   - 当前文档提交触发的 SonarCloud（run `24451514245`）在记录时仍为 `in_progress`。
+
+4. 文档回填
+   - 已同步更新：FD/TD/TDD/TODO/联调检查文档至最新版本号与镜像核对结论。
+
+5. 现场状态
+   - 本次仅进行镜像状态核对与文档记录，不涉及业务代码变更。
+
+---
+
+#### 71. v1.17.0 发布状态核对（Latest）与监控闭环确认
+**时间**：2026-04-15
+
+**本次操作**：
+
+1. 发布状态核对
+   - 执行：`gh release view v1.17.0 --json ...`
+   - 结果：
+     - `isDraft=false`
+     - `isPrerelease=false`
+     - `name/tag=v1.17.0`
+     - `publishedAt=2026-04-15T10:29:25Z`
+     - 发布页：`https://github.com/ZeroPointSix/outlookEmailPlus/releases/tag/v1.17.0`
+   - `gh release list` 核对：`v1.17.0` 为 `Latest`。
+
+2. 监控收口状态补充
+   - 文档收口提交 `05871bf` 触发的 `SonarCloud Scan`（run `24450875717`）已 `completed/success`。
+   - 至此本会话发布推进链路（发布 + 修复 + 二次监控）完成闭环。
+
+3. 文档回填
+   - 已同步更新：
+     - `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`（v1.8）
+     - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`（v1.8）
+     - `docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`（v1.7）
+     - `docs/TODO/2026-04-14-通用Webhook通知与APIKey易用性增强TODO.md`（v1.10）
+     - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强-PRD-FD-TD-TDD联调检查.md`
+
+4. 现场状态
+   - 本次以状态核对和文档回填为主，无新增业务实现。
+
+---
+
+#### 70. CI/CD 二次监控完结回传（全绿恢复）
+**时间**：2026-04-15
+
+**本次操作**：
+
+1. 监控结果（提交 `f3d2208`）
+   - `Code Quality`（run `24450419443`）✅ success
+   - `Python Tests`（run `24450419407`）✅ success
+   - `Build and Push Docker Image`（run `24450419424`）✅ success
+   - `SonarCloud Scan`（run `24450419444`）✅ success
+
+2. 发布链路结论
+   - `v1.17.0` 发布后因格式化导致的 quality-gate 阻断已通过本轮修复提交解除。
+   - 当前 `main` 最新提交链路已恢复四项主工作流全绿。
+
+3. 现场状态
+   - 本次为监控收口回传，不涉及新增代码实现。
+   - WORKSPACE 已按会话要求持续记录至当前最终状态。
+
+---
+
+#### 69. CI/CD 二次监控进展回传（部分完成）
+**时间**：2026-04-15
+
+**本次操作**：
+
+1. 监控对象（提交 `f3d2208`）
+   - Python Tests（run `24450419407`）
+   - Build and Push Docker Image（run `24450419424`）
+   - SonarCloud Scan（run `24450419444`）
+
+2. 当前状态（本轮拉取）
+   - Python Tests：✅ `completed/success`
+   - Build and Push Docker Image：⏳ `queued`
+   - SonarCloud Scan：⏳ `in_progress`
+   - Code Quality（同批次 run `24450419443`）维持 ✅ success
+
+3. 现场状态
+   - 当前仅 Python Tests 已最终完成；Docker 与 Sonar 尚未结束。
+   - 继续按会话要求进行后续状态跟踪并回传。
+
+---
+
+#### 68. 质量门禁修复提交并推送，CI/CD 二次监控中
+**时间**：2026-04-15
+
+**本次操作**：
+
+1. 提交与推送
+   - 提交前状态：`main...origin/main`，22 个文件待提交（格式化 + 文档回填）。
+   - 执行：`git add --all`
+   - 提交：`f3d2208`
+   - 提交信息：`chore(format): restore quality gate after v1.17.0 release`
+   - 推送：`git push origin main` 成功（`4107faf..f3d2208`）。
+
+2. 推送后工作流状态（实时）
+   - `Code Quality`（run `24450419443`）✅ success
+   - `Python Tests`（run `24450419407`）⏳ in_progress
+   - `Build and Push Docker Image`（run `24450419424`）⏳ in_progress
+   - `SonarCloud Scan`（run `24450419444`）⏳ in_progress
+
+3. 现场状态
+   - 本次已完成：修复提交 + 推送 + 工作流实时状态回传。
+   - 其余工作流仍在进行中，待下一次状态回传确认最终结论。
+
+---
+
+#### 67. v1.17.0 发布后质量门禁修复（black/isort）与分批回归复核
 **时间**：2026-04-15
 
 **本次操作**：
@@ -5510,185 +5725,9 @@ git push origin dev
    - 本次已完成：格式化修复 + 分批回归 + 文档回填 + WORKSPACE 记录。
    - 尚未进行本轮修复提交/推送（待用户确认后执行）。
 
-#### 68. 质量门禁修复提交并推送，CI/CD 二次监控中
-
-**时间**：2026-04-15
-
-**本次操作**：
-
-1. 提交与推送
-   - 提交前状态：`main...origin/main`，22 个文件待提交（格式化 + 文档回填）。
-   - 执行：`git add --all`
-   - 提交：`f3d2208`
-   - 提交信息：`chore(format): restore quality gate after v1.17.0 release`
-   - 推送：`git push origin main` 成功（`4107faf..f3d2208`）。
-
-2. 推送后工作流状态（实时）
-   - `Code Quality`（run `24450419443`）✅ success
-   - `Python Tests`（run `24450419407`）⏳ in_progress
-   - `Build and Push Docker Image`（run `24450419424`）⏳ in_progress
-   - `SonarCloud Scan`（run `24450419444`）⏳ in_progress
-
-3. 现场状态
-   - 本次已完成：修复提交 + 推送 + 工作流实时状态回传。
-   - 其余工作流仍在进行中，待下一次状态回传确认最终结论。
-
-#### 69. CI/CD 二次监控进展回传（部分完成）
-
-**时间**：2026-04-15
-
-**本次操作**：
-
-1. 监控对象（提交 `f3d2208`）
-   - Python Tests（run `24450419407`）
-   - Build and Push Docker Image（run `24450419424`）
-   - SonarCloud Scan（run `24450419444`）
-
-2. 当前状态（本轮拉取）
-   - Python Tests：✅ `completed/success`
-   - Build and Push Docker Image：⏳ `queued`
-   - SonarCloud Scan：⏳ `in_progress`
-   - Code Quality（同批次 run `24450419443`）维持 ✅ success
-
-3. 现场状态
-   - 当前仅 Python Tests 已最终完成；Docker 与 Sonar 尚未结束。
-   - 继续按会话要求进行后续状态跟踪并回传。
-
-#### 70. CI/CD 二次监控完结回传（全绿恢复）
-
-**时间**：2026-04-15
-
-**本次操作**：
-
-1. 监控结果（提交 `f3d2208`）
-   - `Code Quality`（run `24450419443`）✅ success
-   - `Python Tests`（run `24450419407`）✅ success
-   - `Build and Push Docker Image`（run `24450419424`）✅ success
-   - `SonarCloud Scan`（run `24450419444`）✅ success
-
-2. 发布链路结论
-   - `v1.17.0` 发布后因格式化导致的 quality-gate 阻断已通过本轮修复提交解除。
-   - 当前 `main` 最新提交链路已恢复四项主工作流全绿。
-
-3. 现场状态
-   - 本次为监控收口回传，不涉及新增代码实现。
-   - WORKSPACE 已按会话要求持续记录至当前最终状态。
-
-#### 71. v1.17.0 发布状态核对（Latest）与监控闭环确认
-
-**时间**：2026-04-15
-
-**本次操作**：
-
-1. 发布状态核对
-   - 执行：`gh release view v1.17.0 --json ...`
-   - 结果：
-     - `isDraft=false`
-     - `isPrerelease=false`
-     - `name/tag=v1.17.0`
-     - `publishedAt=2026-04-15T10:29:25Z`
-     - 发布页：`https://github.com/ZeroPointSix/outlookEmailPlus/releases/tag/v1.17.0`
-   - `gh release list` 核对：`v1.17.0` 为 `Latest`。
-
-2. 监控收口状态补充
-   - 文档收口提交 `05871bf` 触发的 `SonarCloud Scan`（run `24450875717`）已 `completed/success`。
-   - 至此本会话发布推进链路（发布 + 修复 + 二次监控）完成闭环。
-
-3. 文档回填
-   - 已同步更新：
-     - `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`（v1.8）
-     - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`（v1.8）
-     - `docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`（v1.7）
-     - `docs/TODO/2026-04-14-通用Webhook通知与APIKey易用性增强TODO.md`（v1.10）
-     - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强-PRD-FD-TD-TDD联调检查.md`
-
-4. 现场状态
-   - 本次以状态核对和文档回填为主，无新增业务实现。
-
-#### 72. 双仓 Docker 镜像构建状态核对（GHCR + DockerHub）
-
-**时间**：2026-04-15
-
-**本次操作**：
-
-1. 核对目标
-   - GHCR：`ghcr.io/zeropointsix/outlook-email-plus`
-   - DockerHub：`docker.io/guangshanshui/outlook-email-plus`
-
-2. 核对结果（`docker buildx imagetools inspect`）
-   - `main` 标签：
-     - GHCR digest：`sha256:8aef74b93a816e3aa8020d1c20767715a5c51e1373f8c8f58f5d692092869218`
-     - DockerHub digest：`sha256:8aef74b93a816e3aa8020d1c20767715a5c51e1373f8c8f58f5d692092869218`
-     - 结论：一致 ✅
-   - `latest` 标签：
-     - GHCR digest：`sha256:8aef74b93a816e3aa8020d1c20767715a5c51e1373f8c8f58f5d692092869218`
-     - DockerHub digest：`sha256:8aef74b93a816e3aa8020d1c20767715a5c51e1373f8c8f58f5d692092869218`
-     - 结论：一致 ✅
-   - `v1.17.0` 标签：
-     - GHCR：`not found`
-     - DockerHub：`not found`
-     - 结论：版本标签镜像当前未生成。
-
-3. 监控补充
-   - 当前文档提交触发的 SonarCloud（run `24451514245`）在记录时仍为 `in_progress`。
-
-4. 文档回填
-   - 已同步更新：FD/TD/TDD/TODO/联调检查文档至最新版本号与镜像核对结论。
-
-5. 现场状态
-   - 本次仅进行镜像状态核对与文档记录，不涉及业务代码变更。
-
-#### 73. 重打 v1.17.0 标签以补齐版本镜像（执行中）
-
-**时间**：2026-04-15
-
-**本次操作**：
-
-1. 决策与目标
-   - 按会话选择，将 `v1.17.0` 重打到已验证全绿提交 `f3d2208`，以补齐 GHCR/DockerHub 的 `v1.17.0` 镜像标签。
-
-2. 执行动作
-   - `git tag -fa v1.17.0 f3d2208 -m "v1.17.0 (retag for CI-green image publish)"`
-   - `git push origin :refs/tags/v1.17.0`
-   - `git push origin v1.17.0`
-
-3. 触发结果（当前）
-   - `Create GitHub Release`（run `24451870230`）✅ success
-   - `Build and Push Docker Image`（run `24451870226`）⏳ queued/in_progress
-
-4. 文档同步
-   - 已更新 FD/TD/TDD/TODO/联调检查文档，回填重打标签与当前工作流进展。
-
-5. 现场状态
-   - 当前工作区干净，等待 Docker tag workflow 最终完成后再核对双仓 `v1.17.0` 标签。
-
-#### 74. v1.17.0 标签镜像补齐完成（双仓 digest 一致）
-
-**时间**：2026-04-15
-
-**本次操作**：
-
-1. 工作流完成确认
-   - `Build and Push Docker Image`（run `24451870226`）状态：`completed/success`。
-   - 关联 tag 目标提交：`f3d2208`。
-
-2. 双仓 `v1.17.0` 镜像复核
-   - GHCR：`ghcr.io/zeropointsix/outlook-email-plus:v1.17.0`
-   - DockerHub：`docker.io/guangshanshui/outlook-email-plus:v1.17.0`
-   - 两仓 index digest 一致：
-     - `sha256:e485e28b6e5ca5fbb83a0a9f38dc173316bfd166cb874a07b0250471021bfdb4`
-
-3. 其他监控补充
-   - `docs: record dual-registry image status for v1.17.0` 触发的 Sonar（run `24451739406`）已 success。
-
-4. 文档回填
-   - 已同步更新：FD/TD/TDD/TODO/联调检查文档，结论改为“v1.17.0 双仓标签镜像已补齐”。
-
-5. 现场状态
-   - 版本发布链路闭环：Release ✅、主链路 CI ✅、双仓 `v1.17.0` 标签镜像 ✅。
+---
 
 #### 66. v1.17.0 发布执行（单提交策略）与 CI/CD 实时结果回填
-
 **时间**：2026-04-15
 
 **本次操作**：
@@ -5733,8 +5772,9 @@ git push origin dev
    - 本次已完成：提交、tag、push、Release 创建、产物本地构建、CI 状态回传。
    - 当前主分支已推送，但 CI 仍需后续格式化修复后恢复全绿。
 
-#### 65. 发布续推前主工作树核对与会话文档实况修正
+---
 
+#### 65. 发布续推前主工作树核对与会话文档实况修正
 **时间**：2026-04-15
 
 **本次操作**：
@@ -5772,8 +5812,9 @@ git push origin dev
    - 未新增业务代码实现改动。
    - 未执行服务启动/重启/停止。
 
-#### 64. main 分支文档提交后运行态复核（服务已退出）
+---
 
+#### 64. main 分支文档提交后运行态复核（服务已退出）
 **时间**：2026-04-15
 
 **本次操作**：
@@ -5796,8 +5837,9 @@ git push origin dev
    - 当前本地服务处于未运行状态
    - 本次仅记录复核结果，未再次启动服务
 
-#### 63. main 分支文档与 WORKSPACE 回填提交（本地未推送）
+---
 
+#### 63. main 分支文档与 WORKSPACE 回填提交（本地未推送）
 **时间**：2026-04-15
 
 **本次操作**：
@@ -5819,8 +5861,9 @@ git push origin dev
    - 当前后台服务仍由 `PID 41184` 运行（端口 5000）；
    - 本次只处理文档与记录提交，不做功能代码变更。
 
-#### 62. main 分支本地启动与分批全量回归复核（未推送）
+---
 
+#### 62. main 分支本地启动与分批全量回归复核（未推送）
 **时间**：2026-04-15
 
 **本次操作**：
@@ -5860,8 +5903,38 @@ git push origin dev
    - 后台服务运行中：PID `41184`（端口 5000）。
    - 说明：文档中 PRD 路径仍为会话链路引用，当前仓库未找到对应 PRD 实体文件，已标注“路径待补”。
 
-#### 60. Docker 环境恢复后完成镜像构建与容器健康验证
+---
 
+#### 61. Docker 运行态复核与文档二次回填
+**时间**：2026-04-15
+
+**本次操作**：
+
+1. 运行态复核
+   - `docker ps`：`oep-regression-20260415` 状态 `Up ... (healthy)`
+   - `docker inspect`：`Health=healthy`
+   - `docker images`：`outlook-email-plus:local-regression-20260415` 存在（image id `acc8f048a48e`）
+
+2. 文档二次回填（按实际状态修正）
+   - `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`
+     - 6.5 增补 Docker 端口回退细节（5055 失败→18080 成功）
+   - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`
+     - 10.3 补充端口失败处理与回退路径
+   - `docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`
+     - 新增 13.7（Docker 运行态核对）
+   - `docs/TODO/2026-04-14-通用Webhook通知与APIKey易用性增强TODO.md`
+     - 新增“Docker 运行态复核”执行回填
+   - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强-PRD-FD-TD-TDD联调检查.md`
+     - 4.6 增补端口异常处理结论
+
+3. 现场状态
+   - 本次仅做运行态核对与文档修正
+   - 未新增业务代码改动
+   - 未新增服务启停动作（沿用现有后台服务与容器）
+
+---
+
+#### 60. Docker 环境恢复后完成镜像构建与容器健康验证
 **时间**：2026-04-15
 
 **本次操作**：
@@ -5905,36 +5978,9 @@ git push origin dev
    - 本地 Python 后台服务仍保持运行（PID `37460`）
    - Docker 回归容器正在运行：`oep-regression-20260415`
 
-#### 61. Docker 运行态复核与文档二次回填
-
-**时间**：2026-04-15
-
-**本次操作**：
-
-1. 运行态复核
-   - `docker ps`：`oep-regression-20260415` 状态 `Up ... (healthy)`
-   - `docker inspect`：`Health=healthy`
-   - `docker images`：`outlook-email-plus:local-regression-20260415` 存在（image id `acc8f048a48e`）
-
-2. 文档二次回填（按实际状态修正）
-   - `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`
-     - 6.5 增补 Docker 端口回退细节（5055 失败→18080 成功）
-   - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`
-     - 10.3 补充端口失败处理与回退路径
-   - `docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`
-     - 新增 13.7（Docker 运行态核对）
-   - `docs/TODO/2026-04-14-通用Webhook通知与APIKey易用性增强TODO.md`
-     - 新增“Docker 运行态复核”执行回填
-   - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强-PRD-FD-TD-TDD联调检查.md`
-     - 4.6 增补端口异常处理结论
-
-3. 现场状态
-   - 本次仅做运行态核对与文档修正
-   - 未新增业务代码改动
-   - 未新增服务启停动作（沿用现有后台服务与容器）
+---
 
 #### 59. 第二轮分批全量回归执行 + Docker 构建前置检查
-
 **时间**：2026-04-15
 
 **本次操作**：
@@ -5970,8 +6016,9 @@ git push origin dev
    - 未新增业务代码实现改动
    - 服务进程保持后台运行（PID `37460`）
 
-#### 58. webhook.site 请求明细核对完成（成功链路）
+---
 
+#### 58. webhook.site 请求明细核对完成（成功链路）
 **时间**：2026-04-15
 
 **本次操作**：
@@ -6005,8 +6052,9 @@ git push origin dev
    - 未新增业务代码实现改动
    - 未新增服务进程操作（沿用已启动后台进程 PID `37460`）
 
-#### 57. 用户提供 webhook.site 实测地址后完成后台启动与链路验证
+---
 
+#### 57. 用户提供 webhook.site 实测地址后完成后台启动与链路验证
 **时间**：2026-04-15
 
 **本次操作**：
@@ -6045,8 +6093,9 @@ git push origin dev
    - 本次包含：后台启动 + 健康检查 + 日志验证 + 文档回填 + WORKSPACE 记录
    - 未新增业务代码实现改动
 
-#### 56. webhook.site 分步联调指引文档化与会话输出约束回填
+---
 
+#### 56. webhook.site 分步联调指引文档化与会话输出约束回填
 **时间**：2026-04-15
 
 **本次操作**：
@@ -6074,8 +6123,9 @@ git push origin dev
    - 未新增业务代码改动。
    - 未启动/重启/停止任何服务进程。
 
-#### 55. 会话文档按“无 webhook 地址”实际场景修订并同步执行口径
+---
 
+#### 55. 会话文档按“无 webhook 地址”实际场景修订并同步执行口径
 **时间**：2026-04-15
 
 **本次操作**：
@@ -6116,8 +6166,9 @@ git push origin dev
    - 未新增业务代码改动。
    - 未启动/重启/停止任何服务进程。
 
-#### 54. Webhook 手工联调方案补充与服务后台启动口径对齐
+---
 
+#### 54. Webhook 手工联调方案补充与服务后台启动口径对齐
 **时间**：2026-04-15
 
 **本次操作**：
@@ -6148,8 +6199,9 @@ git push origin dev
    - 本次包含：后台启动服务 + 文档更新 + WORKSPACE 记录。
    - 未进行额外实现代码改动。
 
-#### 53. Webhook/API Key 方案自动化验证回填（分批全量回归通过）
+---
 
+#### 53. Webhook/API Key 方案自动化验证回填（分批全量回归通过）
 **时间**：2026-04-15
 
 **本次操作**：
@@ -6193,8 +6245,9 @@ git push origin dev
 
 ### 操作记录
 
-#### 52. 产出“其它 AI 驱动使用”的执行提示词文档
+---
 
+#### 52. 产出“其它 AI 驱动使用”的执行提示词文档
 **时间**：2026-04-14
 
 **本次操作**：
@@ -6223,8 +6276,9 @@ git push origin dev
      - TODO 头部“AI 执行提示词”改为：`按会话实时提供（不落库文档）`
    - 说明：该调整只改变提示词存放方式，不影响 PRD/FD/TD/TDD/TODO 主链路。
 
-#### 51. 基于 TODO 再次联调并回填进度（Phase 0 完成）
+---
 
+#### 51. 基于 TODO 再次联调并回填进度（Phase 0 完成）
 **时间**：2026-04-14
 
 **本次操作**：
@@ -6250,8 +6304,9 @@ git push origin dev
    - 本次仅更新文档（TODO + 联调检查 + WORKSPACE 记录）。
    - 未修改业务代码，未启动/重启/停止任何服务进程。
 
-#### 50. 新建 TODO 任务拆分并完成文档链路闭环（Webhook + API Key）
+---
 
+#### 50. 新建 TODO 任务拆分并完成文档链路闭环（Webhook + API Key）
 **时间**：2026-04-14
 
 **本次操作**：
@@ -6279,8 +6334,9 @@ git push origin dev
    - 本次仅更新文档（新增 TODO + 多文档引用修正 + WORKSPACE 记录）。
    - 未修改业务代码，未启动/重启/停止任何服务进程。
 
-#### 49. PRD/FD/TD/TDD 联调校正（确保不偏离会话 PRD）
+---
 
+#### 49. PRD/FD/TD/TDD 联调校正（确保不偏离会话 PRD）
 **时间**：2026-04-14
 
 **本次操作**：
@@ -6307,8 +6363,9 @@ git push origin dev
    - 本次仅更新文档（PRD + 联调检查 + WORKSPACE 记录）。
    - 未修改业务代码，未启动/重启/停止任何服务进程。
 
-#### 48. 基于 PRD+FD+TD 新建 TDD（通用 Webhook + API Key 易用性）
+---
 
+#### 48. 基于 PRD+FD+TD 新建 TDD（通用 Webhook + API Key 易用性）
 **时间**：2026-04-14
 
 **本次操作**：
@@ -6340,8 +6397,9 @@ git push origin dev
    - 本次仅进行文档新增与更新（PRD/FD/TD/TDD/WORKSPACE）。
    - 未修改业务代码，未启动/重启/停止任何服务进程。
 
-#### 47. 基于 PRD+FD 新建 TD（通用 Webhook + API Key 易用性）
+---
 
+#### 47. 基于 PRD+FD 新建 TD（通用 Webhook + API Key 易用性）
 **时间**：2026-04-14
 
 **本次操作**：
@@ -6370,8 +6428,9 @@ git push origin dev
    - 本次仅进行文档新增与更新（PRD/FD/TD/WORKSPACE）。
    - 未修改业务代码，未启动/重启/停止任何服务进程。
 
-#### 46. 基于 PRD 新建 FD（通用 Webhook + API Key 易用性）
+---
 
+#### 46. 基于 PRD 新建 FD（通用 Webhook + API Key 易用性）
 **时间**：2026-04-14
 
 **本次操作**：
@@ -6393,8 +6452,9 @@ git push origin dev
    - 本次仅更新会话文档（新增 FD + 更新 WORKSPACE 记录）。
    - 未修改业务代码，未启动/重启/停止任何服务进程。
 
-#### 45. Issue #42 需求澄清与 PRD 新建（通用 Webhook + API Key 易用性）
+---
 
+#### 45. Issue #42 需求澄清与 PRD 新建（通用 Webhook + API Key 易用性）
 **时间**：2026-04-14
 
 **本次操作**：
@@ -6437,8 +6497,9 @@ git push origin dev
 
 ### 操作记录
 
-#### 44. main 对齐 alias 合并结果并完成分批全量 unittest 验证
+---
 
+#### 44. main 对齐 alias 合并结果并完成分批全量 unittest 验证
 **时间**：2026-04-13
 
 **本次操作**：
@@ -6468,8 +6529,9 @@ git push origin dev
 
 ---
 
-#### 43. 联网比对公开案例并收敛平台侧共性
+---
 
+#### 43. 联网比对公开案例并收敛平台侧共性
 **时间**：2026-04-13
 
 **本次操作**：
@@ -6494,8 +6556,9 @@ git push origin dev
 
 ---
 
-#### 42. 收敛 ClawCloud 故障处理方向并补记执行约束
+---
 
+#### 42. 收敛 ClawCloud 故障处理方向并补记执行约束
 **时间**：2026-04-13
 
 **本次操作**：
@@ -6517,8 +6580,9 @@ git push origin dev
 
 ---
 
-#### 41. 邮箱别名（+ 子地址）自动识别与无缝迁移测试补齐
+---
 
+#### 41. 邮箱别名（+ 子地址）自动识别与无缝迁移测试补齐
 **时间**：2026-04-13
 
 **本次操作**：
@@ -6546,8 +6610,9 @@ git push origin dev
 
 ---
 
-#### 40. 统一同步其他分支到 main（本地 + 远端）
+---
 
+#### 40. 统一同步其他分支到 main（本地 + 远端）
 **时间**：2026-04-13
 
 **本次操作**：
@@ -6573,8 +6638,9 @@ git push origin dev
 
 ---
 
-#### 39. 补齐 v1.16.0 标签镜像（重打 tag 到 CI 全绿提交）
+---
 
+#### 39. 补齐 v1.16.0 标签镜像（重打 tag 到 CI 全绿提交）
 **时间**：2026-04-13
 
 **本次操作**：
@@ -6605,8 +6671,9 @@ git push origin dev
 
 ---
 
-#### 38. 核对 GHCR / DockerHub 镜像 digest 一致性
+---
 
+#### 38. 核对 GHCR / DockerHub 镜像 digest 一致性
 **时间**：2026-04-13
 
 **本次操作**：
@@ -6632,8 +6699,9 @@ git push origin dev
 
 ---
 
-#### 37. 修正 v1.16.0 Release 文案口径（产物状态）
+---
 
+#### 37. 修正 v1.16.0 Release 文案口径（产物状态）
 **时间**：2026-04-13
 
 **本次操作**：
@@ -6652,8 +6720,9 @@ git push origin dev
 
 ---
 
-#### 36. CI 修复结果复核（四项主工作流恢复全绿）
+---
 
+#### 36. CI 修复结果复核（四项主工作流恢复全绿）
 **时间**：2026-04-13
 
 **本次操作**：
@@ -6673,8 +6742,9 @@ git push origin dev
 
 ---
 
-#### 35. 修复 v1.16.0 发布后的 CI 格式化门禁
+---
 
+#### 35. 修复 v1.16.0 发布后的 CI 格式化门禁
 **时间**：2026-04-13
 
 **本次操作**：
@@ -6697,8 +6767,9 @@ git push origin dev
 
 ---
 
-#### 34. v1.16.0 发布后 CI/CD 状态核对
+---
 
+#### 34. v1.16.0 发布后 CI/CD 状态核对
 **时间**：2026-04-13
 
 **本次操作**：
@@ -6724,8 +6795,9 @@ git push origin dev
 
 ---
 
-#### 33. v1.16.0 正式发布（GitHub Release + 产物上传）
+---
 
+#### 33. v1.16.0 正式发布（GitHub Release + 产物上传）
 **时间**：2026-04-13
 
 **本次操作**：
@@ -6766,8 +6838,9 @@ git push origin dev
 
 ---
 
-#### 32. v1.16.0 发布准备（版本更新 + 日志同步）
+---
 
+#### 32. v1.16.0 发布准备（版本更新 + 日志同步）
 **时间**：2026-04-13
 
 **本次操作**：
@@ -6791,8 +6864,9 @@ git push origin dev
 
 ---
 
-#### 31. 更新 steering 文档与 CLAUDE.md（按当前代码架构同步）
+---
 
+#### 31. 更新 steering 文档与 CLAUDE.md（按当前代码架构同步）
 **时间**：2026-04-13
 
 **本次操作**：
@@ -6834,8 +6908,9 @@ git push origin dev
 
 ---
 
-#### 30. OAuth Token 服务层修复 + main 全量回归验证
+---
 
+#### 30. OAuth Token 服务层修复 + main 全量回归验证
 **时间**：2026-04-13
 
 **本次操作**：
@@ -6870,8 +6945,9 @@ git push origin dev
 
 ---
 
-#### 29. dev → main 合并 + 全量测试验证
+---
 
+#### 29. dev → main 合并 + 全量测试验证
 **时间**：2026-04-13
 
 **本次操作**：
@@ -6909,8 +6985,9 @@ git push origin dev
 
 ---
 
-#### 28. OAuth Token 工具 UI 简化 + 获取授权链接 + i18n 翻译
+---
 
+#### 28. OAuth Token 工具 UI 简化 + 获取授权链接 + i18n 翻译
 **时间**：2026-04-13
 
 **本次操作**：
@@ -6955,8 +7032,9 @@ git push origin dev
 
 ### 操作记录
 
-#### 27. 输出“微软云配置自动化提示词”文件，供其他 AI 直接执行云端配置
+---
 
+#### 27. 输出“微软云配置自动化提示词”文件，供其他 AI 直接执行云端配置
 **时间**：2026-04-12
 
 **本次操作**：
@@ -6977,8 +7055,9 @@ git push origin dev
 - 已在 `docs\\OAuth-Token工具兼容导入踩坑总结.md` 中补上对这份提示词文件的引用
 - 已同步更新会话 `plan.md` 与 `WORKSPACE.md`
 
-#### 26. 评估“微软 CLI / API + AI 自动完成配置”的可行边界
+---
 
+#### 26. 评估“微软 CLI / API + AI 自动完成配置”的可行边界
 **时间**：2026-04-12
 
 **调研结论**：
@@ -7002,8 +7081,9 @@ git push origin dev
 - 已将这部分内容补入 `docs\\OAuth-Token工具兼容导入踩坑总结.md`
 - 已同步更新会话 `plan.md` 与 `WORKSPACE.md`
 
-#### 25. 输出会话专用踩坑总结文件，供后续写教程使用
+---
 
+#### 25. 输出会话专用踩坑总结文件，供后续写教程使用
 **时间**：2026-04-12
 
 **本次操作**：
@@ -7018,8 +7098,9 @@ git push origin dev
 - 最终验证结果
 - 后续写教程时建议强调的顺序
 
-#### 24. 权限放开后，邮件拉取已成功；日志确认此前是“受众 + Scope + API permissions”三重叠加
+---
 
+#### 24. 权限放开后，邮件拉取已成功；日志确认此前是“受众 + Scope + API permissions”三重叠加
 **时间**：2026-04-12
 
 **本次结果**：
@@ -7047,8 +7128,9 @@ git push origin dev
 - 日志里仍有一个独立问题：`/api/emails/.../extract-verification` 触发了 `AttributeError: 'str' object has no attribute 'get'`
 - 这个 500 不影响本次邮件列表拉取成功，但属于后续可单独修复的旁路问题
 
-#### 23. 按最新运行时诊断再次重启本地服务
+---
 
+#### 23. 按最新运行时诊断再次重启本地服务
 **时间**：2026-04-12
 
 **原因**：
@@ -7059,1684 +7141,408 @@ git push origin dev
 - 重新启动本地服务，新 PID `44800`
 - 验证：`http://127.0.0.1:5000/login` 返回 `HTTP 200`
 
-#### 22. 运行日志确认当前保存的 Scope 仍是旧 Graph 默认值
+---
 
-**时间**：2026-04-12
+#### 22. Issue #49 — 按用户要求改为“会话直接交付提示词正文”
+**时间**：2026-04-22
 
-**日志与配置结论**：
-- 运行日志显示：
-  - Graph：`AADSTS9002331`（受众过窄，仍与 `/common` 冲突）
-  - IMAP：`AADSTS70000`（scope 未授权 / 过期）
-- 进一步读取当前工具配置后确认：
-  - `oauth_tool_scope = offline_access https://graph.microsoft.com/.default`
+**背景**：
+- 用户明确要求“直接给我就好，不要写成文档”；
+- 同时要求继续同步会话文档与 `WORKSPACE.md`。
 
-**确认结论**：
-- 当前 IMAP 失败不是“refresh_token 本身坏了”
-- 更直接的原因是：用户这次授权仍在沿用旧的 Graph 默认 Scope，没有切回 IMAP 兼容预设
-- 因此兼容导入模式下，需要：
-  - 将受众切到 `AzureADandPersonalMicrosoftAccount`
-  - 将 Scope 切回 IMAP 预设
-  - 重新授权后再写入账号
+**本次上下文核对（先获取后行动）**：
+1. 复读当前 TODO 顶部“执行提示词”描述；
+2. 复读 BUG 文档中“实施可参考”段落；
+3. 复读 DEVLOG Unreleased 记录，确认需补“交付策略偏好”口径。
 
-**本次同步动作**：
-- `get_config()` 现在会把历史遗留的 Graph 默认 Scope 自动映射回 IMAP 默认值，降低旧配置残留导致的重复踩坑概率
-- 新增自动化用例覆盖这条“旧 Graph 默认 Scope → IMAP 默认值”的兼容映射
-- 更新页面说明、README、会话 plan 和 `WORKSPACE.md`
+**本次实际修改**：
+1. 更新 `docs/TODO/2026-04-22-失效账号检测与清理（方案C）TODO.md`
+   - 将“执行提示词”说明改为：优先会话内直接交付正文，文档版仅归档备份。
+2. 更新 `docs/BUG/2026-04-22-批量导入后失效账号检测与清理需求评估BUG.md`
+   - 补充备注：用户偏好会话直接交付，文件仅作备份。
+3. 更新 `docs/DEVLOG.md`
+   - Unreleased 补记交付策略已调整（会话直给优先）。
+4. 更新 `WORKSPACE.md`（本条 22）
+   - 记录本轮口径调整。
 
-**针对性回归**：
-- `python -m pytest tests/test_oauth_tool.py -v -k "legacy_graph_scope or common_endpoint_guidance"` → `2 passed`
-
-#### 21. `AADSTS9002331` 证明受众不能收窄到 PersonalMicrosoftAccount
-
-**时间**：2026-04-12
-
-**实际现象**：
-- 授权已成功，用户进入“写入账号”弹窗
-- 保存前 token 验证失败，错误为：
-  - `AADSTS9002331`
-  - `Application ... is configured for use by Microsoft Account users only. Please use the /consumers endpoint to serve this request.`
-
-**确认结论**：
-- 这说明兼容导入模式不能把应用受众收窄到 **PersonalMicrosoftAccount**
-- 因为系统当前写入前验证与部分运行链路仍依赖 `/common`
-- 因此与现有模型兼容的正确受众，应是：
-  - **Accounts in any identity provider or organizational directory and personal Microsoft accounts**
-  - 即 `AzureADandPersonalMicrosoftAccount`
-
-**本次同步动作**：
-- 更新 `save_to_account()` 的失败引导：遇到 `AADSTS9002331` 时，明确提示把 Supported account types 改为 `AzureADandPersonalMicrosoftAccount`
-- 新增自动化用例覆盖该引导分支
-- 更新页面说明、README、会话 plan 和 `WORKSPACE.md`，撤回此前“PersonalMicrosoftAccount 也可作为推荐选项”的过宽口径
-
-**针对性回归**：
-- `python -m pytest tests/test_oauth_tool.py -v -k "common_endpoint_guidance or invalid_client or unauthorized_client"` → `3 passed`
-
-#### 20. 用户最新 manifest 已修正一半，剩余卡点集中在 Web 回调平台
-
-**时间**：2026-04-12
-
-**用户反馈的最新 manifest**：
-- `allowPublicClient = true` ✅
-- `signInAudience = "PersonalMicrosoftAccount"` ✅
-- `accessTokenAcceptedVersion = 2` ✅
-- 但 `replyUrlsWithType` 仍然只有：
-  - `http://localhost:5000/token-tool/callback`（`type = "Web"`）
-
-**字段级结论**：
-- 这说明 audience / public-client 开关已经改对了一半
-- 当前仍然不符合兼容导入模式的关键点，是**回调平台仍停留在 Web**
-- 在这种情况下，Azure 继续把当前链路视为机密 Web 客户端、继续要求 `client_secret` 是符合现象的
-
-**下一步建议**：
-- 不再继续围绕 Web 回调调整
-- 改用 **Mobile and desktop applications** 的 public redirect
-- 若 Azure 门户允许，优先直接登记 `http://localhost:5000/token-tool/callback` 这类本地 callback URI；`http://localhost` 作为后备 public redirect
-- 在工具里把 Redirect URI 改成相同值，并使用**手动粘贴回调 URL**完成 exchange
-
-#### 19. `invalid_client` + “必须提供 client_secret” 反映的是平台类型错位
-
-**时间**：2026-04-12
-
-**实际现象**：
-- 用户重新测试后收到：
-  - `invalid_client`
-  - `AADSTS70002: The provided request must include a 'client_secret' input parameter`
-
-**当前判断**：
-- 这不应再解读成“Client ID 无效或应用被删除”
-- 更符合当前上下文的解释是：Azure 仍把当前 redirect/platform 视为**机密 Web 客户端**
-- 也就是说，即使 audience、public client 开关已经调整过，只要还在走 Web 平台回调，Azure 仍可能继续要求 `client_secret`
-
-**本次同步动作**：
-- 更新 `oauth_tool.py` 的 `invalid_client` 引导文案，改成 public client / redirect 平台错位说明
-- 更新 `templates/token_tool.html` 与 README：若仍被要求 `client_secret`，改用 **Mobile and desktop applications** 平台的 public redirect（如 `http://localhost`），并在工具里走手动粘贴回调 URL
-- 将该结论写入会话 plan 与 `WORKSPACE.md`，作为后续人工测试的主诊断方向
-
-**针对性回归**：
-- `python -m pytest tests/test_oauth_tool.py -v -k "invalid_client or unauthorized_client"` → `2 passed`
-
-#### 18. `ms-sso.copilot.microsoft.com/processcookie` 跳转属于浏览器侧干扰
-
-**时间**：2026-04-12
-
-**实际现象**：
-- 用户登录 Microsoft 账号后，没有直接回到 Azure / 本地回调
-- 浏览器跳到：
-  - `ms-sso.copilot.microsoft.com/processcookie?...`
-- 页面报错：
-  - `ERR_CONNECTION_CLOSED`
-
-**当前判断**：
-- 这个域名不在我们应用的 OAuth 回调链路中
-- 它更像是浏览器 / Copilot / Microsoft SSO 的 cookie 处理辅助跳转
-- 因此这一步优先按**浏览器环境问题**处理，而不是继续修改本地代码或 Azure App Registration
-
-**建议排查方向**：
-- 使用无插件的隐身窗口 / Guest Profile / 另一浏览器重试
-- 清理 `live.com`、`microsoftonline.com`、`copilot.microsoft.com` 相关 cookie
-- 暂时关闭代理、VPN、杀软 HTTPS 检查、浏览器扩展后再试
-- 若在新浏览器或新网络下恢复正常，可基本确认是本机浏览器环境干扰
-
-#### 17. 基于用户提供的 Azure manifest 样本做字段级诊断
-
-**时间**：2026-04-12
-
-**用户提供的 manifest 关键信息**：
-- `signInAudience = "PersonalMicrosoftAccount"` → 这一项已经对了
-- `accessTokenAcceptedVersion = 2` → token 版本前置约束已经满足
-- `allowPublicClient = null` → 兼容导入模式下应显式开启为 public client
-- `replyUrlsWithType` 当前只有 `http://localhost:5000/token-tool/callback`
-
-**字段级结论**：
-- 需要重点改的是 **`allowPublicClient`**：应设为启用（Portal 中对应 `Allow public client flows = Yes`）
-- Redirect URI 最好同时注册：
-  - `http://127.0.0.1:5000/token-tool/callback`
-  - `http://localhost:5000/token-tool/callback`
-- `passwordCredentials` 可以保留，但当前兼容导入模式不会使用它
-- IMAP 兼容链路建议通过 Portal 的 **API permissions** 补充 Exchange Online 的委托权限，而不是直接手改 manifest GUID
-
-**本次同步动作**：
-- 更新页面配置指引，明确本地建议同时注册 `127.0.0.1` 与 `localhost` 两个 Redirect URI
-- 将 manifest 样本分析结果写入会话 plan 与 WORKSPACE，便于后续继续排查
-
-#### 16. Azure 门户切换 consumers 时的 manifest 前置约束补充
-
-**时间**：2026-04-12
-
-**实际现象**：
-- 用户在把应用切换为支持个人 Microsoft 账号时，Azure 门户报错：
-  - `Property api.requestedAccessTokenVersion is invalid`
-
-**确认结论**：
-- 这是 Azure App Registration 的 manifest 约束，不是本地代码问题
-- 当应用要支持个人 Microsoft 账号（`PersonalMicrosoftAccount` / `AzureADandPersonalMicrosoftAccount`）时，`api.requestedAccessTokenVersion` 必须为 `2`
-- 正确处理顺序是：先到 **Manifest** 把 `api.requestedAccessTokenVersion` 改成 `2`，保存后再去切换 Supported account types
-
-**本次同步动作**：
-- 更新页面内 Azure 配置提示，补上 `requestedAccessTokenVersion=2` 的前置说明
-- 更新 README / OAuth Tool 相关 PRD / FD / TD / TDD / TODO / 会话 plan，保证文档与当前实际限制一致
-
-#### 15. 根据实际 `unauthorized_client` 结果补齐微软侧配置口径
-
-**时间**：2026-04-12
-
-**实际现象**：
-- 在兼容账号导入模式下继续人工测试时，Microsoft 返回：
-  - `unauthorized_client`
-  - `The client does not exist or is not enabled for consumers`
-
-**确认结论**：
-- 当前模式不仅要求 `tenant=consumers`、Public Client、无 `client_secret`
-- 还要求 Azure App Registration 的 **Supported account types 必须包含个人 Microsoft 账号**
-- 如果应用只面向组织目录 / 单租户组织账号，即使前端和后端配置都改成兼容模式，授权前也会直接失败
-
-**本次同步动作**：
-- 更新 `oauth_tool.py` 的 `unauthorized_client` 引导文案：明确提示“支持个人 Microsoft 账号 + 开启公共客户端流”
-- 更新 `templates/token_tool.html` 的 Azure 配置指引：显式写出 Supported account types 的可选项与禁区
-- 更新 README / README.en 与 OAuth Tool 相关 PRD / FD / TD / TDD / TODO 顶部说明，使文档与这次真实报错保持一致
-
-**针对性回归**：
-- `python -m pytest tests/test_oauth_tool.py -v -k unauthorized_client` → `1 passed`
-
-#### 14. OAuth Token 工具收口到兼容账号导入模式（专项 + 全量回归通过）
-
-**时间**：2026-04-12
-
-**本轮实现**：
-- 前端页面与侧边栏入口统一改为“兼容账号 Token 导入”口径，Client Secret 改为禁用提示，Tenant 固定为 `consumers`
-- `token_tool.js` 统一按兼容模式收集表单：`client_secret` 强制空字符串，`tenant` 强制 `consumers`，默认 Scope 切换到 IMAP 兼容预设
-- `token_tool.py` 在 `prepare_oauth()`、`save_config()`、`save_to_account()` 增加兼容模式硬校验，直接拒绝非空 `client_secret` 与非 `consumers` tenant
-- `graph.py` 与 `oauth_tool.py` 清理上一轮 tenant/client_secret-aware 临时链路，回到现有账号运行模型
-- `tests/test_oauth_tool.py` 同步改为兼容模式口径：新增 prepare/config/save 的拒绝分支断言，配置返回固定空 `client_secret` 与 `consumers` tenant，并补充 IMAP 默认 Scope 断言
-
-**当前判断**：
-- Token 工具不再承诺“任意 Azure 应用上下文导入”，而是收敛为与现有购买账号同模型的导入入口
-- 这轮改动用于在工具阶段就拦截不兼容账号，避免保存成功后才在运行态 `GRAPH_TOKEN_FAILED` / `IMAP_TOKEN_FAILED`
-
-**专项回归**：
-- `python -m pytest tests/test_oauth_tool.py -v` → `64 passed`
-
-**全量回归**：
-- `python -m pytest tests/ -v` → `994 passed, 10 skipped, 2 warnings`
-
-**服务同步**：
-- 已停止旧服务 PID `12592`
-- 已按当前代码重启本地服务，新 PID `31192`
-- `http://127.0.0.1:5000/login` 返回 `HTTP 200`
-
-#### 15. OAuth Token 获取工具审查提示词（v1.0）
-
-**时间**：2026-04-12
-
-**问题背景**：
-- 基于两轮代码审查经验，为 OAuth Token 获取工具编写专项审查提示词
-- 目标：可交给其他 AI 对该功能实现进行独立审查
-
-**产出**：
-- `docs/DEV/oauth-token-review-prompt.md` — OAuth Token 功能专项审查提示词 v1.0
-- 包含：全部 TD 函数签名/路由/配置表、6 项关键技术约束、八维度检查清单、TDD 13 类 59 用例映射
-- 审查重点：功能实现正确性（TD 逐函数比对）+ 回归安全性（测试覆盖有效性）
+**当前状态**：
+1. 后续将优先在会话直接给出提示词正文；
+2. 文档文件继续保留为归档，不作为唯一交付渠道；
+3. 仍为文档阶段，未开始代码实施。
 
 ---
 
-#### 14. OAuth Token 获取工具第二轮代码审查（v1.15.0）
+#### 21. Issue #49 — 生成详细 TODO 实施提示词（供他人执行）
+**时间**：2026-04-22
 
-**时间**：2026-04-12
+**背景**：
+- 用户要求“编写一份详细的 TODO 提示词来指导其他人如何开展工作”；
+- 并要求继续同步会话文档与 `WORKSPACE.md`。
 
-**问题背景**：
-- 第一轮审查发现 3 条 Watch Items（均 LOW）
-- 另一 AI 完成保守加固（Scope Chip DOM 创建 + client_secret 兼容策略）后进行第二轮审查
+**本次上下文核对（先获取后行动）**：
+1. 读取现有提示词模板：
+   - `docs/DEV/2026-04-21-插件Provider域名选择泛化与设置入口解耦-实施提示词.md`
+   - `docs/DEV/2026-04-21-临时邮箱插件化-实施提示词.md`
+2. 读取当前 Issue #49 基线文档：
+   - `docs/BUG/2026-04-22-批量导入后失效账号检测与清理需求评估BUG.md`
+   - `docs/TODO/2026-04-22-失效账号检测与清理（方案C）TODO.md`
+   - `docs/DEVLOG.md`
+3. 复核 `WORKSPACE.md` 最近条目，确保口径连续。
 
-**审查范围**：
-- 核心后端 6 + 前端 5 + 测试 1 + 发布/文档 7 = 19 个文件
-- 八维度深度审查：TD/TDD 一致性、OAuth 安全链路、配置安全、账号写入链路、前后端契约、XSS/注入/泄露、测试覆盖、发布文档一致性
+**本次实际修改**：
+1. 新增 `docs/DEV/2026-04-22-Issue49-失效账号检测与清理-实施提示词.md`
+   - 提供可直接交给其他 AI 的完整执行提示词；
+   - 明确角色、必读上下文、约束、DoD、分阶段实施（Phase A~D）、禁止事项与交付要求。
+2. 更新 `docs/TODO/2026-04-22-失效账号检测与清理（方案C）TODO.md`
+   - 顶部新增“执行提示词”引用。
+3. 更新 `docs/BUG/2026-04-22-批量导入后失效账号检测与清理需求评估BUG.md`
+   - 在“下一步”处补充实施提示词链接。
+4. 更新 `docs/DEVLOG.md`
+   - Unreleased 段补记“执行提示词已新增”。
+5. 更新 `WORKSPACE.md`（本条 21）
+   - 同步记录本轮“提示词生成 + 文档联动更新”。
 
-**审查结论**：
-- **Must-Fix: 0 条**
-- **Watch Items: 1 条（LOW）**：`exchange_token` 中 state 不匹配分支缺少直接单元测试
-- **结论: Merge-Ready**
-
-**验收数据**：
-- `python -m pytest tests/test_oauth_tool.py -v` → `59 passed`
-- `python -m pytest tests/ -v` → `989 passed, 10 skipped, 2 warnings`
-
-**加固确认**：
-- ✅ Scope Chip: `document.createElement()` + `data-scope` + 事件委托
-- ✅ client_secret: 明文→直接返回 / `enc:` 正常→解密 / `enc:` 损坏→返回空串
-- ✅ 新增 2 个专项测试覆盖上述加固
+**当前状态**：
+1. 已有可直接分发给其他执行者的高细节实施提示词；
+2. TODO/BUG/DEVLOG 均已联动引用；
+3. 仍处文档阶段，尚未进入代码实现。
 
 ---
 
-#### 13. OAuth Token 工具方向收敛：改为兼容账号导入模式（规划阶段）
+#### 20. Issue #49 方案细化说明（回答“你打算如何解决”）
+**时间**：2026-04-22
 
-**时间**：2026-04-12
+**背景**：
+- 用户要求我明确说明“修改方案是什么、打算如何解决这个问题”；
+- 同时要求继续更新会话文档并把操作记录进 `WORKSPACE.md`。
 
-**背景判断**：
-- 通过人工测试确认：Token 工具虽然已能完成授权、换 token、保存前验证与账号写入，但“购买账号”运行模型与“用户自备 Azure 应用导入账号”并不是同一类型
-- 现有运行态默认只表达 `client_id + refresh_token`，而用户自备 Azure 应用可能还要求 tenant / client_secret / 单租户上下文
-- 继续在运行时对单租户 / 机密客户端逐点打补丁，会持续扩大复杂度并破坏旧模型稳定性
+**本次上下文核对（先获取后行动）**：
+1. 复读 refresh/graph/accounts/main.js 的现有实现能力，确认不是从零开发；
+2. 复读本次新增 BUG/TODO 文档，确保新方案补充与现有口径一致；
+3. 继续遵守当前范围：文档阶段，不做代码实现。
 
-**本次规划结论**：
-- 不再以“支持任意 Azure 应用导入”为目标
-- 改为“**兼容账号导入模式**”：只允许导入与现有购买账号运行模型一致的账号
-- 兼容模式口径暂定为：`tenant=consumers`、public client、无需 client_secret、不依赖账号级 tenant/secret 运行态上下文
+**本次实际修改**：
+1. 更新 `docs/BUG/2026-04-22-批量导入后失效账号检测与清理需求评估BUG.md`
+   - 新增第 9 节“拟实施方案（V1 技术草案）”；
+   - 明确后端、前端、测试、风险控制四部分具体改法。
+2. 更新 `docs/TODO/2026-04-22-失效账号检测与清理（方案C）TODO.md`
+   - 新增“实施路径”章节（Step A~D）；
+   - 将“你打算如何解决”转成可执行步骤。
+3. 更新 `docs/DEVLOG.md`
+   - Unreleased 补充“V1 拟实施方案”摘要。
+4. 更新 `WORKSPACE.md`（本条 20）
+   - 记录本次“方案细化答复 + 文档同步”动作。
 
-**规划动作**：
-- 已创建会话级 `plan.md`
-- 已拆分后续收敛任务：前端收敛、后端硬校验、测试口径调整、文档统一、临时兼容逻辑清理
-- 当前阶段仅完成方案收敛与计划编写，尚未开始按兼容模式改代码
+**对用户问题的直接答复（方案摘要）**：
+1. 先做后端统一判定 helper（只判 `invalid_grant/AADSTS70000`）；
+2. 再扩展刷新返回字段，直接给出失效账号计数与摘要；
+3. 增加独立治理接口（候选列表 + 批量置 inactive）；
+4. 删除继续复用现有 `batch-delete`（加二次确认，不改保护）；
+5. 前端补“刷新结果→治理面板”闭环；
+6. 最后补契约测试与人工验收收口。
 
-**结论**：
-- 后续实现方向从“扩运行态支持更多 OAuth 模型”转为“收缩 Token 工具输入边界，使导入账号与购买账号模型一致”
-- 该方向更符合当前项目既有运行模型，也更利于控制复杂度
+**当前状态**：
+1. 已把“怎么改”明确到可执行步骤；
+2. 文档同步完成；
+3. 仍处文档阶段，尚未实施代码。
 
-#### 12. OAuth Token 工具写入前 client_secret 校验链路修复
+---
 
-**时间**：2026-04-12
+#### 19. Issue #49 深度可解决性分析与文档同步
+**时间**：2026-04-22
 
-**问题背景**：
-- 在 tenant-aware 修复之后，保存前 refresh token 校验继续报 `AADSTS7000218`
-- 排查确认：保存接口虽然已经带上了 `tenant`，但验证请求仍然没有带 `client_secret`
-- 对于机密客户端（confidential client），这会导致保存前验证阶段直接要求 `client_secret` / `client_assertion`
+**背景**：
+- 用户要求“继续深度分析判断，具体这个 issue 是否好解决并介绍”；
+- 同时要求继续把会话文档按实际更新，并同步记录到 `WORKSPACE.md`。
 
-**本次修复**：
+**本次上下文核对（先获取后行动）**：
+1. 复读实现代码（非猜测）：
+   - `outlook_web/services/refresh.py`：`stream_refresh_all_accounts` / `stream_refresh_selected_accounts` / `refresh_failed_accounts` 的失败输出结构与 `failed_list`；
+   - `outlook_web/services/graph.py`：`test_refresh_token_with_rotation()` 的错误返回形态；
+   - `outlook_web/controllers/accounts.py`：状态更新能力（`active/inactive/disabled`）与批量删除保护；
+   - `static/js/main.js`：失败列表加载、重试失败入口、批量删除入口。
+2. 复读已落盘文档：
+   - `docs/BUG/2026-04-22-批量导入后失效账号检测与清理需求评估BUG.md`
+   - `docs/TODO/2026-04-22-失效账号检测与清理（方案C）TODO.md`
 
-1. client_secret 贯通保存链路
-   - `static/js/features/token_tool.js` 在保存 payload 中补充提交 `client_secret`
-   - `outlook_web/controllers/token_tool.py` 在 `save_to_account()` 中接收 `client_secret`
-   - 仅当实际有值时，才向底层验证函数传递 `client_secret`
+**本次实际修改**：
+1. 更新 `docs/BUG/2026-04-22-批量导入后失效账号检测与清理需求评估BUG.md`
+   - 新增“可解决性深度判断”章节（结论：好解决，属中低复杂度整合改造）；
+   - 明确“为什么好解决”“真实难点”“投入预估（1~2 迭代日）”。
+2. 更新 `docs/TODO/2026-04-22-失效账号检测与清理（方案C）TODO.md`
+   - 新增“可解决性评估”小节，明确前提、风险与工期预估。
+3. 更新 `docs/DEVLOG.md`
+   - 在 Unreleased 段补充“可解决性深度评估”摘要记录。
+4. 更新 `WORKSPACE.md`（本条 19）
+   - 同步记录本次深度分析与文档修改。
 
-2. 保存前验证支持机密客户端
-   - `outlook_web/services/graph.py` 的 `test_refresh_token_with_rotation()` 增加可选 `client_secret`
-   - 当页面已配置 secret 时，保存前 refresh token 校验将一并携带该 secret
+**深度分析结论（给用户的最终判断）**：
+1. Issue #49 **值得做且好解决**；
+2. 核心不是“技术做不到”，而是“把现有能力串成闭环”；
+3. 风险主要在误判/误删，可通过统一判定 + 默认置 inactive + 二次确认删除 + 审计日志控制。
 
-3. 回归与运行态同步
-   - `tests/test_oauth_tool.py` 新增 client-secret-aware 保存验证测试
-   - `python -m pytest tests/test_oauth_tool.py -v` → `62 passed`
-   - 本地服务已重启并确认 `http://127.0.0.1:5000/login` 返回 `HTTP 200`
+**当前状态**：
+1. 本轮完成了深度评估与三份文档同步；
+2. 仍未进入代码实现与测试执行阶段（保持文档阶段）。
 
-**结论**：
-- 机密客户端现在不会再因为保存前验证缺少 `client_secret` 而卡在 `AADSTS7000218`
-- 当前人工测试环境已更新到最新代码，可继续刷新页面验证完整“获取 token → 写入账号”链路
+---
 
-#### 11. OAuth Token 工具写入前 tenant-aware 验证修复
+#### 18. Issue #49 文档收口补充（仅 DEVLOG 版本记录）
+**时间**：2026-04-22
 
-**时间**：2026-04-12
+**背景**：
+- 在用户确认“继续：只补充 DEVLOG 版本记录，不动 FD/TD/TDD”后，继续按该范围推进；
+- 用户额外提出“这些内容放在哪里更好”的问题，需要给出可长期维护的放置建议。
 
-**问题背景**：
-- 人工测试中，Token 获取已经成功，但写入账号前的 refresh_token 验证报错：应用在目录 `Microsoft Accounts` 中不存在
-- 排查确认：OAuth Tool 前面的授权链路按当前表单 Tenant 成功获取了 token，但保存前验证复用了 `graph.py` 里写死 `common` 的旧校验端点
-- 对于单租户 Azure 应用，这会把本应在指定租户里验证的 token 错误地拿去 `common / Microsoft Accounts` 上验证，从而导致保存失败
+**本次上下文核对（先获取后行动）**：
+1. 读取 `docs/DEVLOG.md` 当前结构，确认存在发布版本分段与顶部追加记录模式；
+2. 读取 `outlook_web/__init__.py`，确认当前版本号为 `2.1.1`，避免错误写入正式版本段；
+3. 复核本轮已落盘文档：
+   - `docs/BUG/2026-04-22-批量导入后失效账号检测与清理需求评估BUG.md`
+   - `docs/TODO/2026-04-22-失效账号检测与清理（方案C）TODO.md`
 
-**本次修复**：
+**本次实际修改**：
+1. 更新 `docs/DEVLOG.md`
+   - 顶部新增 `Unreleased - Issue #49 失效账号检测与清理（方案 C）文档基线` 章节；
+   - 明确本轮为文档收口，不含代码实现与测试执行；
+   - 记录方案 C 决策与两份新文档路径。
+2. 更新 `WORKSPACE.md`（本条 18）
+   - 同步记录本次仅补充 DEVLOG 的操作与范围约束。
 
-1. tenant 贯通保存链路
-   - `outlook_web/services/oauth_tool.py` 的 token 结果中补充返回 `tenant`
-   - `static/js/features/token_tool.js` 在保存 payload 中补充提交 `tenant`
-   - `outlook_web/controllers/token_tool.py` 在 `save_to_account()` 中接收 `tenant`
+**关于“这些内容放哪里比较好”的结论**：
+1. **需求分析与问题定义**：放 `docs/BUG/...`（即本次 BUG 评估文档）；
+2. **执行计划与分阶段任务**：放 `docs/TODO/...`（即本次方案 C TODO）；
+3. **版本线变更摘要**：放 `docs/DEVLOG.md` 的 `Unreleased` 段；
+4. **会话操作轨迹**：放 `WORKSPACE.md`（当前文档）。
 
-2. 保存前验证 tenant-aware
-   - `outlook_web/services/graph.py` 新增按 tenant 生成 token 端点的能力
-   - `test_refresh_token_with_rotation()` 增加可选 `tenant` 参数
-   - 保存前验证不再固定走 `common`，而是按当前 OAuth 实际 tenant 发起 refresh token 校验
+**当前状态**：
+1. 已按用户限定范围完成 DEVLOG 补充；
+2. FD/TD/TDD 未改动；
+3. 本轮仍未进行代码实现与测试执行。
 
-3. 回归与运行态同步
-   - `tests/test_oauth_tool.py` 新增 tenant-aware 保存验证测试
-   - `python -m pytest tests/test_oauth_tool.py -v` → `61 passed`
-   - 本地服务已重启并加载最新代码，`http://127.0.0.1:5000/login` 返回 `HTTP 200`
+---
 
-**结论**：
-- 单租户 Azure 应用现在不会再因为保存前验证错误落到 `Microsoft Accounts/common` 而写入失败
-- 当前人工测试环境已切到最新代码，可继续刷新页面验证“获取 token → 写入账号”完整链路
+#### 17. Issue #49 功能评估与方案 C 文档落盘（失效账号检测与清理）
+**时间**：2026-04-22
 
-#### 10. OAuth Token 工具写入账号弹窗错误可视化修复
+**背景**：
+- 用户要求读取并分析 Issue #49：`https://github.com/ZeroPointSix/outlookEmailPlus/issues/49`，判断“批量检测失效邮箱并删除”是否需要实现；
+- 随后用户明确选择 **方案 C（混合方案）**：
+  - 全量检测主入口纳入失效识别；
+  - 保留独立治理入口用于批量处置。
+- 用户进一步要求：按实际更新会话文档，并将本次操作及时记录到 `WORKSPACE.md`。
 
-**时间**：2026-04-12
+**本次上下文核对（先获取后行动）**：
+1. 读取 Issue #49 全量内容与日志样例（`invalid_grant / AADSTS70000`）；
+2. 核对现有代码能力：
+   - `POST /api/accounts/refresh-failed`
+   - `GET /api/accounts/refresh-logs/failed`
+   - `POST /api/accounts/batch-delete`
+   - 账号列表中的 `last_refresh_status / last_refresh_error`
+3. 核对文档结构与落盘位置，确定新增 BUG 评估文档 + TODO 执行文档，并同步写入 `WORKSPACE.md`。
 
-**问题背景**：
-- 人工测试中，OAuth Token 已成功获取，但点击“写入到账号 → 确认写入”后，界面看起来像“按钮没有反应”
-- 通过运行中的服务日志确认，前端实际上已经多次请求 `POST /api/token-tool/save`，且后端返回 `400`
-- 根因不是按钮失效，而是前端把错误提示输出到了弹窗外的主状态栏，用户在 modal 打开状态下看不到
+**本次实际修改**：
+1. 新增 `docs/BUG/2026-04-22-批量导入后失效账号检测与清理需求评估BUG.md`
+   - 记录 Issue #49 现象、现有能力、真实缺口与方案 C 决策；
+   - 明确本轮为文档阶段，不改业务代码。
+2. 新增 `docs/TODO/2026-04-22-失效账号检测与清理（方案C）TODO.md`
+   - 按 Phase 0~4 拆分后续实现任务；
+   - 明确默认安全路径（优先置 inactive，删除需二次确认）；
+   - 明确审计与回归要求。
+3. 更新 `WORKSPACE.md`（本条 17）
+   - 同步记录本次分析、决策与文档落盘动作。
 
-**本次修复**：
+**当前状态**：
+1. Issue #49 已完成可执行级别的方案收敛：采用方案 C；
+2. 相关会话文档与 TODO 已落盘；
+3. 本轮未进行代码实现与测试执行（仅文档同步）。
 
-1. 弹窗内错误反馈
-   - 在 `templates/token_tool.html` 的保存弹窗中新增独立状态区
-   - `static/js/features/token_tool.js` 新增弹窗级 `showSaveDialogStatus()` / `clearSaveDialogStatus()`
-   - 保存校验失败、账号列表加载失败、保存接口返回错误时，统一在弹窗内直接展示提示
+---
 
-2. 样式与运行态同步
-   - `static/css/token_tool.css` 增加弹窗状态区样式
-   - 本地服务重启后再次确认 `http://127.0.0.1:5000/login` 返回 `HTTP 200`
+#### 16. 会话待命状态同步（用户忙，保持寸止持续对话）
+**时间**：2026-04-21
 
-**验收结果**：
-- `python -m pytest tests/test_oauth_tool.py -v` → `60 passed`
-- 本地服务已重启并加载最新前端代码
-
-**结论**：
-- 当前“确认写入像没反应”的表现已被修正为“错误直接在弹窗内可见”
-- 后续若再出现写入失败，用户将能直接看到真实后端返回信息，方便继续定位业务原因
-
-#### 9. OAuth Token 工具人工测试前回归与服务拉起
-
-**时间**：2026-04-12
+**触发原因**：
+- 用户明确要求“等待一下，用户目前正忙”，并要求后续继续通过寸止 MCP 对话，不主动结束。
 
 **本次操作**：
+- 已确认当前实现状态与文档状态一致：
+  - `test_plugin/moemail.py` 与 `test_plugin/cloudflare_temp_mail_test_plugin.py` 已落地
+  - 两个新增测试文件均已通过各自 `5/5`
+  - `WORKSPACE.md` 已有完整实现记录（条目 14、15）
+- 本条（16）仅做会话状态同步，不新增代码实现。
 
-1. 全量回归确认
-   - 再次执行 `python -m pytest tests/ -v`
-   - 结果为 `990 passed, 10 skipped, 2 warnings`
-   - warnings 仍是 `tests/test_live_credentials.py` 里既有的 `return bool` 提示，非本轮引入
-
-2. 本地服务启动
-   - 使用项目默认入口 `python start.py` 启动 Flask 服务
-   - 通过 PowerShell `Start-Process` 挂起进程并保留 stdout/stderr 日志
-   - 启动后确认服务监听 `127.0.0.1:5000`
-
-3. 连通性检查
-   - 对 `http://127.0.0.1:5000/login` 发起本地请求
-   - 返回 `HTTP 200`，登录页 HTML 正常返回
-
-**结论**：
-- 当前代码已完成最新一轮全量回归
-- 本地人工测试服务已成功拉起，可直接基于 `http://127.0.0.1:5000` 继续手工验证
-
-#### 8. OAuth Token 获取工具审查后保守加固与二次回归（v1.15.0）
-
-**时间**：2026-04-12
-
-**问题背景**：
-- 在 OAuth Token 工具主功能落地并通过初轮回归后，针对审查结果继续做一轮保守优化
-- 本轮明确不改动 `save_to_account()` 的 TD 主路径，只处理不影响既有设计链路的安全性与兼容性项
-
-**本次处理内容**：
-
-1. 前端安全加固
-   - `static/js/features/token_tool.js` 中的 Scope Chip 改为 `document.createElement()` 构建
-   - 删除动态 scope 值拼接到 `onclick` 的做法，改为 `data-scope` + 容器事件委托
-
-2. 配置兼容性明确化
-   - `outlook_web/repositories/settings.py` 中的 `get_oauth_tool_client_secret()` 显式区分明文与 `enc:` 值
-   - 历史明文配置直接返回；不可解密的加密值继续隐藏为空字符串，避免把损坏密文回显到页面
-
-3. 测试与文档同步
-   - `tests/test_oauth_tool.py` 新增 3 个回归用例（2 个配置读取 + 1 个 state mismatch 直接覆盖）
-   - `CHANGELOG.md` 与 `WORKSPACE.md` 同步补充本轮审查后加固记录
-
-**验收结果**：
-- `python -m pytest tests/test_oauth_tool.py -v` → `60 passed`
-- `python -m pytest tests/ -v` → `990 passed, 10 skipped, 2 warnings`
-- warnings 仍来自 `tests/test_live_credentials.py` 中已有的 `return bool` 写法，非本轮引入
-
-**结论**：
-- OAuth Token 工具在不偏离 TD 主路径的前提下完成了一轮审查后保守加固
-- 前端动态事件拼接风险已收敛，`client_secret` 配置读取策略也与当前实际行为保持一致
-
-#### 1. OAuth Token 获取工具 PRD 编写（Issue #38, #34）
-
-**时间**：2026-04-12
-
-**问题背景**：
-- Issue #38、#34 多位用户反馈需要内置 refresh_token 获取功能
-- 旧版本该功能因设计复杂被废弃,但社区需求持续存在
-- 旧版本内置 client_id 导致 unauthorized_client 报错（Issue #26, #20）
-
-**讨论与决策**：
-
-1. 方案评估
-   - 方案 A: 深度集成 OAuth 页面 — 耦合度高,维护成本大
-   - **方案 B: 松耦合集成**（✅ 采纳）— 独立 Blueprint 模块,可启用/禁用
-   - 方案 C: 不内置,仅对接外部工具 — 体验割裂
-
-2. 参考分析
-   - 分析了博客文章「Python实现Microsoft邮件自动化：OAuth2.0认证与邮件处理详细指引」
-   - 分析了 QuickMSToken 项目（somnifex/QuickMSToken）源码实现
-   - 分析了现有代码库 token 刷新架构（graph.py、refresh.py）
-
-3. 核心设计决策
-   - 用户自备 client_id,不内置默认值
-   - 支持 Authorization Code + PKCE 流程
-   - 支持手动回调 URL 粘贴（兼容 Docker/反代部署）
-   - 获取 token 后可一键写入系统账号
-
-**产出文档**：
-- `docs/PRD/2026-04-12-OAuth-Token获取工具PRD.md`
-
-**补充内容（v1.1）**：
-- 新增 2.6 节: Token 工具与现有导入功能的定位区分
-- 新增 2.7 节: 8 种常见 OAuth 错误的中文提示与解决引导
-- 扩展 7.2 节: Azure 应用注册指引改为分步骤详细说明（含直达链接）
-- 新增 Tenant 租户选择器需求（consumers/common/organizations + 自定义）
-- 更新 UI 布局图增加快速指引卡片和 Tenant 下拉
-- 补充验收标准 A-07（Azure 指引）、A-08（多租户）
-
-**结论**：
-- PRD 已完成 v1.1 版,涵盖产品背景、核心需求、用例、错误引导、安全、部署兼容性等完整内容
-- PRD 已在 FD 讨论后更新为 v1.2，补充页面形态决策和配置持久化策略
-
-#### 2. OAuth Token 获取工具 FD 编写
-
-**时间**：2026-04-12
-
-**讨论与决策**：
-
-1. 分析现有代码架构
-   - Flask Blueprint 工厂模式（`create_blueprint()` + `add_url_rule()`）
-   - 原生 JS SPA 前端（`navigate()` 页面切换）
-   - `@login_required` Session 认证 + Flask-WTF CSRF
-   - MVC 分层: routes → controllers → services → repositories
-
-2. 分析 QuickMSToken 源码（app.py 731 行）
-   - PKCE 生成: `secrets.token_urlsafe(64)` + SHA256
-   - 内存 OAUTH_FLOW_STORE + 线程锁 + 20 分钟 TTL
-   - 双模式: page 模式自动回调 + popup 模式手动粘贴
-   - Scope 校验: 单资源限制、`.default` 混用检测
-   - JWT 不验签解码（仅展示 audience/scope）
-
-3. FD 关键设计决策
-   - **页面形态**: 浏览器新窗口 `window.open()`（D1 方案）
-   - **回调处理**: 智能回调,优先自动降级手动（Q2-A）
-   - **结果传递**: 用户手动复制回调 URL 到主页面（Q3-A，QuickMSToken 方式）
-   - **配置持久化**: 服务端 Settings 表,key 前缀 `oauth_tool_`（Q4-B）
-
-4. 前后端模块设计
-   - 后端: 新增 Blueprint `token_tool`（8 个路由）+ Controller + Service（`oauth_tool.py`）
-   - 前端: 独立模板 `token_tool.html` + `token_tool.js` + `token_tool.css`
-   - 回调页: `popup_result.html`（极简,仅显示复制提示或错误引导）
-
-**产出文档**：
-- `docs/FD/2026-04-12-OAuth-Token获取工具FD.md`
-- `docs/PRD/2026-04-12-OAuth-Token获取工具PRD.md`（v1.2 更新）
-
-**结论**：
-- FD 已完成 v1.0,涵盖系统架构、数据流、接口设计、前端设计、安全设计、环境变量等完整内容
-- 可直接进入开发阶段
-
-#### 3. OAuth Token 获取工具 TD 编写
-
-**时间**：2026-04-12
-
-**代码库深度分析**：
-
-1. 应用工厂与 Blueprint 注册
-   - `app.py`: 12 个 Blueprint 无条件注册（lines 138-150），本期首例条件注册
-   - Context Processor `inject_app_version()` 注入 `APP_VERSION`（lines 80-82）
-   - CSRF 全局保护 `CSRFProtect`（line 109），部分 Blueprint 传入 `csrf_exempt`
-
-2. 现有 Token 操作体系
-   - `graph.py`: `TOKEN_URL_GRAPH` 使用 `/common/` 硬编码 tenant（line 11）
-   - `get_access_token_graph_result()` 使用 `grant_type=refresh_token`（lines 46-106）
-   - `test_refresh_token_with_rotation()` 返回 `(success, error, new_refresh_token)` 三元组（lines 255-293）
-   - Token 工具将使用 `grant_type=authorization_code`，复用验证函数
-
-3. 加密/配置/Settings 现状
-   - `crypto.py`: `encrypt_data()` 使用 `enc:` 前缀标识 + Fernet 加密（lines 66-80）
-   - `config.py`: `_getenv()` + `env_true()` 模式（lines 6-55）
-   - `settings.py`: `get_setting()` / `set_setting()` + typed getter 模式（已有 CF Worker 先例）
-   - `errors.py`: 已有 8 个 OAuth 相关错误码（lines 49-56, 95-102）
-
-4. 账号管理
-   - `accounts_repo.add_account()`: 自动 `encrypt_data(refresh_token)`（lines 157-236）
-   - `accounts_repo.update_account()`: None 参数不覆盖现有值（lines 239-339）
-   - DB Schema v19，本期无需升级
-
-**核心技术决策**:
-
-| 编号 | 决策 | 选定方案 | 理由 |
-|------|------|---------|------|
-| TD-01 | Schema 变更 | 无需升级（保持 v19） | Settings 表 INSERT OR REPLACE 自动处理，accounts 字段够用 |
-| TD-02 | 配置读取 | settings.py 新增 getter 函数 | 与 CF Worker getter 模式一致，封装优先级链 |
-| TD-03 | CSRF 策略 | 标准流程，不 exempt | 独立模板 Jinja2 注入 csrf_token，GET 请求天然不受 CSRF 保护 |
-| TD-04 | FLOW_STORE 位置 | services/oauth_tool.py 内部 | 紧耦合于 OAuth 流程，Service 自包含模式 |
-| TD-05 | Blueprint 注册 | 条件注册（env_true 模式） | 默认 OAUTH_TOOL_ENABLED=true，遵循 PRD 开箱即用要求 |
-
-**产出文档**：
-- `docs/TD/2026-04-12-OAuth-Token获取工具TD.md`
-
-**结论**：
-- TD 已完成 v1.0，涵盖代码级实现细节：config/settings/service/controller/routes/templates/JS 完整伪代码
-- 11 个章节：文档目标、技术现状、核心决策、后端实现（7 个文件）、前端实现（4 个文件）、安全设计、错误处理、测试策略、实施计划（4 里程碑）、风险缓解、未来优化
-- 与 FD 的区别：TD 精确到行号级代码引用、函数签名、变量命名、参数约束，可直接指导开发
-
-#### 4. PRD/FD/TD 文档联调
-
-**时间**：2026-04-12
-
-**发现的问题与修复**：
-
-1. **PRD 版本号不一致**（严重度: 中）
-   - 问题: PRD 头部标记为 `v1.0`，但实际已经过两次更新（v1.1 补充, v1.2 FD 联动更新）
-   - 修复: 更新为 `v1.3`（含本次联调修正）
-   - 新增 FD/TD 关联文档引用
-
-2. **PRD §4.4 与 FD/TD 的 client_secret 存储策略矛盾**（严重度: 高）
-   - 问题: PRD 明确写 "❌ 不存储 client_secret 到数据库或文件"，但 FD §8.1 和 TD §3.1 设计为 Settings 表加密存储
-   - 原因: FD 讨论阶段（Q4-B 决策）选定了服务端 Settings 表持久化方案，PRD 未同步更新
-   - 修复: 删除 PRD §4.4 中该条约束，补充 v1.2 更新说明；同步更新 §5.1 安全表述
-
-3. **TD save_to_account() 使用了错误的 update_account() 调用方式**（严重度: 高）
-   - 问题: TD 伪代码传入 `email_addr=None, group_id=None, remark=None`，但 `update_account()` 要求这三个参数为必填（`str`/`int`/`str`），传 None 会触发 `if not email_addr → return False`
-   - 修复: 改为先通过 `get_account_by_id()` 获取现有数据，将原字段回传，仅替换 `client_id`/`refresh_token`/`status`
-   - 更新 Q1 说明，纠正 "None 值不覆盖" 的错误描述
-
-4. **TD get_account_list() 调用了不存在的函数**（严重度: 高）
-   - 问题: TD 使用 `accounts_repo.get_all_accounts()`，但 accounts.py 中该函数不存在
-   - 实际函数: `accounts_repo.load_accounts()`（line 47，返回全部账号含解密字段）
-   - 修复: 替换为 `load_accounts()`，补充安全说明（仅提取 4 个非敏感字段返回前端）
-
-5. **FD §7.2/§7.3 与 TD 的配置引用方式不一致**（严重度: 中）
-   - 问题: FD 使用 `from outlook_web.config import OAUTH_TOOL_ENABLED`（常量导入），TD 使用 `app_config.get_oauth_tool_enabled()`（函数调用）
-   - 修复: FD 统一改为函数调用方式（因 config.py 定义的是函数而非常量）
-
-6. **FD 缺少 TD 关联引用**（严重度: 低）
-   - 修复: FD 头部新增 `关联 TD` 字段
-
-**产出变更**：
-- `docs/PRD/2026-04-12-OAuth-Token获取工具PRD.md` → v1.3（修复 #1, #2）
-- `docs/FD/2026-04-12-OAuth-Token获取工具FD.md` → v1.0（修复 #5, #6，内容更新但版本号保持）
-- `docs/TD/2026-04-12-OAuth-Token获取工具TD.md` → v1.1（修复 #3, #4）
-
-**结论**：
-- 三份文档间的术语、API 函数签名、配置引用方式已对齐
-- 2 个高严重度 Bug（会导致运行时失败的伪代码错误）已修复
-- PRD 中被 FD 设计阶段覆盖的约束已标注更新说明
-
-#### 5. TDD 测试设计文档编写
-
-**时间**：2026-04-12
-
-**问题背景**：
-- PRD/FD/TD 已完成并联调通过，需编写独立的 TDD（测试设计文档）指导实现阶段的测试编写
-- TD §8 仅提供测试策略概要（单元 11 + 集成 9 = 20 个用例），需扩展为完整的测试设计
-
-**讨论与决策**：
-
-1. 文件组织方式
-   - 方案 A: 两个文件（与 TD §8 原设计一致）
-   - **方案 B: 一个文件**（✅ 采纳）— `tests/test_oauth_tool.py`，多 TestCase 分组
-   - 方案 C: 三个文件（最细粒度）
-
-2. 测试基础设施分析
-   - 分析了 7 个现有测试文件的 fixture/mock/断言/命名模式
-   - 分析了 errors.py、auth.py、graph.py、accounts.py 的完整函数签名
-   - 确认项目使用 `unittest.TestCase` + `_import_app.py` 模式
-
-**产出变更**：
-- `docs/TDD/2026-04-12-OAuth-Token获取工具TDD.md` → v1.0（新建）
-  - 11 个章节：文档目标、测试目标、测试原则、测试分层设计（13 个 TestCase 分组）、Mock 策略、测试数据、测试难点、前端手动验收、用例总表、执行命令、与 TD 差异说明
-  - 自动化 47 个用例 + 手动验收 8 个场景 = 55 个测试点
-  - 每个用例含用例 ID、场景描述、关键断言、伪代码
-- `docs/TD/2026-04-12-OAuth-Token获取工具TD.md` → v1.2（更新 §8 测试策略）
-  - 测试文件名由两个合并为一个（`test_oauth_tool.py`）
-  - §8 增加 TDD 交叉引用
-  - 头部新增关联 TDD 字段
-
-**结论**：
-- TDD 覆盖了 TD §8 的全部用例并扩展至 47 个自动化用例（原 20 个），增加了 PKCE 字符集、Scope 更多边界、FLOW_STORE 更细粒度、认证拦截、敏感数据过滤等边界场景
-- 识别了 4 个测试难点并提供应对方案：FLOW_STORE 模块级变量隔离、Blueprint 条件注册时机、update_account 必填参数、requests.post Mock 路径
+**当前状态**：
+- 进入“待用户下一步指令”阶段，保持寸止 MCP 沟通链路持续。
 
 ---
 
-#### 6. TODO 任务拆分文档编写
+#### 15. cloudflare_temp_email 测试插件（独立于内置 CF Provider）实现与验证
+**时间**：2026-04-21
 
-**时间**：2026-04-12
+**需求来源**：
+- 用户指定基于 `https://github.com/dreamhunter2333/cloudflare_temp_email` 单独编写一份 CF 临时邮箱插件，
+- 明确“不考虑现有内置 CF Provider”，用于测试效果；
+- 同时要求仅更新 `WORKSPACE.md` 做会话文档同步。
 
-**问题背景**：
-- PRD/FD/TD/TDD 四份文档均已完成并联调通过
-- 需编写 TODO 任务拆分文档，将 TD §9 的 4 个里程碑细化为可执行的开发任务
+**关键决策（经会话确认）**：
+- 采用独立 provider 名称：`cloudflare_temp_mail_test_plugin`（避免覆盖内置 `cloudflare_temp_mail`）
+- 插件落地目录：`plugins/temp_mail_providers/test_plugin/`
+- 文档更新范围：仅 `WORKSPACE.md`
 
-**讨论与决策**：
+**本次实际改动文件**：
+1. `plugins/temp_mail_providers/test_plugin/cloudflare_temp_mail_test_plugin.py`
+   - 新增 `CloudflareTempMailTestPluginProvider`（`@register_provider`）
+   - 完整实现接口：
+     - `get_options`
+     - `create_mailbox`
+     - `delete_mailbox`
+     - `list_messages`
+     - `get_message_detail`
+     - `delete_message`
+     - `clear_messages`
+   - 配置读取：`plugin.cloudflare_temp_mail_test_plugin.*`
+   - 兼容 `cloudflare_temp_email` 常见路径：
+     - `GET /open_api/settings`
+     - `POST /admin/new_address`
+     - `GET /api/mails`
+     - `GET /api/mail/{id}`（失败时 fallback）
+     - `DELETE /api/mails/{id}`
+     - `DELETE /api/clear_inbox`
+     - `DELETE /admin/delete_address/{id}`（优先） / `DELETE /api/delete_address`（回退）
+   - 邮件结构归一化：`id/message_id/from_address/subject/content/html_content/has_html/timestamp`
 
-1. 分阶段结构（8 个 Phase）
-   - Phase 0: 文档对齐收尾（修复 TDD URL 路径不一致问题）
-   - Phase 1~2: 后端基础层 + Service 核心
-   - Phase 3: Service 层 TDD 测试（先行）
-   - Phase 4~5: 路由层 + API 集成测试
-   - Phase 6: 前端实现
-   - Phase 7: 联调与发布
+2. `tests/test_temp_mail_provider_cf_test_plugin.py`
+   - 新增 5 个最小测试：
+     - 注册/发现（并验证不覆盖内置 CF Provider）
+     - `get_options()` 结构稳定
+     - `create_mailbox()` 成功与失败分支
+     - `list_messages()` 归一化
+     - `get_message_detail()` fallback（detail 不可用回退列表过滤）
 
-2. TDD URL 路径修正
-   - 发现 TDD 中所有 API 路径使用了 `/token-tool/api/*` 格式
-   - TD 定义的路由为 `/api/token-tool/*` 格式
-   - 已在编写 TODO 前统一修正 TDD 中约 20 处 URL 路径
+**测试执行结果**：
+- 命令：`python -m unittest tests.test_temp_mail_provider_cf_test_plugin -v`
+- 结果：`Ran 5 tests ... OK`
 
-**产出变更**：
-- `docs/TODO/2026-04-12-OAuth-Token获取工具TODO.md` → v1.0（新建）
+**说明**：
+- 本次仅新增测试插件与其测试，不改动内置 CF Provider 与插件主干加载逻辑。
 
-#### 7. OAuth Token 获取工具实现落地（v1.15.0）
+---
 
-**时间**：2026-04-12
+#### 14. Issue #43（moemail 支持）— test_plugin 目录实现 + 会话记录同步
+**时间**：2026-04-21
 
-**本次实现内容**：
+**上下文来源（已核对）**：
+- GitHub Issue：`https://github.com/ZeroPointSix/outlookEmailPlus/issues/43`（需求：集成 moemail）
+- 接入提示词：`临时邮箱Provider插件接入提示词.md`
+- 接入说明与插件化文档：`临时邮箱Provider插件接入说明.md`、`docs/TD/2026-04-21-临时邮箱插件化TD.md`、`docs/TDD/2026-04-21-临时邮箱插件化TDD.md`、`docs/FD/2026-04-21-临时邮箱插件化FD.md`、`docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
 
-1. 后端基础层
-   - `outlook_web/config.py` 新增 6 个 OAuth Token 工具环境变量 getter
-   - `outlook_web/repositories/settings.py` 新增 6 个 `oauth_tool_*` typed getter
+**关键决策（经寸止确认）**：
+- moemail 接口口径：采用上游 `beilunyang/moemail` OpenAPI 风格（`X-API-Key`）
+- 插件落地目录：按测试诉求放入 `test_plugin` 子目录，不改主加载器递归策略
+- 文档更新范围：仅更新 `WORKSPACE.md`（本条记录），不改其它接入说明文档
 
-2. OAuth Service 核心
-   - 新增 `outlook_web/services/oauth_tool.py`
-   - 完成 PKCE、Scope 校验、OAUTH_FLOW_STORE、错误引导、JWT payload 解码、authorization_code 换 token
-   - 修正 Microsoft 错误解析：同时保留 `error` 与 `error_description`，保证引导映射稳定
+**本次实际改动文件**：
+1. `plugins/temp_mail_providers/test_plugin/moemail.py`
+   - 新增 `MoemailTempMailProvider`（`@register_provider`）
+   - 实现方法：`get_options/create_mailbox/delete_mailbox/list_messages/get_message_detail/delete_message/clear_messages`
+   - 配置读取：`plugin.moemail.*`
+   - `config_schema` 已提供可在插件管理 UI 渲染的字段（base_url/api_key/domains/default_domain/default_expiry_ms/request_timeout）
+   - 消息归一化字段：`id/message_id/from_address/subject/content/html_content/has_html/timestamp`
+   - detail 接口不可用时支持 fallback 到 `list_messages()` 过滤
 
-3. 路由与控制器
-   - 新增 `outlook_web/routes/token_tool.py` 与 `outlook_web/controllers/token_tool.py`
-   - `app.py` 条件注册 Blueprint，并注入 `OAUTH_TOOL_ENABLED`
-   - 按实现阶段确认结果，Controller 层统一增加动态开关检查，满足工具关闭时页面/API 一并返回 404
+2. `tests/test_temp_mail_provider_moemail.py`
+   - 新增 5 个最小覆盖用例：
+     - Provider 注册/发现（通过 patch `temp_mail_provider_factory._get_plugin_dir` 指向 `test_plugin`）
+     - `get_options()` 结构稳定
+     - `create_mailbox()` 成功与失败分支
+     - `list_messages()` 归一化
+     - `get_message_detail()` fallback 行为
 
-4. 测试
-   - 新增 `tests/test_oauth_tool.py`
-   - 覆盖 Service 29 个用例 + API 33 个用例，共 62 个自动化用例
+**测试执行结果**：
+- 命令：`python -m unittest tests.test_temp_mail_provider_moemail -v`
+- 结果：`Ran 5 tests ... OK`
 
-5. 前端与发布信息
-   - 新增独立页面 `token_tool.html`、回调页 `popup_result.html`
-   - 新增 `static/js/features/token_tool.js`、`static/css/token_tool.css`
-   - `templates/index.html` 侧边栏增加 Token 工具入口
-   - 更新 `CHANGELOG.md`、`README.md`、`README.en.md`、`.env.example`、`docker-compose.yml`
-   - 版本号提升到 `v1.15.0`
-  - 8 个 Phase、43 个 Task
-  - 每个 Task 含文件路径、位置、检查项
-  - 包含依赖关系图、风险提醒表
-  - 映射 TD §4/§5 完整伪代码和 TDD 55 个测试点
-- `docs/TDD/2026-04-12-OAuth-Token获取工具TDD.md`（修正）
-  - 约 20 处 API URL 路径从 `/token-tool/api/*` 修正为 `/api/token-tool/*`，与 TD §4.4 路由定义保持一致
+**说明（与当前架构一致）**：
+- 当前 `load_plugins()` 默认扫描 `<DATABASE_PATH 上级目录>/plugins/temp_mail_providers/*.py`（非递归）。
+- 本次为满足“test_plugin 目录测试”诉求，采用测试内 monkeypatch 指向 `test_plugin` 目录完成注册与发现验证；未改动主干加载行为。
 
-**结论**：
-- 所有开发文档（PRD/FD/TD/TDD/TODO）编写完成，形成完整的文档链路
-- Issue #38 功能从需求分析到任务拆分的文档阶段全部完成
-- 后续进入实现阶段时，按 TODO Phase 0~7 顺序执行
+---
 
-#### 7. 第二次文档联调（TODO 交叉审查）
-
-**时间**：2026-04-12
-
-**问题背景**：
-- TODO v1.0 完成后，需要与 PRD/FD/TD/TDD 全部文档进行交叉一致性校验
-- 确保 TODO 中所有函数名、返回类型、字段名、测试数量与权威文档（TD）完全一致
-
-**审查发现（8 个不一致）**：
-
-| 级别 | 编号 | 问题 | 影响文件 |
-|------|------|------|---------|
-| HIGH | H1 | TODO Phase 2 使用 6 个错误的 Service 函数名（如 `store_flow()` → `store_oauth_flow()`） | TODO |
-| HIGH | H2 | `validate_scope()` 返回类型 `Optional[str]` → `Tuple[str, Optional[str]]` | TODO |
-| HIGH | H3 | TDD §9 用例总数 24+23=47 → 实际 29+28=57（预存 bug） | TDD, TODO |
-| MED | M4 | `get_account_list()` 返回字段 `email_addr, client_id` → `email, account_type` | TODO, TDD |
-| MED | M5 | 删除不存在的 `save_oauth_tool_config()` 函数 | TODO |
-| MED | M6 | 补充缺失的 `get_oauth_tool_prompt_consent()` getter | TODO |
-| LOW | L7 | getter 命名 `get_oauth_tool_tenant_id()` → `get_oauth_tool_tenant()` | TODO |
-| LOW | L8 | `render_page()` 动态开关检查描述修正（与 Task 4.6 统一） | TODO |
-
-**产出变更**：
-- `docs/TODO/2026-04-12-OAuth-Token获取工具TODO.md` → v1.1
-  - 修复全部 8 个不一致问题
-  - 更新版本头部引用 TDD v1.1
-- `docs/TDD/2026-04-12-OAuth-Token获取工具TDD.md` → v1.1
-  - §9 用例总数修正：24→29, 23→28, 47→57, 55→65
-  - A-LIST-01 返回字段修正：`email_addr, client_id` → `email, account_type`
-  - A-LIST-01 伪代码断言对齐 TD §4.5
-
-**结论**：
-- 五份文档（PRD/FD/TD/TDD/TODO）全部完成交叉一致性校验
-- 所有函数名、返回类型、字段名与 TD（权威源）完全对齐
-- 文档链路完整，可进入实现阶段
-
-#### 8. 实现提示词编写 + 文档最终同步
-
-**时间**：2026-04-12
-
-**问题背景**：
-- 用户需要一份自包含的实现提示词，供其他 AI 按文档严格执行开发
-- 第二次联调修正后 TD §8 的测试计数仍沿用旧值，需同步
-
+#### 13. 生成功能验证提示词（给其他 AI 审查用）
 **操作内容**：
+- 创建 `VERIFICATION_PROMPT.md`，包含 A2 方案的完整功能验证提示词
+- 覆盖 5 大类验证点（后端 API / Docker 服务 / 前端 / 安全 / 边界条件），共 30+ 个具体检查项
+- 附带改动文件清单和已知限制说明
+- 用于交给其他 AI 审查代码变更的完整性和正确性
 
-1. TD §8 测试计数同步
-   - §8.1 标题 24 → 29、§8.2 标题 23 → 28、总计 47+8=55 → 57+8=65
-   - TD 版本升级 v1.2 → v1.3
-   - TODO 引用更新为 TD v1.3
-
-2. 编写实现提示词（直接输出，不落地为文件）
-   - 涵盖项目上下文、5 份文档精华、逐 Phase 实现指令
-   - 包含关键陷阱警告和验收标准
-
-**产出变更**：
-- `docs/TD/2026-04-12-OAuth-Token获取工具TD.md` → v1.3（§8 计数同步）
-- `docs/TODO/2026-04-12-OAuth-Token获取工具TODO.md` → v1.1（引用更新 TD v1.3）
-
-**文档最终版本**：
-
-| 文档 | 版本 | 状态 |
-|------|------|------|
-| PRD | v1.3 | ✅ 完成 |
-| FD | v1.0 | ✅ 完成 |
-| TD | v1.3 | ✅ 完成 |
-| TDD | v1.1 | ✅ 完成 |
-| TODO | v1.1 | ✅ 完成 |
+**已新增文件**：
+- `VERIFICATION_PROMPT.md` — 功能验证提示词
 
 ---
 
-## 2026-04-09
+### 待办：项目文件归类清理（暂缓，提交后执行）
 
-### 操作记录
+> 以下为扫描项目结构后的清理建议，待 dev 分支提交后再执行。
 
-**操作内容**：
-- PRD：6 处修改
-  - `§2.4.1` 标题和所有 `/claim` 引用 → `claim-random`
-  - "加密存储" → "明文 JSON 存储"（JWT 已签名，本期不额外加密）
-- FD：3 处修改
-  - 数据流图和参考资料中 `/claim` → `claim-random`
-- TD：4 处修改
-  - `Schema v18` → `Schema v19`
-  - 所有 `/claim` 引用 → `claim-random`
-- TODO：Phase 0 任务全部标记为 `[x]`
+#### 需删除的文件
 
-#### 7c. Phase 4 读信链路适配 + 真实 E2E 测试
-
-**时间**：2026-04-09
-
-**操作内容**：
-
-1. **mailbox_resolver.py 适配**：
-   - CF pool 账号（`provider='cloudflare_temp_mail'`）→ 返回 `kind='temp'`
-   - meta 从 `accounts.temp_mail_meta` 解析，包含 `provider_jwt`
-   - 外部读信链路自动走 `TempMailService → CF Provider → 真实 CF Worker API`
-
-2. **真实 CF Worker E2E 测试**（`tests/test_pool_cf_real_e2e.py`）：
-   - CF Worker: `https://temp.zerodotsix.top` + 真实 admin key
-   - E2E-01: claim-random → 真实创建 CF 邮箱 ✅
-   - E2E-02: 读取邮件列表（新邮箱为空，正确返回 404）✅
-   - E2E-03: complete(success) → 远程 CF 邮箱已删除 ✅
-   - E2E-04: complete(verification_timeout) → 远程邮箱保留 ✅
-   - 4/4 全部通过（11.961s）
-
-3. **测试结果汇总**：
-   - Pool 相关 70 测试（含 TDD 骨架）：0 failures, 1 skipped
-   - 真实 E2E 4 测试：0 failures
-   - 模块边界测试 3/3 通过
-
-**修改文件**：
-- `outlook_web/services/mailbox_resolver.py` — 新增 CF pool 账号 → `kind='temp'` 逻辑
-- `outlook_web/services/refresh.py` — 排除 CF pool 账号进入 OAuth 刷新链路（`provider='cloudflare_temp_mail'`）
-- `tests/test_pool_cf_real_e2e.py` — **新增** 真实 CF Worker E2E 测试（4 个用例）
-- `tests/test_pool_cf_integration_tdd_skeleton.py` — E2E mock 测试 skip（已由真实 E2E 替代）
-
-#### 7d. Phase 6 风险修复 + 联调验收
-
-**时间**：2026-04-09
-
-**发现并修复的风险**：
-- CF pool 账号（account_type='outlook'）会被 `refresh.py` 误选入 OAuth token 刷新链路
-- 修复：`is_refreshable_outlook_account()` 新增 `provider` 参数，排除 `cloudflare_temp_mail`
-- 修复：`build_refreshable_outlook_account_where()` SQL 新增 `provider != 'cloudflare_temp_mail'` 条件
-- 验证：refresh 测试 7/7 通过
-
-**Phase 6 进度**：
-- ✅ Task 6.1: 本地联调脚本（已被真实 E2E 覆盖）
-- ✅ Task 6.3: 日志与审计（claim/complete audit 有 provider、account_id、result）
-- ✅ Task 6.4: 风险清单复核（refresh 排除 + 缓存依赖已通过 E2E 验证）
-- ✅ Task 6.5: 验收清单（claim → read → complete 全链路真实验证通过）
-
-#### 7e. Phase 6.2 前端 UI 保护 + 后端删除/编辑守卫
-
-**时间**：2026-04-09
-
-**操作内容**：
-
-1. **前端 UI 保护**（`static/js/features/groups.js`）：
-   - `getProviderLabel()` 新增 `cloudflare_temp_mail: 'CF 临时邮箱'` 标签
-   - 新增 `isCfPoolAccount` 变量，识别 CF pool 账号
-   - CF pool 账号的编辑和删除按钮设为 `disabled` + `opacity:0.3` + 提示文案
-
-2. **后端删除保护**（`outlook_web/controllers/accounts.py`）：
-   - `api_delete_account()` 新增 CF pool 检查，返回 403
-   - `api_delete_account_by_email()` 新增 CF pool 检查，返回 403
-   - `api_batch_delete_accounts()` 新增 CF pool 跳过逻辑
-   - `api_update_account()` 新增 CF pool 检查，返回 403
-
-3. **全量测试**：917 测试通过，0 failures
-
-**修改文件**：
-- `static/js/features/groups.js` — CF provider 标签 + 编辑/删除按钮禁用
-- `outlook_web/controllers/accounts.py` — 删除/编辑 CF pool 账号保护（4 处）
-
-#### 7f. 临时邮箱页面 CF 域名下拉不显示：BUG 确认 + 方案 A 选定 + 文档对齐更新
-
-**时间**：2026-04-09
-
-**背景**：在验收 CF Worker 临时邮箱/邮箱池接入时发现一个前端体验 BUG —— 设置页已同步的 CF 域名在「⚡ 临时邮箱」页选择 `cloudflare_temp_mail` provider 后，域名下拉不展示。
-
-**根因结论**（已记录到 BUG 文档）：
-- `/api/temp-emails/options` 当前不支持按 provider 返回（始终按全局 runtime provider 返回 options）
-- `CloudflareTempMailProvider.get_options()` 读取的是 `temp_mail_*` key，但设置页同步写入的是 `cf_worker_*` key，导致 domains 为空
-
-**本次决策**：确认采用 **修复方案 A（推荐）**
-- options API 支持 `provider_name` 参数（后端按 provider 返回 options）
-- CF provider 的 options 读取口径切换为 `cf_worker_*`
-- 前端请求 options 时携带当前选择的 provider
-
-**本次实际操作**（按“以代码为准”修正文档）：
-- 更新/对齐文档：
-  - `docs/FD/2026-04-09-CF临时邮箱接入邮箱池FD.md`（修正“读信无需改动/解析返回 kind=account/account_type=temp_mail”等不准确描述；强调 resolver 返回 `kind='temp'`）
-  - `docs/TD/2026-04-09-CF临时邮箱接入邮箱池TD.md`（修正“Repository 层进行网络调用”的伪代码与函数命名；对齐实际实现：网络调用在 Service，Repository 仅 DB 写入）
-  - `docs/TODO/2026-04-09-CF临时邮箱接入邮箱池TODO.md`（补齐 Phase 4/6 的已完成勾选，保持与 WORKSPACE 的真实进度一致）
-  - `docs/BUG/2026-04-09-临时邮箱-CF域名配置不生效-Options口径不一致BUG.md`（状态更新为“已确认方案 A，待实施”）
-
-#### 7g. BUG 修复实施完成 + 人工验收通过（含一次配置值误报排查）
-
-**时间**：2026-04-09
-
-**实施内容**：
-
-1. **方案 A 落地**：
-   - `/api/temp-emails/options` 支持 `provider_name` 参数（后端按 provider 返回 options）
-   - `TempMailService.get_options(provider_name=...)` 支持按 provider 取配置
-   - 前端 `loadTempEmailOptions()` 带 provider 查询参数
-
-2. **v0.3.1 快速修复**：
-   - `CloudflareTempMailProvider.get_options()` 增加自动同步逻辑：
-     - 当 `cf_worker_domains` 为空且 `cf_worker_base_url` 已配置时，自动请求 `GET {base_url}/open_api/settings`
-     - 成功后写回 `cf_worker_domains` / `cf_worker_default_domain`
-     - 失败非阻塞（warning）
-
-3. **人工验收（真实环境）**：
-   - provider=CF 后域名下拉可见（`zerodotsix.top`, `outlookmailplus.tech`）
-   - 指定域名创建邮箱成功
-
-4. **现场故障排查记录**：
-   - 现象：创建时报 `UNAUTHORIZED` / 502
-   - 根因：`cf_worker_admin_key` 配置值错误（写入了 `admin123`，实际应为 `1234567890-=`）
-   - 结论：非代码保存链路缺陷，修正配置值后恢复
-
-#### 7h. 文档二次对齐收尾（按“代码与测试结果为准”）
-
-**时间**：2026-04-09
-
-**目标**：将 `FD/TD/TODO/BUG` 与当前实现、真实人工验收、全量测试结果一致化，清理历史“计划态/样例态”描述。
-
-**本次对齐动作**：
-
-1. `docs/TODO/2026-04-09-CF临时邮箱接入邮箱池TODO.md`
-   - 将全量测试从 `917/917` 更新为 `919/919`
-   - 明确 claim/complete audit 当前字段覆盖现状（claim-complete 额外 provider 标为后续增强）
-   - 明确 `mailbox_resolver` + external read 最小链路已由真实 E2E 覆盖
-   - 文末声明更新为“已持续回填，默认以代码和测试为准”
-
-2. `docs/FD/2026-04-09-CF临时邮箱接入邮箱池FD.md`
-   - 修正测试文件引用：去除不存在的 `test_pool_cf_integration.py / test_external_pool_cf_e2e.py / test_pool_cf_contract.py`
-   - 对齐当前实际测试文件：`test_pool_cf_integration_tdd_skeleton.py`、`test_pool_cf_real_e2e.py`、`test_temp_emails_api_regression.py`、`test_temp_mail_provider_cf.py`
-   - 调整“文档更新”章节为当前仓库状态描述（CHANGELOG/API 文档按可选同步）
-
-3. `docs/TD/2026-04-09-CF临时邮箱接入邮箱池TD.md`
-   - 将“动态创建在 claim_atomic 中调用 `_create_cf_temp_email_for_pool()`”改为真实实现：Service 层 `_create_cf_mailbox_for_pool()` + Repository `insert_claimed_account()`
-   - 将 external claim-random 示例对齐为当前 controller 结构（返回字段以当前实现为准）
-   - 修正里程碑与验收项：标注已完成项、待发布项、测试结果（919/919）
-   - 将不存在测试文件替换为当前真实文件
-
-4. `docs/BUG/2026-04-09-临时邮箱-CF域名配置不生效-Options口径不一致BUG.md`
-   - 状态改为“已修复”
-   - 补充 v0.3.1 自动同步实现与人工验收结论
-   - 补充“UNAUTHORIZED 为配置值错误而非保存链路缺陷”的排查记录
-
-**验证**：
-- 重点回归：`tests.test_temp_mail_provider_cf` + `tests.test_temp_emails_api_regression` 通过
-- 全量测试：`python -m unittest discover -s tests -v` → `Ran 919 tests ... OK (skipped=7)`
-
-#### 7i. README 与对外接口文档同步更新（面向接入方）
-
-**时间**：2026-04-09
-
-**背景**：在完成 CF 临时邮箱接入池能力与人工验收后，补齐对外可见文档，避免接入方沿用旧字段/旧错误码。
-
-**本次更新文件**：
-
-1. `README.md`
-   - 补充 CF 临时邮箱最近更新：
-     - options 支持 `provider_name`（前端切换 provider 时域名下拉正确联动）
-     - v0.3.1 自动同步 domains（`cf_worker_domains` 为空时自动回源）
-     - `cf_worker_admin_key` 配置不一致会导致 `UNAUTHORIZED` 的注意事项
-   - 在核心能力中补充 `provider=cloudflare_temp_mail` 且池空动态创建
-   - 在环境变量说明中补充 CF Worker 对应项（并注明设置页 key 名）
-
-2. `注册与邮箱池接口文档.md`
-   - `claim-random` 的 `provider` 可选值补全：`outlook/imap/custom/cloudflare_temp_mail`
-   - 明确 `provider=cloudflare_temp_mail` 且池空时会动态创建
-   - 成功返回字段补全：`email_domain`、`claimed_at`
-   - 错误码对齐：`NO_AVAILABLE_ACCOUNT` → `no_available_account`
-   - 补充 `claim-complete` 下 CF 删除策略（success/credential_invalid 删除，失败非阻塞）
-
-3. `registration-mail-pool-api.en.md`
-   - 与中文接口文档做同口径同步（provider 枚举、动态创建行为、返回字段、错误码大小写、CF 删除策略）
-
-**结果**：
-- 接入方文档与当前实现保持一致，减少对接歧义和现场排障成本。
-
-#### 7j. 对外接口文档补充“可复制接入示例”（中英）
-
-**时间**：2026-04-09
-
-**背景**：为降低接入成本，按当前真实接口契约补充可直接复制的 curl 与响应示例。
-
-**更新文件**：
-
-1. `注册与邮箱池接口文档.md`
-   - 新增：
-     - CF 池 `claim-random` 可复制请求示例
-     - `claim-random` 成功/无可用账号响应示例
-     - `claim-complete` 可复制请求与成功响应示例
-     - `claim-release` 可复制请求示例
-
-2. `registration-mail-pool-api.en.md`
-   - 同步新增英文版可复制示例（claim-random / claim-complete / claim-release）
-
-**文档口径**：
-- provider 明确支持 `cloudflare_temp_mail`
-- no-available 错误码统一为 `no_available_account`
-- claim-random 成功字段示例包含 `email_domain`、`claimed_at`
-
----
-
-#### 4. CF临时邮箱接入邮箱池：文档补齐 + TDD 编写
-
-**时间**：2026-04-09
-
-**目标**：按“文档先行”流程补齐该功能的文档链路，并在进入实现前完成 TDD（测试设计文档）。
-
-**本次实际操作**：
-
-- 确认 PRD 已存在：`docs/PRD/2026-04-09-CF临时邮箱接入邮箱池PRD.md`
-- 编写/补齐（当前工作区内为未提交状态）：
-  - `docs/FD/2026-04-09-CF临时邮箱接入邮箱池FD.md`
-  - `docs/TD/2026-04-09-CF临时邮箱接入邮箱池TD.md`
-  - `docs/TDD/2026-04-09-CF临时邮箱接入邮箱池-TDD.md`
-
-**关键内容**：
-
-- 明确测试目标：动态创建、智能删除、兼容不破坏、外部 API 契约稳定
-- 明确测试分层：Repository → Service → Controller →（可选）external 读信链路
-- 明确 Mock 策略：禁止真实网络，统一 patch `CloudflareTempMailProvider.*`
-
-**对话规范**：后续需求确认/方案选择/完成前反馈，统一通过“寸止 MCP”进行。
-
-#### 5. 文档与代码现状对齐：schema 版本与项目地图修正
-
-**时间**：2026-04-09
-
-**目标**：在“充分阅读源代码”后，将仓库内关键说明文档与代码现状对齐，并记录本次操作。
-
-**本次实际操作**：
-
-- 对照源码确认：
-  - `outlook_web/__init__.py` 版本号为 `1.13.0`
-  - `outlook_web/db.py` 当前 `DB_SCHEMA_VERSION = 19`（含 v18: accounts 新增 `temp_mail_meta`）
-- 修正文档不一致处：
-  - `CLAUDE.md`：
-    - `outlook_web/__init__.py` 版本号注释 `v1.12.0` → `v1.13.0`
-    - `db.py` schema 注释 `v18` → `v19`
-    - Database 章节 `schema v18` → `schema v19`
-  - `docs/项目地图.md`：
-    - “凭据加密（schema v18）” → “（schema v19）”
-    - “数据库迁移框架（v18）” → “（v19）”
-
-**说明**：本次仅做“事实对齐”的最小改动，不调整原有结构与叙事。
-
-#### 6. 深读主链路源码并对齐 CF 邮箱池文档（external_pool 路由实际为 claim-random/claim-complete）
-
-**时间**：2026-04-09
-
-**目标**：按“以源码为准”的原则深读邮箱池/CF Provider/外部 API 安全链路，并将 FD/TD 文档中的接口路径与行为描述对齐到当前实现。
-
-**本次实际操作（可核对点）**：
-
-- 深读源码文件（节选）：
-  - `outlook_web/routes/external_pool.py`：外部邮箱池路由实际为
-    - `POST /api/external/pool/claim-random`
-    - `POST /api/external/pool/claim-release`
-    - `POST /api/external/pool/claim-complete`
-    - `GET  /api/external/pool/stats`
-  - `outlook_web/controllers/external_pool.py`：claim-random/complete/release 的参数透传与 audit 逻辑
-  - `outlook_web/security/external_api_guard.py`：公网模式下的 IP 白名单、限流、功能开关（feature 禁用）
-  - `outlook_web/repositories/pool.py`：provider=cloudflare_temp_mail 时无可用邮箱会动态创建；complete 后按结果非阻塞删除远程 CF 邮箱
-  - `outlook_web/services/temp_mail_provider_cf.py`：CF Worker API 适配（x-admin-auth / Bearer jwt），meta 标准化（provider_jwt/provider_mailbox_id/provider_capabilities）
-
-- 文档对齐改动：
-  - `docs/FD/2026-04-09-CF临时邮箱接入邮箱池FD.md`
-    - 将 `/api/external/pool/claim` 对齐为实际路由 `/api/external/pool/claim-random`
-    - 将 `/api/external/pool/complete` 对齐为实际路由 `/api/external/pool/claim-complete`
-    - 修正“邮件读取已支持无需改动”的表述，避免与当前 resolver 行为产生误导
-  - `docs/TD/2026-04-09-CF临时邮箱接入邮箱池TD.md`
-    - 将 external pool 章节中的 `/claim`、`/complete` 路由对齐为 `/claim-random`、`/claim-complete`
-    - 将 complete 响应示例调整为“以 controller 实现为准”的兼容表述
-
-**说明**：本次仍坚持“最小必要改动”，只修正与源码不一致的接口路径与高风险误导点。
-
-#### 3. 分支同步与联系方式添加
-
-**时间**：2026-04-09
-
-**分支同步**：
-- `Buggithubissue`、`dev`、`feature` 三个分支均已落后 main，无独立提交
-- 使用 `git branch -f` + `git push --force` 将所有分支 fast-forward 到 main（`7952820`）
-- 注意：三个分支被 worktree 占用（`E:/hushaokang/Data-code/EnsoAi/outlookEmail/` 下），无法 checkout，改用 `git branch -f` 直接重置
-- `feature` 无远程分支，仅本地同步
-
-**联系方式**：
-- `README.md`：新增"联系方式"章节 → `outlookmailplus@163.com`
-- `README.en.md`：新增"Contact"章节 → `outlookmailplus@163.com`
-
-**修改文件**：
-- `README.md`：末尾新增联系方式
-- `README.en.md`：末尾新增 Contact 章节
-
-**Commits**：
-- `301b122`：fix: 移除 sonar-project.properties 中已删除的 fix_format.py 引用
-- `7952820`：docs: 添加联系邮箱，同步所有分支到 main
-
----
-
-#### 2. v1.13.0 发布与 SonarCloud 修复
-
-**时间**：2026-04-09
-
-**版本发布**：
-- 版本号：`1.12.0` → `1.13.0`（`outlook_web/__init__.py`）
-- 更新 CHANGELOG.md、DEVLOG.md、README.md、README.en.md 版本引用
-- 更新 `tests/test_version_update.py` 中所有版本断言和 mock 数据
-- 本地 893 测试全部通过（0 failures, 6 skipped）
-- CI 全量通过（Python Tests / Code Quality / Docker Build）
-- Git Tag `v1.13.0` → 触发 `create-github-release.yml` 自动创建 GitHub Release
-- Docker 镜像双仓库推送成功：
-  - GHCR: `ghcr.io/zeropointsix/outlook-email-plus:v1.13.0` / `:latest`
-  - Docker Hub: `guangshanshui/outlook-email-plus:v1.13.0` / `:latest`
-  - Digest: `sha256:8909cf0300c956d2db803157dfdeced2a24e6b6c09c149509f87ae6025ff086d`
-  - 架构: `linux/amd64` + `linux/arm64`
-
-**SonarCloud 失败修复**：
-- 根因：`sonar-project.properties` 中 `sonar.sources` / `sonar.inclusions` / `sonar.coverage.exclusions` 引用了已删除的 `fix_format.py`
-- 该文件在 commit `04824bc` 已删除，但 SonarCloud 配置未同步清理
-- 修复：从 3 处配置项中移除 `fix_format.py` 引用
-- 同步清理：`docs/项目地图.md` 中可清理项目列表移除 `fix_format.py`
-
-**修改文件**：
-- `outlook_web/__init__.py`：版本号 → `1.13.0`
-- `tests/test_version_update.py`：版本断言 + mock tag_name
-- `CHANGELOG.md`：新增 `[v1.13.0]` 段落
-- `docs/DEVLOG.md`：新增 `v1.13.0` 段落
-- `README.md` / `README.en.md`：版本引用更新
-- `sonar-project.properties`：移除 `fix_format.py` 引用（3 处）
-- `docs/项目地图.md`：移除已删除文件记录
-
----
-
-#### 1. hotupdate-test 分支端到端测试与合并
-
-**时间**：2026-04-09
-
-**背景**：`hotupdate-test` 分支在 `main` 基础上新增 24 个提交，用于热更新功能的端到端验证（Watchtower + Docker API 双模式）。分支使用 GHCR 远程镜像（`ghcr.io/zeropointsix/outlook-email-plus:hotupdate-test`）进行了完整的两种更新方式的实际测试。
-
-**测试环境**：
-- 端口 5002：Watchtower 模式（`docker-compose.hotupdate-test.yml`，含 Watchtower sidecar）
-- 端口 5003：Docker API 模式（`docker-compose.docker-api-test.yml`，挂载 docker.sock）
-- 镜像：`ghcr.io/zeropointsix/outlook-email-plus:hotupdate-test`
-
-**发现并修复的问题**：
-
-| # | 问题 | 修复 | Commit |
-|---|------|------|--------|
-| 1 | GHCR 镜像不在白名单 | 添加 `ghcr.io/zeropointsix/` 到 ALLOWED_IMAGE_PREFIXES | 早期提交 |
-| 2 | 本地镜像检测误判 | 重写 `_looks_like_local_image_ref()` 为 namespace 白名单 | 早期提交 |
-| 3 | 版本比较 pre-release 后缀问题 | `_version_gt()` 忽略 `-hotupdate-test` 等后缀 | 早期提交 |
-| 4 | Watchtower 连通测试超时 (5s) | 增加到 35s，添加详细注释说明 Watchtower 同步行为 | `6441de2` |
-| 5 | Emoji 前缀 i18n 翻译匹配失败 | 在 exactMap 中添加 `🔄`/`🚀` 前缀变体 | `6441de2` |
-| 6 | 设置页 Tab 标签缺少翻译 | 添加 基础/临时邮箱/API 安全/自动化 翻译 | `6441de2` |
-| 7 | Watchtower 200 响应误判为"更新成功" | 改为 `already_latest: true`（Watchtower 同步完成 → 未更新我们） | `2b49547` |
-| 8 | 连通性/更新结果 i18n 缺失 | 添加 连通正常/检查完毕/测试中/更新失败 等翻译 | `2b49547` |
-| 9 | 测试断言不匹配 | 更新 `test_watchtower_success` 断言 `already_latest` + `"检查完毕"` | `3672888` |
-
-**合并过程**：
-
-1. 版本号从 `1.12.8-hotupdate-test` 回退至 `1.12.0`（与 main 一致）
-2. 删除测试专用 compose 文件（`docker-compose.hotupdate-test.yml`、`docker-compose.docker-api-test.yml`）
-3. 移除 CI docker-build-push 中 `hotupdate-test` 分支触发
-4. 清理 `start.py` 测试注释、恢复 `WORKSPACE.md`
-5. Fast-forward 合并到 main（`6f5c707`）
-6. 推送 main、删除远程和本地 `hotupdate-test` 分支
-7. 停止并删除所有测试容器和 volume
-
-**Watchtower 同步行为关键发现**：
-
-Watchtower `POST /v1/update` 是**同步接口**——完整执行镜像拉取和 digest 比对后才返回 200。如果我们的容器需要更新，Watchtower 会在返回前 kill 旧容器并启动新容器，因此**我们永远收不到 200 响应**。反过来，如果收到了 200 响应，说明 Watchtower 判定当前已是最新版本，无需更新。
-
-**Watchtower DNS 问题**：
-
-测试环境中 Watchtower 将 `ghcr.io` 解析为 `198.18.2.198`（VPN/代理干扰），导致 HEAD 请求失败，fallback 到完整 pull（需 25-30s），这是连通测试超时需要从 5s 增加到 35s 的根本原因。
-
----
-
-## 2026-04-07
-
-### 操作记录
-
-#### 7. Docker API 自更新安全策略强化（策略A）
-
-**时间**：2026-04-07 下午
-
-**背景**：原有 Docker API 自更新功能存在安全隐患——本地构建镜像可能误触发更新，导致不可预期的行为。
-
-**目标**：实施策略A（彻底禁止本地构建镜像触发 Docker API 更新），确保只有官方远程镜像才能触发更新。
-
-**实施内容**：
-
-1. **镜像白名单收紧**：
-   - 移除 `outlook-email-plus`（无 namespace）白名单项
-   - 仅保留 `guangshanshui/outlook-email-plus`官方镜像前缀
-   
-2. **新增本地构建检测**：
-   - `validate_image_for_update()`：镜像白名单 + RepoDigests 检测双重校验
-   - `_looks_like_local_image_ref()`：基于 namespace 的启发式本地镜像检测（修复 bug：改为 namespace 白名单判断）
-   - `_has_repo_digests()`：通过 Docker API 检查镜像 RepoDigests（本地 build 镜像为空）
-   
-3. **API 层前置校验**：
-   - `_trigger_docker_api_update()` 在触发阶段就获取容器镜像并校验
-   - 校验失败返回 403/500，避免等到 spawn updater 内部才失败
-   
-4. **部署信息展示优化**：
-   - `api_deployment_info()` 不再依赖 `DOCKER_SELF_UPDATE_ALLOW` 环境变量
-   - 只要 docker.sock 可用就通过 Docker API 获取真实镜像名（更准确）
-   
-5. **测试用例调整**：
-   - `docker-compose.docker-api-test.yml` 镜像改为 `guangshanshui/outlook-email-plus:latest`（形成负向用例：本地 build 但伪装官方名也会被 RepoDigests 检测拦截）
-
-**修改文件**：
-- `outlook_web/services/docker_update.py`：
-  - 白名单收紧
-  - 新增 `validate_image_for_update()`, `_looks_like_local_image_ref()`, `_has_repo_digests()`
-  - `get_container_info()` 通过 `client.images.get()` 获取 RepoDigests
-  - `spawn_update_helper_container()` 和 `self_update()` 调用新校验函数
-  - Bug修复：`_looks_like_local_image_ref()` 改为 namespace 白名单判断（`guangshanshui`, `docker.io/guangshanshui`, `ghcr.io/guangshanshui`）
-- `outlook_web/controllers/system.py`：
-  - `_trigger_docker_api_update()` API 层镜像校验
-  - `api_deployment_info()` 获取镜像名逻辑优化
-- `docker-compose.docker-api-test.yml`：测试镜像名调整
-
-**代码逻辑测试结果**（PowerShell环境）：
-```
-=== 白名单校验 ===
-guangshanshui/outlook-email-plus:latest  → ✅ 通过
-guangshanshui/outlook-email-plus:test    → ✅ 通过
-outlook-email-plus:latest                → ❌ 拦截（无 namespace）
-myregistry/outlook-email-plus:latest     → ❌ 拦截（非官方 namespace）
-
-=== 启发式检测 ===
-guangshanshui/outlook-email-plus:*       → False（正确识别为官方）
-outlook-email-plus:*                     → True（正确识别为本地）
-其他namespace/*                          → True（正确识别为非官方）
-```
-
-**文档产出**：
-- `docs/DEV/manual-acceptance-checklist.md`：人工验收清单（4 个测试用例 + 验收标准 + 快速测试脚本）
-
-**待验收项（当时）**：
-- [ ] 负向用例1：本地构建镜像触发更新被拦截
-- [ ] 负向用例2：本地构建伪装官方名触发更新被拦截
-- [ ] 正向用例3：官方远程镜像成功触发更新流程
-- [ ] 部署信息准确性验证
-
-**端到端实际测试记录（Docker Desktop / Windows）**：
-
-环境：
-- Docker Desktop 4.43.2（Engine 28.3.2，Context: desktop-linux）
-- Docker Compose v2.38.2
-
-执行：
-1) 启动负向用例（本地 build + 伪装官方镜像名）：
-   - 命令：`docker compose -f docker-compose.docker-api-test.yml up -d --build`
-   - 容器：`outlook-dockerapi-test`（端口 5003→5000）
-   - 镜像：`guangshanshui/outlook-email-plus:latest`（本地 build）
-   - 镜像 RepoDigests：`[]`（确认本地 build 特征）
-
-2) 通过脚本模拟前端触发更新（含 CSRF）：
-   - `POST /login` → ✅ success
-   - `GET /api/csrf-token` → ✅ 返回 csrf_token
-   - `POST /api/system/trigger-update?method=docker_api` + `X-CSRFToken` → ✅ 返回 403
-     - message：`检测到本地构建镜像（RepoDigests 为空），已按安全策略禁止 Docker API 一键更新...`
-   - 结论：策略A拦截生效；未创建 updater 容器；旧容器未被 stop
-
-3) 正向用例尝试（远程拉取官方镜像）被环境网络阻塞：
-   - `docker pull guangshanshui/outlook-email-plus:v1.11.0` → ❌ 超时
-   - 错误：`Client.Timeout exceeded while awaiting headers`（auth.docker.io token 请求超时）
-   - 影响：无法在当前环境完成“远程镜像 RepoDigests 非空 → 允许触发 updater → self_update 跑完”的正向验收
-
-**结论（阶段性）**：负向端到端已通过；正向端到端当时受 DockerHub 网络访问影响未完成。
-
----
-
-#### 13. 策略A 正向端到端验收补全：真实“热更新切换”演示（A2 + 远程镜像 tag 变更）
-
-**时间**：2026-04-07 晚
-
-**目标**：补齐策略A的正向端到端验收，验证当远程镜像 tag 指向新 digest 时，A2 updater 能完成完整切换流程：
-
-- pull 最新镜像
-- digest 不同 → create 新容器
-- stop 旧容器释放端口
-- start 新容器 + health
-- rename（新容器接管原名称）
-- 旧容器保留为 backup（remove_old=false）
-
-**验收环境/对象**：
-
-- 镜像 tag：`guangshanshui/outlook-email-plus:a2-strategyA-canary`
-- 初始运行容器：`outlook-canary`（端口 `5005 -> 5000`，挂载 `/var/run/docker.sock`）
-- 触发更新方式：应用内接口 `POST /api/system/trigger-update?method=docker_api`（登录 + CSRF）
-
-**关键证据（更新前）**：
-
-- 运行中容器：`outlook-canary`
-- 容器使用的 image id（旧）：`sha256:056f69613d8dac7a486ed77a32c8041fb522c4f63d0fad8f6d0149078190e84e`
-- 容器镜像引用仍为 tag：`guangshanshui/outlook-email-plus:a2-strategyA-canary`
-- 本地同 tag 已被重新打到新镜像（新 image id）：`sha256:21aba8bda26d893f59af319eaeb5a72d06eedfd3b4f521a0d004e2bd9503b2fb`
-
-说明：容器创建时记录的是当时 tag 对应的镜像 ID；后续重新 push 同 tag 后，容器仍显示原 tag，但 image id 不会自动变化，因此能触发“digest 不同 → 更新”。
-
-**触发更新（PowerShell / Invoke-RestMethod，带 session cookie 与 CSRF）**：
-
-```powershell
-$session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
-
-# 1) 登录（写入 session cookie）
-$loginBody = @{ password = 'admin123' } | ConvertTo-Json
-Invoke-RestMethod -Uri 'http://localhost:5005/login' -Method Post -ContentType 'application/json' -Body $loginBody -WebSession $session
-
-# 2) 获取 CSRF token
-$csrf = (Invoke-RestMethod -Uri 'http://localhost:5005/api/csrf-token' -Method Get -WebSession $session).csrf_token
-
-# 3) 触发 Docker API 更新（A2 helper）
-Invoke-RestMethod -Uri 'http://localhost:5005/api/system/trigger-update?method=docker_api' -Method Post -Headers @{ 'X-CSRFToken' = $csrf } -WebSession $session
-```
-
-接口返回（关键字段）：
-
-```json
-{"success": true, "message": "更新任务已启动: oep-updater-1775571256 (e21bf4afbbdb)"}
-```
-
-**关键证据（更新后）**：
-
-1) `outlook-canary` 名称仍存在，且重新变为运行态并健康：
-
-- 新容器 ID（short）：`e0ba3c44dcc9`
-- 新容器 image id：`sha256:21aba8bda26d893f59af319eaeb5a72d06eedfd3b4f521a0d004e2bd9503b2fb`
-- 端口仍为：`0.0.0.0:5005->5000/tcp`
-
-2) 旧容器被 rename 为 backup 并退出（符合 A2 设计：保留旧容器便于回滚）：
-
-- 旧容器名称：`outlook-canary_backup_1775571270`
-- 旧容器 image id：`sha256:056f69613d8dac7a486ed77a32c8041fb522c4f63d0fad8f6d0149078190e84e`
-- 状态：Exited(0)
-
-3) `/healthz` 访问正常（证明新容器已接管服务）：
-
-```json
-{"status":"ok","version":"1.12.0","boot_id":"1775571264516-7"}
-```
-
-**结论**：策略A + A2 helper 的“正向端到端热更新切换”已完成，验证了 digest 变化场景下的 stop/start/rename/backup 全链路行为。
-
-**关联 Issue/PR**：待 Docker 容器内实际验收通过后提交
-
----
-
-#### 1. mystatus 插件状态确认
-
-**背景**：尝试使用 `mystatus` 工具查询 AI 账户配额使用情况。
-
-**实际情况**：
-
-| 项目 | 状态 |
+| 文件 | 原因 |
 |------|------|
-| 插件安装 | `opencode-mystatus@1.2.4` 已安装于全局 `~/.config/opencode/node_modules/` |
-| 全局配置 | `~/.config/opencode/opencode.json` 已注册 `plugin` 和 `command` |
-| 项目配置 | 项目级 `opencode.json` 未单独配置 mystatus 插件（使用全局配置） |
-| 工具可用性 | 当前会话工具列表中**未注册** `mystatus` 工具，无法直接调用 |
+| `fix_format.py` | 一次性格式修复脚本，已完成使命 |
+| `NUL` | Windows 空文件，已在 .gitignore |
+| `EhushaokangData-codeoutlookEmailserver.log` | 日志文件（文件名异常），已在 .gitignore |
+| `-p/` 空目录 | 空目录，无内容 |
+| `.ruff_cache/` | Linter 缓存目录 |
 
-**配置位置**：
+#### 需移动归类的文件
 
-- 全局插件配置：`C:\Users\PLA30\.config\opencode\opencode.json`
-  ```json
-  "plugin": ["opencode-mystatus"],
-  "command": {
-    "mystatus": {
-      "description": "Query quota usage for all AI accounts",
-      "template": "Use the mystatus tool to query quota usage. Return the result as-is without modification."
-    }
-  }
-  ```
-- 插件源码位置：`C:\Users\PLA30\.config\opencode\node_modules\opencode-mystatus\`
+| 文件 | 目标位置 |
+|------|---------|
+| `注册与邮箱池接口文档.md` | → `docs/API/注册与邮箱池接口文档.md` |
+| `registration-mail-pool-api.en.md` | → `docs/API/registration-mail-pool-api.en.md` |
+| `VERIFICATION_PROMPT.md` | → `docs/DEV/VERIFICATION_PROMPT.md` |
+| `docs/2026-04-05-设置页面重构-AI执行提示词.md` | → `docs/DEV/` 或删除 |
 
-**支持平台**：
+#### .gitignore 需补充
 
-| Platform | Account Type |
-|----------|-------------|
-| OpenAI | Plus / Team / Pro |
-| Zhipu AI | Coding Plan |
-| Z.ai | Coding Plan |
-| GitHub Copilot | Individual / Business |
-| Google Cloud | Antigravity |
+```
+.ruff_cache/
+-p/
+```
 
-**结论**：`mystatus` 作为 opencode 插件需要在 opencode 运行时环境中通过 `/mystatus` 命令或自然语言触发，当前通过外部 Agent 调用时无法直接使用该工具。
-
-#### 2. 热更新功能开发状态确认
-
-**关联文档**：
-- AI 提示词：`docs/DEV/hot-update-ai-prompt.md`
-- 基线记录：`docs/DEV/hot-update-baseline.md`
-
-**功能概述**：为 Outlook Email Plus 实现 Docker 部署环境下的一键更新功能，支持 Watchtower 和 Docker API 两种更新方式。
-
-**实施进度（全部已完成）**：
-
-| 阶段 | 内容 | 状态 | Commit |
-|------|------|------|--------|
-| Phase 1 | BUG 修复（Token 为空启动失败、浏览器缓存旧 JS） | ✅ | 91a8f35 |
-| Phase 2 | UI 提示优化（镜像标签/构建模式检测） | ✅ | 91a8f35 |
-| Phase 3 | 内置 Docker API 自更新 | ✅ | 91a8f35 |
-| P0 | BUG-006 GitHub 仓库地址修复 | ✅ | e6d27b6 |
-
-**核心产出**：
-- 新增：`outlook_web/services/docker_update.py`（591 行，经代码验证 2026-04-07，原文档记录 839 行已修正）
-- 新增 API：`/api/system/version-check`、`/api/system/trigger-update`、`/api/system/test-watchtower`、`/api/system/deployment-info`
-- 新增设置项：`watchtower_url`、`watchtower_token`（加密存储）、`update_method`
-- 前端：版本更新 Banner、Watchtower 配置 UI、Docker API 更新方式选择
-- 前端补齐：设置页一键更新区域的部署信息警告（`/api/system/deployment-info` → `#deploymentWarnings`）
-- 安全：默认关闭 Docker API 自更新、镜像白名单校验、审计日志
-
-**当前版本**：v1.12.0，热更新验证已通过（v1.12.0 → v1.12.1）
-
-#### 3. 文档更新
-
-- 创建 `WORKSPACE.md` 工作区操作记录文档
-- 确认项目结构：项目级 `opencode.json` 仅配置了子代理（context-retriever, small-task-executor），mystatus 依赖全局配置
-- 记录热更新功能完整实施状态
-
-#### 4. 热更新文档代码验证与清理
-
-**操作内容**：
-
-1. **代码验证**：逐一对比 `hot-update-ai-prompt.md` 中的描述与实际代码
-   - ✅ 4 个 API 端点全部存在且已注册路由
-   - ✅ `update_method` 设置项 GET/PUT 支持
-   - ✅ 静态文件缓存控制 `set_static_cache_control()` 
-   - ✅ GitHub 仓库地址 `ZeroPointSix/outlookEmailPlus`
-   - ✅ `docker-compose.yml` 配置完整（Token 默认值、docker.sock 注释、DOCKER_SELF_UPDATE_ALLOW）
-   - ✅ `.env.example` 模板完整
-   - ⚠️ **发现差异**：`docker_update.py` 实际 591 行，文档记录为 839 行 → **已修正**
-
-2. **文档清理**：清理 `hot-update-ai-prompt.md`
-   - 删除"待实施任务 (可选扩展)"部分（第 154-318 行），该部分重复了已完成的 Phase 1-3 任务描述
-   - 新增"代码验证记录"表格，记录 13 项验证结果
-   - 修正 `docker_update.py` 行数为实际值 591
-   - 保留"参考文件清单"和"注意事项"部分
-
-**已修改文件**：
-- `docs/DEV/hot-update-ai-prompt.md` — 删除冗余内容，新增验证记录，修正数据
-
-#### 5. README 生产配置更新
-
-**操作内容**：
-- 更新 `README.md` 中 docker-compose 生产配置示例，同步 Phase 3 新功能
-  - 新增 `DOCKER_SELF_UPDATE_ALLOW` 环境变量（注释状态）
-  - 新增 docker.sock 挂载选项（注释状态）
-  - 新增"更新方式"说明段落，指导用户如何切换 Watchtower/Docker API 模式
-- 修正 README "最近更新"版本号：v1.11.0 → v1.12.0
-- 新增"一键更新"功能说明段落
-
-**已修改文件**：
-- `README.md` — 版本号更新、docker-compose 示例更新、功能说明补充
-
-#### 6. 热更新功能完整性详细分析
-
-**结论：功能已完整实现**，所有文档描述的功能点均在代码中找到对应实现。
-
-**后端功能验证（全部 ✅）**：
-
-| 功能 | 位置 | 状态 |
-|------|------|------|
-| 版本检测 API（10 分钟缓存） | system.py:353 | ✅ |
-| 更新触发 API（双模式） | system.py:402 | ✅ |
-| Watchtower 更新（DB→env fallback + 加密 Token） | system.py:438 | ✅ |
-| Docker API 更新（安全检查→socket→白名单→12 步流程） | system.py:500 + docker_update.py | ✅ |
-| 部署信息检测（镜像/标签/本地构建/Watchtower 连通性） | system.py:561 | ✅ |
-| Watchtower 连通性测试 | system.py:732 | ✅ |
-| 设置项 update_method（GET/PUT） | settings.py:351/1013 | ✅ |
-| 静态文件缓存控制 | app.py:124 | ✅ |
-
-**前端功能验证（全部 ✅）**：
-
-| 功能 | 位置 | 状态 |
-|------|------|------|
-| 页面加载版本检查 | main.js:3763 `checkVersionUpdate()` | ✅ |
-| 双模式触发更新 + 差异化超时 | main.js:3790 `triggerUpdate()` (120s/10s) | ✅ |
-| 重启轮询等待 | main.js:3880 `waitForRestart()` | ✅ |
-| 部署信息警告渲染（设置页） | main.js: `loadDeploymentInfo()` / `renderDeploymentWarnings()` | ✅ |
-| Watchtower 连通性测试 | main.js:2169 `testWatchtower()` | ✅ |
-| 设置加载/保存 update_method | main.js:1743/2100 | ✅ |
-
-**Docker API 自更新 12 步流程（docker_update.py）**：
-
-| 步骤 | 函数 | 状态 |
-|------|------|------|
-| 1. 启用开关检查 | `is_docker_api_enabled()` | ✅ |
-| 2. Socket 可访问性 | `check_docker_socket()` | ✅ |
-| 3. 获取当前容器信息 | `get_current_container_info()` | ✅ |
-| 4. 镜像名白名单校验 | `validate_image_name()` | ✅ |
-| 5. 拉取最新镜像 | `pull_latest_image()` | ✅ |
-| 6. Digest 比较 | `compare_image_digest()` | ✅ |
-| 7. 创建新容器（复制配置） | `create_new_container()` + `_parse_volumes()` + `_parse_ports()` | ✅ |
-| 8. 启动新容器 | `start_new_container()` | ✅ |
-| 9. 健康检查 | `health_check_new_container()` | ✅ |
-| 10. 停止旧容器 | `stop_old_container()` | ✅ |
-| 11. 重命名容器 | `rename_containers()` | ✅ |
-| 12. 清理/保留旧容器 | `cleanup_old_container()` | ✅ |
-
-**发现的问题（非阻塞）**：
-
-| # | 问题 | 严重度 | 说明 |
-|---|------|--------|------|
-| 1 | `can_auto_update` 未考虑 Docker API 模式 | 低 | `api_deployment_info()` 中 `can_auto_update` 仅检查 Watchtower 连通性，用户选 Docker API 模式且无 Watchtower 时会误报为不可更新 |
-| 2 | `self_update()` 同步调用风险 | 低 | system.py:531 注释说明同步调用可能中断响应，但 Docker API 模式下前端有 120s 超时 + `waitForRestart()` 轮询兜底 |
-| 3 | `docker-compose.hotupdate-test.yml` 含硬编码密钥 | 低 | 测试专用文件，不影响生产安全 |
-
-#### 7. 热更新功能非阻塞问题修复
-
-**修复 #1：`can_auto_update` 逻辑支持 Docker API 模式**
-
-- **文件**：`outlook_web/controllers/system.py`
-- **问题**：`api_deployment_info()` 中 `can_auto_update` 仅检查 Watchtower 连通性
-- **修复**：新增 `docker_api_available` 检测（检查 `DOCKER_SELF_UPDATE_ALLOW` + socket 可用性），`can_auto_update` 逻辑改为 `watchtower_reachable or docker_api_available`
-- **新增返回字段**：`deployment.docker_api_available`（布尔值）
-
-**修复 #2：`self_update()` 同步→异步**
-
-- **文件**：`outlook_web/controllers/system.py`
-- **问题**：`_trigger_docker_api_update()` 同步调用 `self_update()`，旧容器被停止时响应无法到达客户端
-- **修复**：使用 `threading.Thread(daemon=True)` 在后台线程执行自更新，主线程立即返回 `{"success": True, "message": "Docker API 自更新已启动，容器即将重启"}`
-- **审计日志**：移入后台线程，确保更新结果被记录
-- **前端兼容**：前端已有 `waitForRestart()` 轮询 `/healthz` 等待新容器启动，无需修改
-
-**修复 #3：清理测试配置硬编码密钥**
-
-- **文件**：`docker-compose.hotupdate-test.yml`
-- **问题**：SECRET_KEY 和 WATCHTOWER_HTTP_API_TOKEN 为硬编码明文值
-- **修复**：改为 `${SECRET_KEY:-please-change-this-secret-key-for-testing}` 和 `${WATCHTOWER_HTTP_API_TOKEN:-test-hotupdate-token}` 格式，支持 `.env` 文件注入
-- **附加**：更新文件头注释（移除版本号引用，添加使用方式说明）
-
-**已修改文件汇总**：
-- `outlook_web/controllers/system.py` — can_auto_update 逻辑 + self_update 异步化
-- `docker-compose.hotupdate-test.yml` — 密钥环境变量化
-
-#### 8. README 环境变量补充
-
-**操作内容**：
-- 在 `README.md` 的"常用环境变量"部分新增"一键更新相关"小节
-- 补充环境变量说明：
-  - `WATCHTOWER_HTTP_API_TOKEN` — Watchtower API 鉴权令牌
-  - `WATCHTOWER_API_URL` — Watchtower API 地址
-  - `DOCKER_SELF_UPDATE_ALLOW` — 是否启用 Docker API 自更新
-  - `DOCKER_IMAGE` — 当前容器镜像名（可选）
-- 添加安全提示说明 Docker API 自更新的风险
-
-**已修改文件**：
-- `README.md` — 新增一键更新相关环境变量说明
-
-#### 9. 一键更新功能人工验收 BUG 分析
-
-**分析范围**：dev 分支相对于 main 分支新增的一键更新功能
-
-**功能概述**：
-- 版本检测：GET `/api/system/version-check`，对比 GitHub 最新 release 与本地版本
-- 触发更新：POST `/api/system/trigger-update?method=watchtower|docker_api`
-- Watchtower 配置：设置页可配置 URL + Token（加密存储）
-- Docker API 自更新：12 步流程（拉取镜像→创建容器→健康检查→切换）
-
-**潜在 BUG 分析**：
-
-| # | 问题描述 | 严重度 | 复现条件 | 影响 | 建议处理 |
-|---|---------|--------|----------|------|----------|
-| 1 | **镜像名检测依赖 DOCKER_IMAGE 环境变量** | 低 | 未设置 DOCKER_IMAGE 时 | `api_deployment_info()` 无法准确获取镜像名，可能显示 `unknown` | 可接受，用户可手动设置 |
-| 2 | **容器名冲突风险** | 低 | Docker API 自更新失败后重试 | 新容器使用 `{name}_new` 临时名称，若上次失败未清理可能冲突 | 代码中已有 force 删除逻辑，风险较低 |
-| 3 | **审计日志在后台线程中记录** | 低 | Docker API 自更新 | 若新容器启动后旧容器被停止，审计日志写入数据库时机可能不稳定 | 非阻塞，日志可能丢失但不影响功能 |
-| 4 | **前端超时固定 120s** | 信息 | Docker API 大镜像拉取 | 若镜像很大，拉取时间超过 120s，前端可能误报超时（但后台仍在执行） | 可接受，前端会继续轮询 `/healthz` |
-
-**健康检查说明**：
-- `docker_update.py` 中的 `health_check_new_container()` 检查的是 Docker 容器状态和 Docker 原生 healthcheck
-- 前端 `waitForRestart()` 轮询的 `/healthz` 端点是应用级健康检查（已存在于 `system.py:39`）
-- 两者是独立的：容器启动后，后端健康检查通过 → 前端轮询 `/healthz` 确认应用可用
-
-**验收建议**：
-
-1. **Watchtower 模式验收**：
-   - [ ] 部署 docker-compose（含 watchtower 服务）
-   - [ ] 在设置页配置 Watchtower URL + Token
-   - [ ] 点击"测试连通性"按钮，确认返回成功
-   - [ ] 触发版本检测，确认 Banner 显示
-   - [ ] 点击"立即更新"，确认容器重启
-
-2. **Docker API 模式验收**：
-   - [ ] 修改 docker-compose 启用 `DOCKER_SELF_UPDATE_ALLOW=true`
-   - [ ] 挂载 `/var/run/docker.sock`
-   - [ ] 在设置页切换"更新方式"为 Docker API
-   - [ ] 确认部署信息显示 `docker_api_available: true`
-   - [ ] 触发更新，确认 12 步流程正常执行
-
-3. **边界条件验收**：
-   - [ ] 使用固定版本标签（如 `:v1.12.0`），确认 UI 警告正确
-   - [ ] 本地构建镜像，确认 UI 警告正确
-   - [ ] 未配置 Watchtower Token，确认错误提示
-
-**结论**：一键更新功能已基本完整，无阻塞性 BUG。建议按上述验收清单进行人工测试。
-
-#### 10. Docker API 自更新实测发现阻塞 BUG 并修复（dev 分支）
-
-**实测背景**：尝试在 Docker 容器中调用 `/api/system/trigger-update?method=docker_api` 做完整 12 步自更新模拟。
-
-**实际问题**：接口直接返回 500。
-
-- 容器日志报错：`ModuleNotFoundError: No module named 'outlook_web.models'`
-- 根因：`outlook_web/controllers/system.py::_trigger_docker_api_update()` 中错误引用 `from outlook_web.models import AuditLog`，但项目不存在 `outlook_web/models.py` 以及 `AuditLog` 类
-
-**修复策略（方案 A）**：移除 `AuditLog` 依赖。
-
-- 主线程：使用现有 `outlook_web.audit.log_audit()` 记录一次 `trigger_docker_api_update_start`（含 method/remove_old/username）
-- 后台线程：仅执行 `docker_update.self_update()` 并写入应用日志（logger），避免后台线程依赖 Flask request context / DB 连接
-
-**修改文件**：
-- `outlook_web/controllers/system.py` — 移除 `outlook_web.models.AuditLog` 引用，改用 `log_audit`
+**执行结果**（Commit: `04824bc`）：
+- ✅ 删除 `fix_format.py`
+- ✅ 移动 `注册与邮箱池接口文档.md` → `docs/API/`
+- ✅ 移动 `registration-mail-pool-api.en.md` → `docs/API/`
+- ✅ 移动 `VERIFICATION_PROMPT.md` → `docs/DEV/`
+- ✅ 移动 `设置页面重构-AI执行提示词.md` → `docs/DEV/`
+- ✅ `.gitignore` 补充 `.ruff_cache/` 和 `-p/`
+- 注：`NUL`、`-p/`、`.ruff_cache/`、`Ehushaokang...server.log` 已在 .gitignore 中，物理文件已被清理
 
 ---
 
-#### 11. A2 方案实现：按需 helper job 容器（避免"自杀"问题）
+### 历史记录：A2 方案开发期间的修改清单（已合并至 main）
 
-**背景问题**：Docker API 模式实测发现核心阻塞——容器无法在内部 stop 自己后继续执行后续步骤（进程被杀死）。原始方案使用 daemon 线程在后台执行 self_update()，但旧容器被 stop 的瞬间后台线程也会被杀死，导致"create 新容器→stop 旧→rename→cleanup"流程中断。
+> 以下修改已通过 `hotupdate-test` 分支合并到 main（2026-04-09），此处仅作历史参考。
 
-**方案选型**：
+| 文件 | 修改类型 | 说明 |
+|------|---------|------|
+| `outlook_web/services/docker_update_helper.py` | **新增** | updater 容器入口模块 |
+| `outlook_web/services/docker_update.py` | Modified | helper 容器创建、步骤顺序调整、失败回滚 |
+| `outlook_web/controllers/system.py` | Modified | A2 触发逻辑、healthz 增强、部署信息增强 |
+| `static/js/main.js` | Modified | boot_id 检测、部署警告渲染、超时优化 |
+| `templates/index.html` | Modified | deploymentWarnings 容器 |
+| `tests/test_error_and_trace.py` | Modified | 适配 healthz 新字段 |
+| `tests/test_smoke_contract.py` | Modified | 适配 healthz 新字段 |
+| `docs/DEV/hot-update-ai-prompt.md` | Modified | 文档清理 + 补充 |
+| `docs/DEV/hot-update-baseline.md` | Modified | 文档补充 |
 
-| 方案 | 描述 | 优势 | 劣势 |
-|------|------|------|------|
-| A1: 两阶段脚本 | app 容器内写脚本→nohup 后台执行→exit | 最简单 | 可靠性差，进程管理困难 |
-| **A2: 按需 helper job 容器** | app 通过 Docker API 临时创建 updater 容器 | 可靠、隔离、auto_remove 自动清理 | 短暂 2 容器并存 |
-| A3: 外部 updater 服务 | 额外部署常驻 updater 容器 | 最稳 | 增加部署复杂度 |
+---
 
-**选定方案**：A2（按需 helper job 容器）
-
-**架构设计**：
-
-```
-┌─────────────────────────────┐
-│  App 容器（用户请求）          │
-│                             │
-│  1. 鉴权 + 安全校验            │
-│  2. 记录审计日志（主线程）       │
-│  3. Docker API 创建 updater 容器│
-│  4. 立即返回 HTTP 响应          │
-└─────────────┬───────────────┘
-              │ docker.sock
-              ▼
-┌─────────────────────────────┐
-│  Updater 容器（短生命周期）     │
-│                             │
-│  1. sleep(2) 等 HTTP 响应     │
-│  2. pull 最新镜像              │
-│  3. create 新容器（复制配置）   │
-│  4. stop 旧容器（释放端口）     │
-│  5. start 新容器               │
-│  6. healthcheck 新容器         │
-│  7. rename 容器                │
-│  8. cleanup 旧容器             │
-│  9. 退出 → auto_remove 自动清理 │
-└─────────────────────────────┘
-```
-
-**关键设计决策**：
-
-1. **start_delay_seconds=2**：updater 容器启动后延迟 2 秒再执行更新操作，给 app 容器的 HTTP 响应留出到达客户端的时间
-2. **先 stop 旧容器再 start 新容器**：解决 host port 映射场景下端口冲突问题（docker-compose 常见 5000:5000 映射）
-3. **auto_remove=True**：updater 容器退出后自动删除，保持"单容器部署体验"
-4. **失败回滚**：新容器启动失败或健康检查失败时，尝试恢复旧容器
-5. **透传 Docker 凭证**：支持 DOCKER_AUTH_CONFIG / DOCKER_CONFIG 环境变量，确保 updater 可拉取私有镜像
-6. **Watchtower 排除**：updater 容器添加 `com.centurylinklabs.watchtower.enable=false` 标签
-
-**新增/修改文件清单**：
-
-| 文件 | 操作 | 说明 |
-|------|------|------|
-| `outlook_web/services/docker_update_helper.py` | **新增**（69 行） | updater 容器入口模块，读取环境变量调用 `self_update()` |
-| `outlook_web/services/docker_update.py` | 修改 | 新增 `get_container_info()`、`spawn_update_helper_container()`；增强 `validate_image_name()` 支持 digest 和 registry port；增强 volumes 解析支持 named volume；`self_update()` 新增 `target_container_id` 参数；调整步骤顺序（先 stop 旧再 start 新）；失败时尝试恢复旧容器 |
-| `outlook_web/controllers/system.py` | 修改 | `healthz()` 新增 `boot_id` 和 `version` 字段；`_trigger_docker_api_update()` 改为调用 `spawn_update_helper_container()`；`api_deployment_info()` 增强 Docker API 检测和上下文感知警告 |
-| `static/js/main.js` | 修改 | `waitForRestart()` 增加 boot_id 变化检测；Docker API 模式超时放宽到 180s；`triggerUpdate()` 统一走 waitForRestart 逻辑；`loadSettings()` 触发部署信息加载；新增 `loadDeploymentInfo()` / `renderDeploymentWarnings()`；语言切换时重渲染部署警告 |
-| `templates/index.html` | 修改 | 新增 `#deploymentWarnings` 容器；微调缩进格式 |
-| `tests/test_error_and_trace.py` | 修改 | 适配 healthz 新增 `boot_id` / `version` 字段 |
-| `tests/test_smoke_contract.py` | 修改 | 适配 healthz 新增字段 |
-| `docker-compose.docker-api-test.yml` | **新增**（45 行） | Docker API 模式专用测试 compose 配置 |
-| `docker-compose.hotupdate-test.yml` | 修改 | 新增 DOCKER_IMAGE 环境变量 |
-
-**self_update() 步骤顺序调整**：
-
-原方案（先 start 新再 stop 旧）在 host port 映射场景下会产生端口冲突：
-
-```
-原: pull → compare → get_info → validate → pull_image → compare_digest → create → start_new → health_check → stop_old → rename → cleanup
-新: pull → compare → get_info → validate → pull_image → compare_digest → create → stop_old → start_new → health_check → rename → cleanup
-```
-
-**前端轮询优化**：
-
-通过 `boot_id`（`{timestamp}-{pid}`）判断容器是否发生了真正的进程重启：
-- 首次轮询前记录 `initialBootId`
-- 后续轮询中检测 `boot_id` 是否变化
-- `boot_id` 变化 或 `seenDown`（曾看到服务不可用）时判定为重启完成
+---
 
 #### 12. A2 方案本地 Docker 验证（dev 分支）
-
 **验证环境**：
 - Docker Desktop 4.43.2 (Engine 28.3.2)
 - 本地构建镜像 `outlook-email-a2-test:latest`（基于 dev 分支源码）
@@ -8889,181 +7695,364 @@ docker rm -f oep-e2e-test
 - [ ] 前端 waitForRestart 轮询正常（boot_id 变化检测）
 - [ ] 语言切换时部署警告重渲染
 
-#### 13. 生成功能验证提示词（给其他 AI 审查用）
+---
 
+#### 11. A2 方案实现：按需 helper job 容器（避免"自杀"问题）
+**背景问题**：Docker API 模式实测发现核心阻塞——容器无法在内部 stop 自己后继续执行后续步骤（进程被杀死）。原始方案使用 daemon 线程在后台执行 self_update()，但旧容器被 stop 的瞬间后台线程也会被杀死，导致"create 新容器→stop 旧→rename→cleanup"流程中断。
+
+**方案选型**：
+
+| 方案 | 描述 | 优势 | 劣势 |
+|------|------|------|------|
+| A1: 两阶段脚本 | app 容器内写脚本→nohup 后台执行→exit | 最简单 | 可靠性差，进程管理困难 |
+| **A2: 按需 helper job 容器** | app 通过 Docker API 临时创建 updater 容器 | 可靠、隔离、auto_remove 自动清理 | 短暂 2 容器并存 |
+| A3: 外部 updater 服务 | 额外部署常驻 updater 容器 | 最稳 | 增加部署复杂度 |
+
+**选定方案**：A2（按需 helper job 容器）
+
+**架构设计**：
+
+```
+┌─────────────────────────────┐
+│  App 容器（用户请求）          │
+│                             │
+│  1. 鉴权 + 安全校验            │
+│  2. 记录审计日志（主线程）       │
+│  3. Docker API 创建 updater 容器│
+│  4. 立即返回 HTTP 响应          │
+└─────────────┬───────────────┘
+              │ docker.sock
+              ▼
+┌─────────────────────────────┐
+│  Updater 容器（短生命周期）     │
+│                             │
+│  1. sleep(2) 等 HTTP 响应     │
+│  2. pull 最新镜像              │
+│  3. create 新容器（复制配置）   │
+│  4. stop 旧容器（释放端口）     │
+│  5. start 新容器               │
+│  6. healthcheck 新容器         │
+│  7. rename 容器                │
+│  8. cleanup 旧容器             │
+│  9. 退出 → auto_remove 自动清理 │
+└─────────────────────────────┘
+```
+
+**关键设计决策**：
+
+1. **start_delay_seconds=2**：updater 容器启动后延迟 2 秒再执行更新操作，给 app 容器的 HTTP 响应留出到达客户端的时间
+2. **先 stop 旧容器再 start 新容器**：解决 host port 映射场景下端口冲突问题（docker-compose 常见 5000:5000 映射）
+3. **auto_remove=True**：updater 容器退出后自动删除，保持"单容器部署体验"
+4. **失败回滚**：新容器启动失败或健康检查失败时，尝试恢复旧容器
+5. **透传 Docker 凭证**：支持 DOCKER_AUTH_CONFIG / DOCKER_CONFIG 环境变量，确保 updater 可拉取私有镜像
+6. **Watchtower 排除**：updater 容器添加 `com.centurylinklabs.watchtower.enable=false` 标签
+
+**新增/修改文件清单**：
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `outlook_web/services/docker_update_helper.py` | **新增**（69 行） | updater 容器入口模块，读取环境变量调用 `self_update()` |
+| `outlook_web/services/docker_update.py` | 修改 | 新增 `get_container_info()`、`spawn_update_helper_container()`；增强 `validate_image_name()` 支持 digest 和 registry port；增强 volumes 解析支持 named volume；`self_update()` 新增 `target_container_id` 参数；调整步骤顺序（先 stop 旧再 start 新）；失败时尝试恢复旧容器 |
+| `outlook_web/controllers/system.py` | 修改 | `healthz()` 新增 `boot_id` 和 `version` 字段；`_trigger_docker_api_update()` 改为调用 `spawn_update_helper_container()`；`api_deployment_info()` 增强 Docker API 检测和上下文感知警告 |
+| `static/js/main.js` | 修改 | `waitForRestart()` 增加 boot_id 变化检测；Docker API 模式超时放宽到 180s；`triggerUpdate()` 统一走 waitForRestart 逻辑；`loadSettings()` 触发部署信息加载；新增 `loadDeploymentInfo()` / `renderDeploymentWarnings()`；语言切换时重渲染部署警告 |
+| `templates/index.html` | 修改 | 新增 `#deploymentWarnings` 容器；微调缩进格式 |
+| `tests/test_error_and_trace.py` | 修改 | 适配 healthz 新增 `boot_id` / `version` 字段 |
+| `tests/test_smoke_contract.py` | 修改 | 适配 healthz 新增字段 |
+| `docker-compose.docker-api-test.yml` | **新增**（45 行） | Docker API 模式专用测试 compose 配置 |
+| `docker-compose.hotupdate-test.yml` | 修改 | 新增 DOCKER_IMAGE 环境变量 |
+
+**self_update() 步骤顺序调整**：
+
+原方案（先 start 新再 stop 旧）在 host port 映射场景下会产生端口冲突：
+
+```
+原: pull → compare → get_info → validate → pull_image → compare_digest → create → start_new → health_check → stop_old → rename → cleanup
+新: pull → compare → get_info → validate → pull_image → compare_digest → create → stop_old → start_new → health_check → rename → cleanup
+```
+
+**前端轮询优化**：
+
+通过 `boot_id`（`{timestamp}-{pid}`）判断容器是否发生了真正的进程重启：
+- 首次轮询前记录 `initialBootId`
+- 后续轮询中检测 `boot_id` 是否变化
+- `boot_id` 变化 或 `seenDown`（曾看到服务不可用）时判定为重启完成
+
+---
+
+#### 10. Docker API 自更新实测发现阻塞 BUG 并修复（dev 分支）
+**实测背景**：尝试在 Docker 容器中调用 `/api/system/trigger-update?method=docker_api` 做完整 12 步自更新模拟。
+
+**实际问题**：接口直接返回 500。
+
+- 容器日志报错：`ModuleNotFoundError: No module named 'outlook_web.models'`
+- 根因：`outlook_web/controllers/system.py::_trigger_docker_api_update()` 中错误引用 `from outlook_web.models import AuditLog`，但项目不存在 `outlook_web/models.py` 以及 `AuditLog` 类
+
+**修复策略（方案 A）**：移除 `AuditLog` 依赖。
+
+- 主线程：使用现有 `outlook_web.audit.log_audit()` 记录一次 `trigger_docker_api_update_start`（含 method/remove_old/username）
+- 后台线程：仅执行 `docker_update.self_update()` 并写入应用日志（logger），避免后台线程依赖 Flask request context / DB 连接
+
+**修改文件**：
+- `outlook_web/controllers/system.py` — 移除 `outlook_web.models.AuditLog` 引用，改用 `log_audit`
+
+---
+
+---
+
+#### 9. 一键更新功能人工验收 BUG 分析
+**分析范围**：dev 分支相对于 main 分支新增的一键更新功能
+
+**功能概述**：
+- 版本检测：GET `/api/system/version-check`，对比 GitHub 最新 release 与本地版本
+- 触发更新：POST `/api/system/trigger-update?method=watchtower|docker_api`
+- Watchtower 配置：设置页可配置 URL + Token（加密存储）
+- Docker API 自更新：12 步流程（拉取镜像→创建容器→健康检查→切换）
+
+**潜在 BUG 分析**：
+
+| # | 问题描述 | 严重度 | 复现条件 | 影响 | 建议处理 |
+|---|---------|--------|----------|------|----------|
+| 1 | **镜像名检测依赖 DOCKER_IMAGE 环境变量** | 低 | 未设置 DOCKER_IMAGE 时 | `api_deployment_info()` 无法准确获取镜像名，可能显示 `unknown` | 可接受，用户可手动设置 |
+| 2 | **容器名冲突风险** | 低 | Docker API 自更新失败后重试 | 新容器使用 `{name}_new` 临时名称，若上次失败未清理可能冲突 | 代码中已有 force 删除逻辑，风险较低 |
+| 3 | **审计日志在后台线程中记录** | 低 | Docker API 自更新 | 若新容器启动后旧容器被停止，审计日志写入数据库时机可能不稳定 | 非阻塞，日志可能丢失但不影响功能 |
+| 4 | **前端超时固定 120s** | 信息 | Docker API 大镜像拉取 | 若镜像很大，拉取时间超过 120s，前端可能误报超时（但后台仍在执行） | 可接受，前端会继续轮询 `/healthz` |
+
+**健康检查说明**：
+- `docker_update.py` 中的 `health_check_new_container()` 检查的是 Docker 容器状态和 Docker 原生 healthcheck
+- 前端 `waitForRestart()` 轮询的 `/healthz` 端点是应用级健康检查（已存在于 `system.py:39`）
+- 两者是独立的：容器启动后，后端健康检查通过 → 前端轮询 `/healthz` 确认应用可用
+
+**验收建议**：
+
+1. **Watchtower 模式验收**：
+   - [ ] 部署 docker-compose（含 watchtower 服务）
+   - [ ] 在设置页配置 Watchtower URL + Token
+   - [ ] 点击"测试连通性"按钮，确认返回成功
+   - [ ] 触发版本检测，确认 Banner 显示
+   - [ ] 点击"立即更新"，确认容器重启
+
+2. **Docker API 模式验收**：
+   - [ ] 修改 docker-compose 启用 `DOCKER_SELF_UPDATE_ALLOW=true`
+   - [ ] 挂载 `/var/run/docker.sock`
+   - [ ] 在设置页切换"更新方式"为 Docker API
+   - [ ] 确认部署信息显示 `docker_api_available: true`
+   - [ ] 触发更新，确认 12 步流程正常执行
+
+3. **边界条件验收**：
+   - [ ] 使用固定版本标签（如 `:v1.12.0`），确认 UI 警告正确
+   - [ ] 本地构建镜像，确认 UI 警告正确
+   - [ ] 未配置 Watchtower Token，确认错误提示
+
+**结论**：一键更新功能已基本完整，无阻塞性 BUG。建议按上述验收清单进行人工测试。
+
+---
+
+#### 8. README 环境变量补充
 **操作内容**：
-- 创建 `VERIFICATION_PROMPT.md`，包含 A2 方案的完整功能验证提示词
-- 覆盖 5 大类验证点（后端 API / Docker 服务 / 前端 / 安全 / 边界条件），共 30+ 个具体检查项
-- 附带改动文件清单和已知限制说明
-- 用于交给其他 AI 审查代码变更的完整性和正确性
+- 在 `README.md` 的"常用环境变量"部分新增"一键更新相关"小节
+- 补充环境变量说明：
+  - `WATCHTOWER_HTTP_API_TOKEN` — Watchtower API 鉴权令牌
+  - `WATCHTOWER_API_URL` — Watchtower API 地址
+  - `DOCKER_SELF_UPDATE_ALLOW` — 是否启用 Docker API 自更新
+  - `DOCKER_IMAGE` — 当前容器镜像名（可选）
+- 添加安全提示说明 Docker API 自更新的风险
 
-**已新增文件**：
-- `VERIFICATION_PROMPT.md` — 功能验证提示词
+**已修改文件**：
+- `README.md` — 新增一键更新相关环境变量说明
 
 ---
 
-### 待办：项目文件归类清理（暂缓，提交后执行）
+#### 7. 热更新功能非阻塞问题修复
+**修复 #1：`can_auto_update` 逻辑支持 Docker API 模式**
 
-> 以下为扫描项目结构后的清理建议，待 dev 分支提交后再执行。
+- **文件**：`outlook_web/controllers/system.py`
+- **问题**：`api_deployment_info()` 中 `can_auto_update` 仅检查 Watchtower 连通性
+- **修复**：新增 `docker_api_available` 检测（检查 `DOCKER_SELF_UPDATE_ALLOW` + socket 可用性），`can_auto_update` 逻辑改为 `watchtower_reachable or docker_api_available`
+- **新增返回字段**：`deployment.docker_api_available`（布尔值）
 
-#### 需删除的文件
+**修复 #2：`self_update()` 同步→异步**
 
-| 文件 | 原因 |
+- **文件**：`outlook_web/controllers/system.py`
+- **问题**：`_trigger_docker_api_update()` 同步调用 `self_update()`，旧容器被停止时响应无法到达客户端
+- **修复**：使用 `threading.Thread(daemon=True)` 在后台线程执行自更新，主线程立即返回 `{"success": True, "message": "Docker API 自更新已启动，容器即将重启"}`
+- **审计日志**：移入后台线程，确保更新结果被记录
+- **前端兼容**：前端已有 `waitForRestart()` 轮询 `/healthz` 等待新容器启动，无需修改
+
+**修复 #3：清理测试配置硬编码密钥**
+
+- **文件**：`docker-compose.hotupdate-test.yml`
+- **问题**：SECRET_KEY 和 WATCHTOWER_HTTP_API_TOKEN 为硬编码明文值
+- **修复**：改为 `${SECRET_KEY:-please-change-this-secret-key-for-testing}` 和 `${WATCHTOWER_HTTP_API_TOKEN:-test-hotupdate-token}` 格式，支持 `.env` 文件注入
+- **附加**：更新文件头注释（移除版本号引用，添加使用方式说明）
+
+**已修改文件汇总**：
+- `outlook_web/controllers/system.py` — can_auto_update 逻辑 + self_update 异步化
+- `docker-compose.hotupdate-test.yml` — 密钥环境变量化
+
+---
+
+#### 6. 热更新功能完整性详细分析
+**结论：功能已完整实现**，所有文档描述的功能点均在代码中找到对应实现。
+
+**后端功能验证（全部 ✅）**：
+
+| 功能 | 位置 | 状态 |
+|------|------|------|
+| 版本检测 API（10 分钟缓存） | system.py:353 | ✅ |
+| 更新触发 API（双模式） | system.py:402 | ✅ |
+| Watchtower 更新（DB→env fallback + 加密 Token） | system.py:438 | ✅ |
+| Docker API 更新（安全检查→socket→白名单→12 步流程） | system.py:500 + docker_update.py | ✅ |
+| 部署信息检测（镜像/标签/本地构建/Watchtower 连通性） | system.py:561 | ✅ |
+| Watchtower 连通性测试 | system.py:732 | ✅ |
+| 设置项 update_method（GET/PUT） | settings.py:351/1013 | ✅ |
+| 静态文件缓存控制 | app.py:124 | ✅ |
+
+**前端功能验证（全部 ✅）**：
+
+| 功能 | 位置 | 状态 |
+|------|------|------|
+| 页面加载版本检查 | main.js:3763 `checkVersionUpdate()` | ✅ |
+| 双模式触发更新 + 差异化超时 | main.js:3790 `triggerUpdate()` (120s/10s) | ✅ |
+| 重启轮询等待 | main.js:3880 `waitForRestart()` | ✅ |
+| 部署信息警告渲染（设置页） | main.js: `loadDeploymentInfo()` / `renderDeploymentWarnings()` | ✅ |
+| Watchtower 连通性测试 | main.js:2169 `testWatchtower()` | ✅ |
+| 设置加载/保存 update_method | main.js:1743/2100 | ✅ |
+
+**Docker API 自更新 12 步流程（docker_update.py）**：
+
+| 步骤 | 函数 | 状态 |
+|------|------|------|
+| 1. 启用开关检查 | `is_docker_api_enabled()` | ✅ |
+| 2. Socket 可访问性 | `check_docker_socket()` | ✅ |
+| 3. 获取当前容器信息 | `get_current_container_info()` | ✅ |
+| 4. 镜像名白名单校验 | `validate_image_name()` | ✅ |
+| 5. 拉取最新镜像 | `pull_latest_image()` | ✅ |
+| 6. Digest 比较 | `compare_image_digest()` | ✅ |
+| 7. 创建新容器（复制配置） | `create_new_container()` + `_parse_volumes()` + `_parse_ports()` | ✅ |
+| 8. 启动新容器 | `start_new_container()` | ✅ |
+| 9. 健康检查 | `health_check_new_container()` | ✅ |
+| 10. 停止旧容器 | `stop_old_container()` | ✅ |
+| 11. 重命名容器 | `rename_containers()` | ✅ |
+| 12. 清理/保留旧容器 | `cleanup_old_container()` | ✅ |
+
+**发现的问题（非阻塞）**：
+
+| # | 问题 | 严重度 | 说明 |
+|---|------|--------|------|
+| 1 | `can_auto_update` 未考虑 Docker API 模式 | 低 | `api_deployment_info()` 中 `can_auto_update` 仅检查 Watchtower 连通性，用户选 Docker API 模式且无 Watchtower 时会误报为不可更新 |
+| 2 | `self_update()` 同步调用风险 | 低 | system.py:531 注释说明同步调用可能中断响应，但 Docker API 模式下前端有 120s 超时 + `waitForRestart()` 轮询兜底 |
+| 3 | `docker-compose.hotupdate-test.yml` 含硬编码密钥 | 低 | 测试专用文件，不影响生产安全 |
+
+---
+
+#### 5. README 生产配置更新
+**操作内容**：
+- 更新 `README.md` 中 docker-compose 生产配置示例，同步 Phase 3 新功能
+  - 新增 `DOCKER_SELF_UPDATE_ALLOW` 环境变量（注释状态）
+  - 新增 docker.sock 挂载选项（注释状态）
+  - 新增"更新方式"说明段落，指导用户如何切换 Watchtower/Docker API 模式
+- 修正 README "最近更新"版本号：v1.11.0 → v1.12.0
+- 新增"一键更新"功能说明段落
+
+**已修改文件**：
+- `README.md` — 版本号更新、docker-compose 示例更新、功能说明补充
+
+---
+
+#### 4. 热更新文档代码验证与清理
+**操作内容**：
+
+1. **代码验证**：逐一对比 `hot-update-ai-prompt.md` 中的描述与实际代码
+   - ✅ 4 个 API 端点全部存在且已注册路由
+   - ✅ `update_method` 设置项 GET/PUT 支持
+   - ✅ 静态文件缓存控制 `set_static_cache_control()` 
+   - ✅ GitHub 仓库地址 `ZeroPointSix/outlookEmailPlus`
+   - ✅ `docker-compose.yml` 配置完整（Token 默认值、docker.sock 注释、DOCKER_SELF_UPDATE_ALLOW）
+   - ✅ `.env.example` 模板完整
+   - ⚠️ **发现差异**：`docker_update.py` 实际 591 行，文档记录为 839 行 → **已修正**
+
+2. **文档清理**：清理 `hot-update-ai-prompt.md`
+   - 删除"待实施任务 (可选扩展)"部分（第 154-318 行），该部分重复了已完成的 Phase 1-3 任务描述
+   - 新增"代码验证记录"表格，记录 13 项验证结果
+   - 修正 `docker_update.py` 行数为实际值 591
+   - 保留"参考文件清单"和"注意事项"部分
+
+**已修改文件**：
+- `docs/DEV/hot-update-ai-prompt.md` — 删除冗余内容，新增验证记录，修正数据
+
+---
+
+#### 3. 文档更新
+- 创建 `WORKSPACE.md` 工作区操作记录文档
+- 确认项目结构：项目级 `opencode.json` 仅配置了子代理（context-retriever, small-task-executor），mystatus 依赖全局配置
+- 记录热更新功能完整实施状态
+
+---
+
+#### 2. 热更新功能开发状态确认
+**关联文档**：
+- AI 提示词：`docs/DEV/hot-update-ai-prompt.md`
+- 基线记录：`docs/DEV/hot-update-baseline.md`
+
+**功能概述**：为 Outlook Email Plus 实现 Docker 部署环境下的一键更新功能，支持 Watchtower 和 Docker API 两种更新方式。
+
+**实施进度（全部已完成）**：
+
+| 阶段 | 内容 | 状态 | Commit |
+|------|------|------|--------|
+| Phase 1 | BUG 修复（Token 为空启动失败、浏览器缓存旧 JS） | ✅ | 91a8f35 |
+| Phase 2 | UI 提示优化（镜像标签/构建模式检测） | ✅ | 91a8f35 |
+| Phase 3 | 内置 Docker API 自更新 | ✅ | 91a8f35 |
+| P0 | BUG-006 GitHub 仓库地址修复 | ✅ | e6d27b6 |
+
+**核心产出**：
+- 新增：`outlook_web/services/docker_update.py`（591 行，经代码验证 2026-04-07，原文档记录 839 行已修正）
+- 新增 API：`/api/system/version-check`、`/api/system/trigger-update`、`/api/system/test-watchtower`、`/api/system/deployment-info`
+- 新增设置项：`watchtower_url`、`watchtower_token`（加密存储）、`update_method`
+- 前端：版本更新 Banner、Watchtower 配置 UI、Docker API 更新方式选择
+- 前端补齐：设置页一键更新区域的部署信息警告（`/api/system/deployment-info` → `#deploymentWarnings`）
+- 安全：默认关闭 Docker API 自更新、镜像白名单校验、审计日志
+
+**当前版本**：v1.12.0，热更新验证已通过（v1.12.0 → v1.12.1）
+
+---
+
+#### 1. mystatus 插件状态确认
+**背景**：尝试使用 `mystatus` 工具查询 AI 账户配额使用情况。
+
+**实际情况**：
+
+| 项目 | 状态 |
 |------|------|
-| `fix_format.py` | 一次性格式修复脚本，已完成使命 |
-| `NUL` | Windows 空文件，已在 .gitignore |
-| `EhushaokangData-codeoutlookEmailserver.log` | 日志文件（文件名异常），已在 .gitignore |
-| `-p/` 空目录 | 空目录，无内容 |
-| `.ruff_cache/` | Linter 缓存目录 |
+| 插件安装 | `opencode-mystatus@1.2.4` 已安装于全局 `~/.config/opencode/node_modules/` |
+| 全局配置 | `~/.config/opencode/opencode.json` 已注册 `plugin` 和 `command` |
+| 项目配置 | 项目级 `opencode.json` 未单独配置 mystatus 插件（使用全局配置） |
+| 工具可用性 | 当前会话工具列表中**未注册** `mystatus` 工具，无法直接调用 |
 
-#### 需移动归类的文件
+**配置位置**：
 
-| 文件 | 目标位置 |
-|------|---------|
-| `注册与邮箱池接口文档.md` | → `docs/API/注册与邮箱池接口文档.md` |
-| `registration-mail-pool-api.en.md` | → `docs/API/registration-mail-pool-api.en.md` |
-| `VERIFICATION_PROMPT.md` | → `docs/DEV/VERIFICATION_PROMPT.md` |
-| `docs/2026-04-05-设置页面重构-AI执行提示词.md` | → `docs/DEV/` 或删除 |
+- 全局插件配置：`C:\Users\PLA30\.config\opencode\opencode.json`
+  ```json
+  "plugin": ["opencode-mystatus"],
+  "command": {
+    "mystatus": {
+      "description": "Query quota usage for all AI accounts",
+      "template": "Use the mystatus tool to query quota usage. Return the result as-is without modification."
+    }
+  }
+  ```
+- 插件源码位置：`C:\Users\PLA30\.config\opencode\node_modules\opencode-mystatus\`
 
-#### .gitignore 需补充
+**支持平台**：
 
-```
-.ruff_cache/
--p/
-```
+| Platform | Account Type |
+|----------|-------------|
+| OpenAI | Plus / Team / Pro |
+| Zhipu AI | Coding Plan |
+| Z.ai | Coding Plan |
+| GitHub Copilot | Individual / Business |
+| Google Cloud | Antigravity |
 
-**执行结果**（Commit: `04824bc`）：
-- ✅ 删除 `fix_format.py`
-- ✅ 移动 `注册与邮箱池接口文档.md` → `docs/API/`
-- ✅ 移动 `registration-mail-pool-api.en.md` → `docs/API/`
-- ✅ 移动 `VERIFICATION_PROMPT.md` → `docs/DEV/`
-- ✅ 移动 `设置页面重构-AI执行提示词.md` → `docs/DEV/`
-- ✅ `.gitignore` 补充 `.ruff_cache/` 和 `-p/`
-- 注：`NUL`、`-p/`、`.ruff_cache/`、`Ehushaokang...server.log` 已在 .gitignore 中，物理文件已被清理
-
----
-
-### 历史记录：A2 方案开发期间的修改清单（已合并至 main）
-
-> 以下修改已通过 `hotupdate-test` 分支合并到 main（2026-04-09），此处仅作历史参考。
-
-| 文件 | 修改类型 | 说明 |
-|------|---------|------|
-| `outlook_web/services/docker_update_helper.py` | **新增** | updater 容器入口模块 |
-| `outlook_web/services/docker_update.py` | Modified | helper 容器创建、步骤顺序调整、失败回滚 |
-| `outlook_web/controllers/system.py` | Modified | A2 触发逻辑、healthz 增强、部署信息增强 |
-| `static/js/main.js` | Modified | boot_id 检测、部署警告渲染、超时优化 |
-| `templates/index.html` | Modified | deploymentWarnings 容器 |
-| `tests/test_error_and_trace.py` | Modified | 适配 healthz 新字段 |
-| `tests/test_smoke_contract.py` | Modified | 适配 healthz 新字段 |
-| `docs/DEV/hot-update-ai-prompt.md` | Modified | 文档清理 + 补充 |
-| `docs/DEV/hot-update-baseline.md` | Modified | 文档补充 |
+**结论**：`mystatus` 作为 opencode 插件需要在 opencode 运行时环境中通过 `/mystatus` 命令或自然语言触发，当前通过外部 Agent 调用时无法直接使用该工具。
 
 ---
-
-#### 14. Issue #43（moemail 支持）— test_plugin 目录实现 + 会话记录同步
-
-**时间**：2026-04-21
-
-**上下文来源（已核对）**：
-- GitHub Issue：`https://github.com/ZeroPointSix/outlookEmailPlus/issues/43`（需求：集成 moemail）
-- 接入提示词：`临时邮箱Provider插件接入提示词.md`
-- 接入说明与插件化文档：`临时邮箱Provider插件接入说明.md`、`docs/TD/2026-04-21-临时邮箱插件化TD.md`、`docs/TDD/2026-04-21-临时邮箱插件化TDD.md`、`docs/FD/2026-04-21-临时邮箱插件化FD.md`、`docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
-
-**关键决策（经寸止确认）**：
-- moemail 接口口径：采用上游 `beilunyang/moemail` OpenAPI 风格（`X-API-Key`）
-- 插件落地目录：按测试诉求放入 `test_plugin` 子目录，不改主加载器递归策略
-- 文档更新范围：仅更新 `WORKSPACE.md`（本条记录），不改其它接入说明文档
-
-**本次实际改动文件**：
-1. `plugins/temp_mail_providers/test_plugin/moemail.py`
-   - 新增 `MoemailTempMailProvider`（`@register_provider`）
-   - 实现方法：`get_options/create_mailbox/delete_mailbox/list_messages/get_message_detail/delete_message/clear_messages`
-   - 配置读取：`plugin.moemail.*`
-   - `config_schema` 已提供可在插件管理 UI 渲染的字段（base_url/api_key/domains/default_domain/default_expiry_ms/request_timeout）
-   - 消息归一化字段：`id/message_id/from_address/subject/content/html_content/has_html/timestamp`
-   - detail 接口不可用时支持 fallback 到 `list_messages()` 过滤
-
-2. `tests/test_temp_mail_provider_moemail.py`
-   - 新增 5 个最小覆盖用例：
-     - Provider 注册/发现（通过 patch `temp_mail_provider_factory._get_plugin_dir` 指向 `test_plugin`）
-     - `get_options()` 结构稳定
-     - `create_mailbox()` 成功与失败分支
-     - `list_messages()` 归一化
-     - `get_message_detail()` fallback 行为
-
-**测试执行结果**：
-- 命令：`python -m unittest tests.test_temp_mail_provider_moemail -v`
-- 结果：`Ran 5 tests ... OK`
-
-**说明（与当前架构一致）**：
-- 当前 `load_plugins()` 默认扫描 `<DATABASE_PATH 上级目录>/plugins/temp_mail_providers/*.py`（非递归）。
-- 本次为满足“test_plugin 目录测试”诉求，采用测试内 monkeypatch 指向 `test_plugin` 目录完成注册与发现验证；未改动主干加载行为。
-
-#### 15. cloudflare_temp_email 测试插件（独立于内置 CF Provider）实现与验证
-
-**时间**：2026-04-21
-
-**需求来源**：
-- 用户指定基于 `https://github.com/dreamhunter2333/cloudflare_temp_email` 单独编写一份 CF 临时邮箱插件，
-- 明确“不考虑现有内置 CF Provider”，用于测试效果；
-- 同时要求仅更新 `WORKSPACE.md` 做会话文档同步。
-
-**关键决策（经会话确认）**：
-- 采用独立 provider 名称：`cloudflare_temp_mail_test_plugin`（避免覆盖内置 `cloudflare_temp_mail`）
-- 插件落地目录：`plugins/temp_mail_providers/test_plugin/`
-- 文档更新范围：仅 `WORKSPACE.md`
-
-**本次实际改动文件**：
-1. `plugins/temp_mail_providers/test_plugin/cloudflare_temp_mail_test_plugin.py`
-   - 新增 `CloudflareTempMailTestPluginProvider`（`@register_provider`）
-   - 完整实现接口：
-     - `get_options`
-     - `create_mailbox`
-     - `delete_mailbox`
-     - `list_messages`
-     - `get_message_detail`
-     - `delete_message`
-     - `clear_messages`
-   - 配置读取：`plugin.cloudflare_temp_mail_test_plugin.*`
-   - 兼容 `cloudflare_temp_email` 常见路径：
-     - `GET /open_api/settings`
-     - `POST /admin/new_address`
-     - `GET /api/mails`
-     - `GET /api/mail/{id}`（失败时 fallback）
-     - `DELETE /api/mails/{id}`
-     - `DELETE /api/clear_inbox`
-     - `DELETE /admin/delete_address/{id}`（优先） / `DELETE /api/delete_address`（回退）
-   - 邮件结构归一化：`id/message_id/from_address/subject/content/html_content/has_html/timestamp`
-
-2. `tests/test_temp_mail_provider_cf_test_plugin.py`
-   - 新增 5 个最小测试：
-     - 注册/发现（并验证不覆盖内置 CF Provider）
-     - `get_options()` 结构稳定
-     - `create_mailbox()` 成功与失败分支
-     - `list_messages()` 归一化
-     - `get_message_detail()` fallback（detail 不可用回退列表过滤）
-
-**测试执行结果**：
-- 命令：`python -m unittest tests.test_temp_mail_provider_cf_test_plugin -v`
-- 结果：`Ran 5 tests ... OK`
-
-**说明**：
-- 本次仅新增测试插件与其测试，不改动内置 CF Provider 与插件主干加载逻辑。
-
-#### 16. 会话待命状态同步（用户忙，保持寸止持续对话）
-
-**时间**：2026-04-21
-
-**触发原因**：
-- 用户明确要求“等待一下，用户目前正忙”，并要求后续继续通过寸止 MCP 对话，不主动结束。
-
-**本次操作**：
-- 已确认当前实现状态与文档状态一致：
-  - `test_plugin/moemail.py` 与 `test_plugin/cloudflare_temp_mail_test_plugin.py` 已落地
-  - 两个新增测试文件均已通过各自 `5/5`
-  - `WORKSPACE.md` 已有完整实现记录（条目 14、15）
-- 本条（16）仅做会话状态同步，不新增代码实现。
-
-**当前状态**：
-- 进入“待用户下一步指令”阶段，保持寸止 MCP 沟通链路持续。

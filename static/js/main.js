@@ -18,6 +18,9 @@
         let currentSkip = 0;
         let lastRefreshTime = null;
         let mailboxViewMode = localStorage.getItem('ol_mailbox_view_mode') || 'standard';
+        let latestInvalidTokenDetectedCount = 0;
+        let invalidTokenGovernanceCandidates = [];
+        let selectedInvalidTokenCandidateIds = new Set();
 
         // 缓存与信任模式
         let emailListCache = {};
@@ -3089,10 +3092,16 @@ ${details}
         // 显示刷新模态框
         async function showRefreshModal() {
             document.getElementById('refreshModal').classList.add('show');
+            resetInvalidTokenGovernanceState();
             // 加载统计数据
             await loadRefreshStats();
             // 自动加载失败列表（如果有失败记录）
             await autoLoadFailedListIfNeeded();
+            // 自动加载失效 token 治理候选（若存在）
+            await loadInvalidTokenGovernanceCandidates({
+                keepVisibleWhenEmpty: false,
+                silentWhenEmpty: true
+            });
         }
 
         // 自动加载失败列表（如果有失败记录）
@@ -3132,6 +3141,7 @@ ${details}
             if (logsContainer) {
                 logsContainer.style.display = 'none';
             }
+            resetInvalidTokenGovernanceState();
 
             // 重置按钮状态
             const refreshAllBtn = document.getElementById('refreshAllBtn');
@@ -3146,6 +3156,212 @@ ${details}
                 retryFailedBtn.textContent = translateAppTextLocal('🔁 重试失败');
             }
         }
+
+        // ==================== 失效 Token 治理面板 ====================
+
+        /** 重置治理面板状态（模态框打开/关闭时调用） */
+        function resetInvalidTokenGovernanceState() {
+            latestInvalidTokenDetectedCount = 0;
+            invalidTokenGovernanceCandidates = [];
+            const container = document.getElementById('invalidTokenGovernanceContainer');
+            if (container) container.style.display = 'none';
+            const summary = document.getElementById('invalidTokenSummary');
+            if (summary) summary.style.display = 'none';
+            const listWrap = document.getElementById('invalidTokenCandidateListWrap');
+            if (listWrap) listWrap.style.display = 'none';
+        }
+
+        /** 显示检测摘要横幅（刷新完成有 invalid token 时调用） */
+        function showInvalidTokenDetectionSummary(count, failedList) {
+            const summary = document.getElementById('invalidTokenSummary');
+            const summaryText = document.getElementById('invalidTokenSummaryText');
+            if (!summary || !summaryText) return;
+
+            summaryText.textContent = `检测到 ${count} 个疑似失效 Token 的账号，需要治理处理`;
+            summary.style.display = 'block';
+
+            // 同时显示治理面板容器
+            const container = document.getElementById('invalidTokenGovernanceContainer');
+            if (container) container.style.display = 'block';
+        }
+
+        /** 隐藏治理面板 */
+        function hideInvalidTokenGovernance() {
+            const container = document.getElementById('invalidTokenGovernanceContainer');
+            if (container) container.style.display = 'none';
+            const summary = document.getElementById('invalidTokenSummary');
+            if (summary) summary.style.display = 'none';
+            const listWrap = document.getElementById('invalidTokenCandidateListWrap');
+            if (listWrap) listWrap.style.display = 'none';
+        }
+
+        /** 从后端加载治理候选列表并渲染 */
+        async function loadInvalidTokenGovernanceCandidates(options = {}) {
+            const { keepVisibleWhenEmpty = false, silentWhenEmpty = false } = options;
+
+            try {
+                const response = await fetch('/api/accounts/invalid-token-candidates?limit=200');
+                const data = await response.json();
+
+                if (!data.success) {
+                    if (!silentWhenEmpty) {
+                        showToast('加载失效 Token 候选失败', 'error');
+                    }
+                    return;
+                }
+
+                invalidTokenGovernanceCandidates = data.candidates || [];
+                const count = invalidTokenGovernanceCandidates.length;
+
+                // 更新数量标签
+                const countEl = document.getElementById('invalidTokenCandidateCount');
+                if (countEl) {
+                    countEl.textContent = `${count} 个`;
+                }
+
+                if (count === 0) {
+                    if (!keepVisibleWhenEmpty) {
+                        hideInvalidTokenGovernance();
+                    }
+                    return;
+                }
+
+                // 渲染候选列表
+                const listEl = document.getElementById('invalidTokenCandidateList');
+                const listWrap = document.getElementById('invalidTokenCandidateListWrap');
+
+                if (!listEl || !listWrap) return;
+
+                let html = '';
+                invalidTokenGovernanceCandidates.forEach(item => {
+                    const statusBadge = item.account_status === 'inactive'
+                        ? '<span style="background-color:#fbbf24;color:#78350f;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">已停用</span>'
+                        : '<span style="background-color:#34d399;color:#064e3b;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">活跃</span>';
+
+                    html += `
+                        <div style="padding:10px 12px;border-bottom:1px solid #e5e5e5;display:flex;justify-content:space-between;align-items:start;gap:10px;">
+                            <div style="flex:1;min-width:0;">
+                                <div style="font-weight:600;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeHtml(item.account_email)}">${escapeHtml(item.account_email)}</div>
+                                <div style="font-size:12px;color:#dc3545;margin-bottom:2px;word-break:break-all;">${escapeHtml(item.error_message || '未知错误')}</div>
+                                <div style="font-size:11px;color:#999;">原因: ${escapeHtml(item.reason_label || item.reason_code || '-')} ｜ 刷新时间: ${formatDateTime(item.created_at)}</div>
+                            </div>
+                            <div style="flex-shrink:0;display:flex;align-items:center;gap:4px;">
+                                ${statusBadge}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                listEl.innerHTML = html;
+                listWrap.style.display = 'block';
+
+                // 确保容器可见
+                const container = document.getElementById('invalidTokenGovernanceContainer');
+                if (container) container.style.display = 'block';
+
+            } catch (error) {
+                console.error('加载失效 Token 候选失败:', error);
+                if (!silentWhenEmpty) {
+                    showToast('加载失效 Token 候选失败', 'error');
+                }
+            }
+        }
+
+        /** 批量将失效 Token 候选账号置为停用 */
+        async function batchSetInvalidTokenInactive() {
+            if (invalidTokenGovernanceCandidates.length === 0) {
+                showToast('没有需要处理的候选账号', 'warning');
+                return;
+            }
+
+            // 只取状态不是 inactive 的账号
+            const targetCandidates = invalidTokenGovernanceCandidates.filter(c => c.account_status !== 'inactive');
+            if (targetCandidates.length === 0) {
+                showToast('所有候选账号已经是停用状态', 'info');
+                return;
+            }
+
+            const accountIds = targetCandidates.map(c => c.account_id);
+            const confirmed = confirm(`确定要将 ${accountIds.length} 个失效 Token 账号置为停用吗？停用后账号将不再参与刷新和使用。`);
+            if (!confirmed) return;
+
+            await initCSRFToken();
+
+            try {
+                const response = await fetch('/api/accounts/batch-update-status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ account_ids: accountIds, status: 'inactive' })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showToast(pickApiMessage(data, data.message, '批量停用成功'), 'success');
+                    // 刷新候选列表与统计
+                    await loadInvalidTokenGovernanceCandidates({ keepVisibleWhenEmpty: true, silentWhenEmpty: true });
+                    await loadRefreshStats();
+                    if (currentGroupId) {
+                        delete accountsCache[currentGroupId];
+                        loadAccountsByGroup(currentGroupId, true);
+                    }
+                } else {
+                    handleApiError(data, '批量停用失败');
+                }
+            } catch (error) {
+                console.error('批量停用失败:', error);
+                showToast('批量停用请求失败', 'error');
+            }
+        }
+
+        /** 批量删除失效 Token 候选账号（二次确认） */
+        async function batchDeleteInvalidTokenCandidates() {
+            if (invalidTokenGovernanceCandidates.length === 0) {
+                showToast('没有需要处理的候选账号', 'warning');
+                return;
+            }
+
+            const accountIds = invalidTokenGovernanceCandidates.map(c => c.account_id);
+            const emailPreview = invalidTokenGovernanceCandidates.slice(0, 3).map(c => c.account_email).join(', ')
+                + (accountIds.length > 3 ? ` 等 ${accountIds.length} 个` : '');
+
+            const confirmed = confirm(
+                `⚠️ 危险操作：确定要删除 ${accountIds.length} 个失效 Token 账号吗？\n\n涉及账号：${emailPreview}\n\n此操作不可撤销，请确认！`
+            );
+            if (!confirmed) return;
+
+            // 二次确认
+            const doubleConfirmed = confirm('再次确认：删除账号将同时清除所有相关数据，是否继续？');
+            if (!doubleConfirmed) return;
+
+            await initCSRFToken();
+
+            try {
+                const response = await fetch('/api/accounts/batch-delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ account_ids: accountIds })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showToast(pickApiMessage(data, data.message, '批量删除成功'), 'success');
+                    hideInvalidTokenGovernance();
+                    await loadRefreshStats();
+                    if (currentGroupId) {
+                        delete accountsCache[currentGroupId];
+                        loadAccountsByGroup(currentGroupId, true);
+                    }
+                    loadGroups();
+                } else {
+                    handleApiError(data, '批量删除失败');
+                }
+            } catch (error) {
+                console.error('批量删除失败:', error);
+                showToast('批量删除请求失败', 'error');
+            }
+        }
+
+        // ==================== 刷新统计与全量刷新 ====================
 
         // 加载刷新统计
         async function loadRefreshStats() {
@@ -3233,6 +3449,9 @@ ${details}
                             btn.disabled = false;
                             btn.textContent = translateAppTextLocal('🔄 全量刷新');
 
+                            const invalidTokenFailedCount = Number(data.invalid_token_failed_count || 0);
+                            latestInvalidTokenDetectedCount = invalidTokenFailedCount;
+
                             // 直接更新统计数据，使用本地时间
                             const now = new Date();
                             lastRefreshTime = now; // 保存刷新时间
@@ -3247,6 +3466,14 @@ ${details}
                                     : `刷新完成！成功: ${data.success_count}, 失败: ${data.failed_count}`
                             }`,
                                 data.failed_count > 0 ? 'warning' : 'success');
+
+                            if (invalidTokenFailedCount > 0) {
+                                showInvalidTokenDetectionSummary(invalidTokenFailedCount, data.invalid_token_failed_list || []);
+                                loadInvalidTokenGovernanceCandidates({
+                                    keepVisibleWhenEmpty: true,
+                                    silentWhenEmpty: false
+                                });
+                            }
 
                             // 如果有失败的，显示失败列表
                             if (data.failed_count > 0) {
@@ -3369,6 +3596,17 @@ ${details}
 
                         // 刷新统计
                         loadRefreshStats();
+
+                        // 失效 Token 治理
+                        const retryInvalidTokenCount = Number(data.invalid_token_failed_count || 0);
+                        latestInvalidTokenDetectedCount = retryInvalidTokenCount;
+                        if (retryInvalidTokenCount > 0) {
+                            showInvalidTokenDetectionSummary(retryInvalidTokenCount, data.invalid_token_failed_list || []);
+                            loadInvalidTokenGovernanceCandidates({
+                                keepVisibleWhenEmpty: true,
+                                silentWhenEmpty: false
+                            });
+                        }
 
                         // 如果还有失败的，显示失败列表
                         if (data.failed_count > 0) {

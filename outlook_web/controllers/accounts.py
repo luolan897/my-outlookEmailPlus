@@ -66,6 +66,13 @@ def _parse_bool_flag(value: Any, default: bool = False) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _normalize_account_status(status: Any) -> Optional[str]:
+    normalized_status = str(status or "").strip().lower()
+    if normalized_status not in {"active", "inactive", "disabled"}:
+        return None
+    return normalized_status
+
+
 def _build_account_import_failure_response(
     message: str,
     *,
@@ -1436,8 +1443,8 @@ def api_update_account_remark(account_id: int) -> Any:
 
 def _api_update_account_status(account_id: int, status: str) -> Any:
     """只更新账号状态"""
-    normalized_status = str(status or "").strip().lower()
-    if normalized_status not in {"active", "inactive", "disabled"}:
+    normalized_status = _normalize_account_status(status)
+    if not normalized_status:
         return build_error_response(
             "INVALID_PARAM",
             "状态值无效",
@@ -1470,6 +1477,98 @@ def _api_update_account_status(account_id: int, status: str) -> Any:
             "更新失败",
             message_en="Failed to update account status",
             status=500,
+        )
+
+
+@login_required
+def api_batch_update_status() -> Any:
+    """批量更新账号状态（用于失效账号治理主动作）。"""
+    data = request.get_json(silent=True) or {}
+    account_ids = data.get("account_ids", [])
+    normalized_status = _normalize_account_status(data.get("status"))
+
+    if not isinstance(account_ids, list) or not account_ids:
+        return build_error_response(
+            "ACCOUNT_IDS_REQUIRED",
+            "请选择要修改状态的账号",
+            message_en="Please select accounts to update status",
+        )
+
+    if not normalized_status:
+        return build_error_response(
+            "INVALID_PARAM",
+            "状态值无效",
+            message_en="Invalid account status",
+            status=400,
+        )
+
+    try:
+        parsed_ids = [int(aid) for aid in account_ids]
+    except (TypeError, ValueError):
+        return build_error_response(
+            "INVALID_PARAM",
+            "account_ids 必须为整数列表",
+            message_en="account_ids must be a list of integers",
+            status=400,
+        )
+
+    deduped_ids: List[int] = []
+    seen_ids = set()
+    for aid in parsed_ids:
+        if aid in seen_ids:
+            continue
+        seen_ids.add(aid)
+        deduped_ids.append(aid)
+
+    db = get_db()
+    placeholders = ",".join("?" * len(deduped_ids))
+    try:
+        existing_rows = db.execute(
+            f"SELECT id FROM accounts WHERE id IN ({placeholders})",
+            deduped_ids,
+        ).fetchall()
+        existing_ids = {int(row["id"]) for row in existing_rows}
+
+        missing_ids = [aid for aid in deduped_ids if aid not in existing_ids]
+        if existing_ids:
+            existing_id_list = sorted(existing_ids)
+            update_placeholders = ",".join("?" * len(existing_id_list))
+            db.execute(
+                f"""
+                UPDATE accounts
+                SET status = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id IN ({update_placeholders})
+                """,
+                [normalized_status] + existing_id_list,
+            )
+            db.commit()
+
+        updated_count = len(existing_ids)
+        failed_count = len(missing_ids)
+        log_audit(
+            "update",
+            "account_status",
+            None,
+            f"批量更新账号状态：status={normalized_status}，成功={updated_count}，失败={failed_count}",
+        )
+        return jsonify(
+            {
+                "success": True,
+                "message": f"成功更新 {updated_count} 个账号状态"
+                + (f"，失败 {failed_count} 个" if failed_count > 0 else ""),
+                "status": normalized_status,
+                "updated_count": updated_count,
+                "failed_count": failed_count,
+                "missing_ids": missing_ids,
+            }
+        )
+    except Exception as e:
+        return build_error_response(
+            "ACCOUNT_STATUS_BATCH_UPDATE_FAILED",
+            "批量更新账号状态失败",
+            message_en="Failed to batch update account status",
+            status=500,
+            details=str(e),
         )
 
 
@@ -2364,6 +2463,83 @@ def api_get_failed_refresh_logs() -> Any:
         )
 
     return jsonify({"success": True, "logs": logs})
+
+
+@login_required
+def api_get_invalid_token_candidates() -> Any:
+    """获取最近一次刷新失败且命中 invalid token 判定的候选账号列表。"""
+    db = get_db()
+    limit = request.args.get("limit", default=200, type=int)
+    offset = request.args.get("offset", default=0, type=int)
+
+    if limit is None:
+        limit = 200
+    if offset is None:
+        offset = 0
+    limit = max(1, min(limit, 1000))
+    offset = max(0, offset)
+
+    rows = db.execute(
+        """
+        SELECT
+            l.id as refresh_log_id,
+            l.account_id,
+            COALESCE(a.email, l.account_email) as account_email,
+            a.status as account_status,
+            l.refresh_type,
+            l.error_message,
+            l.created_at
+        FROM account_refresh_logs l
+        INNER JOIN (
+            SELECT account_id, MAX(id) AS max_id
+            FROM account_refresh_logs
+            GROUP BY account_id
+        ) latest
+            ON l.account_id = latest.account_id
+            AND l.id = latest.max_id
+        LEFT JOIN accounts a
+            ON a.id = l.account_id
+        WHERE l.status = 'failed'
+          AND (
+              LOWER(COALESCE(l.error_message, '')) LIKE '%invalid_grant%'
+              OR LOWER(COALESCE(l.error_message, '')) LIKE '%aadsts70000%'
+          )
+        ORDER BY l.id DESC
+        LIMIT ? OFFSET ?
+        """,
+        (limit, offset),
+    ).fetchall()
+
+    candidates = []
+    for row in rows:
+        classified = refresh_service._classify_refresh_failure(row["error_message"])
+        if not classified.get("is_invalid_token"):
+            continue
+
+        candidates.append(
+            {
+                "refresh_log_id": row["refresh_log_id"],
+                "account_id": row["account_id"],
+                "account_email": row["account_email"],
+                "account_status": row["account_status"],
+                "refresh_type": row["refresh_type"],
+                "error_message": row["error_message"],
+                "created_at": row["created_at"],
+                "reason_code": classified.get("reason_code"),
+                "reason_label": classified.get("reason_label"),
+                "is_invalid_token": True,
+            }
+        )
+
+    return jsonify(
+        {
+            "success": True,
+            "candidates": candidates,
+            "total": len(candidates),
+            "limit": limit,
+            "offset": offset,
+        }
+    )
 
 
 @login_required
