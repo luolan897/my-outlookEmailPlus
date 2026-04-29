@@ -13,81 +13,91 @@ from outlook_web.security.crypto import (
     is_password_hashed,
 )
 
-# 核心常量补齐
+# 核心常量，防止导入错误
 DB_SCHEMA_VERSION = 23
 DB_SCHEMA_VERSION_KEY = "db_schema_version"
 DB_SCHEMA_LAST_UPGRADE_TRACE_ID_KEY = "db_schema_last_upgrade_trace_id"
 DB_SCHEMA_LAST_UPGRADE_ERROR_KEY = "db_schema_last_upgrade_error"
 
-# --- 增强版 Turso 适配器 ---
+# --- 完美模拟 sqlite3 行为的适配层 ---
 
-class TursoRow(dict):
-    """完美模拟 sqlite3.Row"""
-    def __init__(self, columns, values):
-        super().__init__(zip(columns, values))
-        self._data = values
+class TursoRow:
+    """完美模拟 sqlite3.Row，支持 row['email'] 和 row[0]"""
+    def __init__(self, cursor, values):
+        self._columns = cursor._columns
+        self._values = values
+        self._data = dict(zip(self._columns, values))
+
     def __getitem__(self, key):
-        if isinstance(key, int): return self._data[key]
-        return super().__getitem__(key)
+        if isinstance(key, int):
+            return self._values[key]
+        return self._data[key]
+
     def keys(self):
-        return list(self.keys())
+        return self._columns
+
+    def __len__(self):
+        return len(self._values)
 
 class TursoCursor:
     def __init__(self, client):
         self.client = client
         self.last_result = None
         self.lastrowid = None
+        self._columns = []
 
     def execute(self, sql, params=None):
+        # 彻底屏蔽物理指令
         s = sql.strip().upper()
-        # 彻底屏蔽不支持的指令
         if any(s.startswith(p) for p in ["PRAGMA", "BEGIN", "SAVEPOINT", "RELEASE", "ROLLBACK"]):
             return self
         
+        # 修正参数
         p = list(params) if params else []
         try:
             res = self.client.execute(sql, p)
             self.last_result = res
             self.lastrowid = res.last_insert_rowid
+            self._columns = res.columns
         except Exception as e:
-            # 记录详细错误但不崩溃
-            if "settings" not in sql: # 忽略初始化时的频繁报错
-                print(f"SQL执行失败: {sql[:100]}... | 错误: {e}")
+            # 记录关键错误
+            if "settings" not in sql:
+                print(f"SQL Error: {sql[:80]} | {e}")
             raise e
         return self
 
     def fetchone(self):
         if not self.last_result or len(self.last_result.rows) == 0:
             return None
-        return TursoRow(self.last_result.columns, self.last_result.rows[0])
+        return TursoRow(self, self.last_result.rows[0])
 
     def fetchall(self):
-        if not self.last_result: return []
-        return [TursoRow(self.last_result.columns, r) for r in self.last_result.rows]
+        if not self.last_result:
+            return []
+        return [TursoRow(self, r) for r in self.last_result.rows]
 
-    def close(self): pass
+    def close(self):
+        pass
 
 class TursoConnection:
     def __init__(self):
-        url = os.environ.get("TURSO_URL", "").strip()
-        # 尝试将 libsql:// 换成 https:// 可能会更稳定，减少 505 错误
-        if url.startswith("libsql://"):
-            self.url = url.replace("libsql://", "https://")
-        else:
-            self.url = url
-            
+        # 1. 强制转换协议为 https:// 解决 505 错误
+        raw_url = os.environ.get("TURSO_URL", "").strip()
+        self.url = raw_url.replace("libsql://", "https://").replace("wss://", "https://")
+        
         self.token = os.environ.get("TURSO_AUTH_TOKEN", "").strip()
         if not self.url or not self.token:
-            raise Exception("环境变量 TURSO_URL 或 TURSO_AUTH_TOKEN 为空")
+            raise Exception("Environment variables TURSO_URL or TURSO_AUTH_TOKEN are missing.")
             
         self.client = libsql_client.create_client_sync(self.url, auth_token=self.token)
 
     def cursor(self):
         return TursoCursor(self.client)
 
-    # 补齐项目需要的直接执行方法
+    # 补齐关键方法，修复 'TursoConnection' object has no attribute 'execute'
     def execute(self, sql, params=None):
-        return self.cursor().execute(sql, params)
+        cur = self.cursor()
+        return cur.execute(sql, params)
 
     def commit(self): pass
     def rollback(self): pass
@@ -95,7 +105,7 @@ class TursoConnection:
         try: self.client.close()
         except: pass
 
-# --- Flask 接口逻辑 ---
+# --- Flask & 初始化逻辑 ---
 
 def create_sqlite_connection(_path=None):
     return TursoConnection()
@@ -115,25 +125,28 @@ def register_db(app):
     app.teardown_appcontext(close_db)
 
 def init_db(database_path: Optional[str] = None):
-    """云端静默初始化"""
+    """初始化逻辑"""
     try:
-        conn = create_sqlite_connection()
-        # 统一使用 execute 方法
-        conn.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
+        db = create_sqlite_connection()
+        # 创建设置表
+        db.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
         
-        row = conn.execute("SELECT value FROM settings WHERE key = ?", (DB_SCHEMA_VERSION_KEY,)).fetchone()
+        # 检查版本
+        res = db.execute("SELECT value FROM settings WHERE key = ?", (DB_SCHEMA_VERSION_KEY,))
+        row = res.fetchone()
+        
         if not row:
-            print("首次运行，初始化云端表结构...")
-            conn.execute("CREATE TABLE IF NOT EXISTS groups (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL, description TEXT, color TEXT DEFAULT '#1a1a1a')")
-            conn.execute("INSERT OR IGNORE INTO groups (name, description, color) VALUES ('默认分组', '未分组', '#666666')")
+            print("Detected new Turso DB. Running initial schema setup...")
+            db.execute("CREATE TABLE IF NOT EXISTS groups (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL, description TEXT, color TEXT DEFAULT '#1a1a1a')")
+            db.execute("INSERT OR IGNORE INTO groups (name, description, color) VALUES ('默认分组', '未分组', '#666666')")
             
             pw = hash_password(config.get_login_password_default())
-            conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('login_password', ?)", (pw,))
-            conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (DB_SCHEMA_VERSION_KEY, str(DB_SCHEMA_VERSION)))
-            print("云端初始化成功")
-        conn.close()
+            db.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('login_password', ?)", (pw,))
+            db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (DB_SCHEMA_VERSION_KEY, str(DB_SCHEMA_VERSION)))
+            print("Initial setup done.")
+        db.close()
     except Exception as e:
-        print(f"⚠ 数据库初始化遇到问题 (若表已存在可忽略): {e}")
+        print(f"Init notice: {e}")
 
 def migrate_sensitive_data(conn):
     pass
