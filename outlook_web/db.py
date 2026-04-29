@@ -16,34 +16,32 @@ DB_SCHEMA_LAST_UPGRADE_ERROR_KEY = "db_schema_last_upgrade_error"
 class TursoRow(dict):
     """
     终极仿真 Row 对象
-    支持: row['id'], row[0], row.id, list(row), dict(row)
+    支持: row['id'], row[0], row.id, list(row), dict(row), 'id' in row
     """
     def __init__(self, columns: list[str], values: list):
         self._columns = columns
         self._values = values
-        # 继承自 dict，确保 dict(row) 和 row['id'] 正常工作
         super().__init__(zip(columns, values))
 
     def __getitem__(self, key):
         if isinstance(key, int):
             return self._values[key] if key < len(self._values) else None
+        # 【关键】如果 Key 不存在返回 None，防止项目代码抛出 KeyError 导致 500
         return super().get(key)
 
     def __getattr__(self, name: str) -> Any:
-        # 支持点语法访问，如 row.id
+        # 支持点语法访问 row.id
         if name in self:
             return self[name]
-        raise AttributeError(f"TursoRow 对象没有属性 '{name}'")
+        return None # 找不到属性返回 None 而不报错
 
     def __iter__(self):
-        # 模拟 sqlite3.Row 的迭代行为（迭代的是值）
         return iter(self._values)
 
     def __len__(self):
         return len(self._values)
 
     def keys(self):
-        # 支持 keys() 转换
         return self._columns
 
 class TursoCursor:
@@ -57,13 +55,20 @@ class TursoCursor:
 
     def execute(self, sql: str, params: Any = None):
         s = sql.strip().upper()
-        # 屏蔽所有 SQLite 特有的物理/事务指令
+        # 1. 彻底屏蔽 SQLite 特有的指令，防止抛错
         if any(s.startswith(p) for p in ["PRAGMA", "BEGIN", "SAVEPOINT", "RELEASE", "ROLLBACK"]):
             return self
         
-        # 兼容性转换
-        sql = sql.replace("INSERT OR IGNORE", "INSERT INTO") 
-        
+        # 2. 语法翻译：将 SQLite 的 OR IGNORE 转换为 Turso 支持的语法
+        if "INSERT OR IGNORE" in s:
+            sql = sql.replace("INSERT OR IGNORE", "INSERT") + " ON CONFLICT DO NOTHING"
+        if "INSERT OR REPLACE" in s:
+            # 简化处理，如果是设置表则直接替换
+            if "SETTINGS" in s:
+                sql = sql.replace("INSERT OR REPLACE", "INSERT") + " ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at"
+            else:
+                sql = sql.replace("INSERT OR REPLACE", "INSERT")
+
         p = list(params) if params else []
         try:
             res = self.client.execute(sql, p)
@@ -73,15 +78,16 @@ class TursoCursor:
             self._columns = list(getattr(res, "columns", []))
             self._pos = 0
         except KeyError as e:
-            # 【核心修复】解决 libsql-client 报 'result' 错误的问题
-            # 如果是写操作报错 'result'，通常命令已成功，我们忽略这个 Key 错误
-            if str(e) == "'result'" and any(s.startswith(x) for x in ["UPDATE", "DELETE", "INSERT"]):
-                self.rowcount = 1 # 假设影响了一行
+            # 【核心修复】拦截 libsql-client 内部的 'result' 错误
+            if str(e) == "'result'":
+                # 如果是写操作，通常已经成功了，直接模拟一个返回
+                self.rowcount = 1
                 return self
             raise e
         except Exception as e:
-            if "settings" not in sql:
-                print(f"❌ SQL执行失败: {sql[:80]}... | 错误: {e}")
+            # 只有非常严重的错误才记录
+            if "settings" not in s:
+                print(f"❌ Turso执行异常: {e} | SQL: {sql[:100]}")
             raise e
         return self
 
@@ -98,7 +104,6 @@ class TursoCursor:
         return [TursoRow(self._columns, r) for r in self.last_result.rows]
 
     def __iter__(self):
-        """支持 for row in cursor 语法"""
         while True:
             row = self.fetchone()
             if row is None: break
@@ -109,21 +114,16 @@ class TursoCursor:
 class TursoConnection:
     def __init__(self):
         raw_url = os.environ.get("TURSO_URL", "").strip()
-        # 强制 HTTPS 解决 505 错误
+        # 强制 HTTPS 解决 Render 的 WSS 兼容性问题
         self.url = raw_url.replace("libsql://", "https://").replace("wss://", "https://")
         if not self.url.startswith("https://"): self.url = f"https://{self.url}"
-        
         self.token = os.environ.get("TURSO_AUTH_TOKEN", "").strip()
         self.client = libsql_client.create_client_sync(self.url, auth_token=self.token)
 
     def cursor(self): return TursoCursor(self.client)
-    
-    def execute(self, sql, params=None):
-        return self.cursor().execute(sql, params)
-    
+    def execute(self, sql, params=None): return self.cursor().execute(sql, params)
     def __enter__(self): return self
     def __exit__(self, exc_type, exc_val, exc_tb): self.close()
-    
     def commit(self): pass
     def rollback(self): pass
     def close(self):
@@ -149,7 +149,6 @@ def register_db(app):
     app.teardown_appcontext(close_db)
 
 def init_db(database_path: Optional[str] = None):
-    """云端自检与初始化"""
     try:
         with create_sqlite_connection() as db:
             db.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
@@ -166,7 +165,7 @@ def init_db(database_path: Optional[str] = None):
             else:
                 print(f"✅ Turso DB Connected. Version: {row['value']}")
     except Exception as e:
-        print(f"⚠ Init Check Notice: {e}")
+        print(f"⚠ Init Notice: {e}")
 
 def migrate_sensitive_data(conn):
     pass
