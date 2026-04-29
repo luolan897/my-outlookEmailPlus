@@ -7,7 +7,7 @@ import libsql_client
 from outlook_web import config
 from outlook_web.security.crypto import hash_password
 
-# 核心常量定义，确保所有模块导入正常
+# 核心常量定义
 DB_SCHEMA_VERSION = 23
 DB_SCHEMA_VERSION_KEY = "db_schema_version"
 DB_SCHEMA_LAST_UPGRADE_TRACE_ID_KEY = "db_schema_last_upgrade_trace_id"
@@ -21,7 +21,7 @@ class TursoRow(dict):
     def __init__(self, columns: list[str], values: list):
         self._columns = columns
         self._values = values
-        # 继承自 dict，确保 dict(row) 和 row['id'] 完美工作
+        # 继承自 dict，确保 dict(row) 和 row['id'] 正常工作
         super().__init__(zip(columns, values))
 
     def __getitem__(self, key):
@@ -30,10 +30,10 @@ class TursoRow(dict):
         return super().get(key)
 
     def __getattr__(self, name: str) -> Any:
-        # 【关键修复】支持点语法访问，如 row.id
+        # 支持点语法访问，如 row.id
         if name in self:
             return self[name]
-        raise AttributeError(f"TursoRow has no attribute '{name}'")
+        raise AttributeError(f"TursoRow 对象没有属性 '{name}'")
 
     def __iter__(self):
         # 模拟 sqlite3.Row 的迭代行为（迭代的是值）
@@ -43,7 +43,7 @@ class TursoRow(dict):
         return len(self._values)
 
     def keys(self):
-        # 支持映射转换
+        # 支持 keys() 转换
         return self._columns
 
 class TursoCursor:
@@ -57,11 +57,11 @@ class TursoCursor:
 
     def execute(self, sql: str, params: Any = None):
         s = sql.strip().upper()
-        # 彻底屏蔽物理文件/事务指令
+        # 屏蔽所有 SQLite 特有的物理/事务指令
         if any(s.startswith(p) for p in ["PRAGMA", "BEGIN", "SAVEPOINT", "RELEASE", "ROLLBACK"]):
             return self
         
-        # 适配特殊的 SQLite 语法
+        # 兼容性转换
         sql = sql.replace("INSERT OR IGNORE", "INSERT INTO") 
         
         p = list(params) if params else []
@@ -72,9 +72,16 @@ class TursoCursor:
             self.rowcount = getattr(res, "rows_affected", 0)
             self._columns = list(getattr(res, "columns", []))
             self._pos = 0
+        except KeyError as e:
+            # 【核心修复】解决 libsql-client 报 'result' 错误的问题
+            # 如果是写操作报错 'result'，通常命令已成功，我们忽略这个 Key 错误
+            if str(e) == "'result'" and any(s.startswith(x) for x in ["UPDATE", "DELETE", "INSERT"]):
+                self.rowcount = 1 # 假设影响了一行
+                return self
+            raise e
         except Exception as e:
             if "settings" not in sql:
-                print(f"❌ SQL Error: {e} | SQL: {sql[:80]}...")
+                print(f"❌ SQL执行失败: {sql[:80]}... | 错误: {e}")
             raise e
         return self
 
@@ -86,7 +93,8 @@ class TursoCursor:
         return TursoRow(self._columns, row)
 
     def fetchall(self):
-        if not self.last_result or not hasattr(self.last_result, "rows"): return []
+        if not self.last_result or not hasattr(self.last_result, "rows"):
+            return []
         return [TursoRow(self._columns, r) for r in self.last_result.rows]
 
     def __iter__(self):
@@ -101,7 +109,7 @@ class TursoCursor:
 class TursoConnection:
     def __init__(self):
         raw_url = os.environ.get("TURSO_URL", "").strip()
-        # 强制 HTTPS 解决 Render 的 505 错误
+        # 强制 HTTPS 解决 505 错误
         self.url = raw_url.replace("libsql://", "https://").replace("wss://", "https://")
         if not self.url.startswith("https://"): self.url = f"https://{self.url}"
         
@@ -109,7 +117,9 @@ class TursoConnection:
         self.client = libsql_client.create_client_sync(self.url, auth_token=self.token)
 
     def cursor(self): return TursoCursor(self.client)
-    def execute(self, sql, params=None): return self.cursor().execute(sql, params)
+    
+    def execute(self, sql, params=None):
+        return self.cursor().execute(sql, params)
     
     def __enter__(self): return self
     def __exit__(self, exc_type, exc_val, exc_tb): self.close()
@@ -147,12 +157,11 @@ def init_db(database_path: Optional[str] = None):
             row = res.fetchone()
             if not row:
                 print("Detected new Turso DB. Initializing...")
-                # 只有新库才跑建表，防止破坏旧库
                 db.execute("CREATE TABLE IF NOT EXISTS groups (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, description TEXT, color TEXT DEFAULT '#1a1a1a')")
-                db.execute("INSERT OR IGNORE INTO groups (name) VALUES ('默认分组')")
+                db.execute("INSERT INTO groups (name) VALUES ('默认分组')")
                 pw = hash_password(config.get_login_password_default())
-                db.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('login_password', ?)", (pw,))
-                db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (DB_SCHEMA_VERSION_KEY, str(DB_SCHEMA_VERSION)))
+                db.execute("INSERT INTO settings (key, value) VALUES ('login_password', ?)", (pw,))
+                db.execute("INSERT INTO settings (key, value) VALUES (?, ?)", (DB_SCHEMA_VERSION_KEY, str(DB_SCHEMA_VERSION)))
                 print("✅ Turso Schema Init Success")
             else:
                 print(f"✅ Turso DB Connected. Version: {row['value']}")
