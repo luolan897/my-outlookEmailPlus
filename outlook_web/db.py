@@ -16,53 +16,176 @@ from outlook_web.security.crypto import (
     is_password_hashed,
 )
 
+# 尝试导入 libsql (用于 Turso 云数据库)
+try:
+    import libsql
+except ImportError:
+    libsql = None
+
+
+# =====================================================================
+# 手动实现兼容 sqlite3.Row 行为的 Turso/libsql 包装器（解决 row_factory 未实现的问题）
+# =====================================================================
+
+class LibsqlRow:
+    """完美模拟 sqlite3.Row，支持通过列名 row["value"] 或 索引 row[0] 来读取数据"""
+    def __init__(self, col_names: list[str], values: tuple):
+        self._col_names = col_names
+        self._values = values
+        self._dict = {name: val for name, val in zip(col_names, values)}
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return self._values[key]
+        elif isinstance(key, str):
+            return self._dict[key]
+        else:
+            raise TypeError("Row indices must be integers or strings")
+
+    def __iter__(self):
+        return iter(self._values)
+
+    def keys(self) -> list[str]:
+        return self._col_names
+
+    def __len__(self) -> int:
+        return len(self._values)
+
+    def __repr__(self) -> str:
+        return f"<Row {self._dict}>"
+
+
+class LibsqlCursorWrapper:
+    """包装 Libsql 的游标，自动将查出来的 tuple 转换为 LibsqlRow"""
+    def __init__(self, cursor):
+        self._cursor = cursor
+
+    def execute(self, sql: str, parameters=()):
+        self._cursor.execute(sql, parameters)
+        return self
+
+    def executemany(self, sql: str, parameters):
+        self._cursor.executemany(sql, parameters)
+        return self
+
+    def _wrap_row(self, row):
+        if row is None:
+            return None
+        # 如果有列名描述，才进行包装
+        if self._cursor.description:
+            col_names = [desc[0] for desc in self._cursor.description]
+            return LibsqlRow(col_names, row)
+        return row
+
+    def fetchone(self):
+        row = self._cursor.fetchone()
+        return self._wrap_row(row)
+
+    def fetchall(self):
+        rows = self._cursor.fetchall()
+        if not rows:
+            return []
+        if self._cursor.description:
+            col_names = [desc[0] for desc in self._cursor.description]
+            return [LibsqlRow(col_names, r) for r in rows]
+        return rows
+
+    def fetchmany(self, size=None):
+        if size is None:
+            rows = self._cursor.fetchmany()
+        else:
+            rows = self._cursor.fetchmany(size)
+        if not rows:
+            return []
+        if self._cursor.description:
+            col_names = [desc[0] for desc in self._cursor.description]
+            return [LibsqlRow(col_names, r) for r in rows]
+        return rows
+
+    @property
+    def lastrowid(self):
+        return self._cursor.lastrowid
+
+    @property
+    def rowcount(self):
+        return self._cursor.rowcount
+
+    def close(self):
+        self._cursor.close()
+
+    def __getattr__(self, name):
+        return getattr(self._cursor, name)
+
+
+class LibsqlConnectionWrapper:
+    """包装 Libsql 的连接，支持原生 .execute() 等便利方法"""
+    def __init__(self, conn):
+        self._conn = conn
+
+    def cursor(self):
+        return LibsqlCursorWrapper(self._conn.cursor())
+
+    def execute(self, sql: str, parameters=()):
+        cursor = self.cursor()
+        cursor.execute(sql, parameters)
+        return cursor
+
+    def commit(self):
+        self._conn.commit()
+
+    def rollback(self):
+        self._conn.rollback()
+
+    def close(self):
+        self._conn.close()
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+# =====================================================================
+
+
 # 数据库 Schema 版本（用于升级可验证/可诊断）
-# v3：对齐 PRD-00005 / FD-00005 / TDD-00005（accounts 表新增多邮箱字段：account_type/provider/imap_host/imap_port/imap_password）
-# v5：BUG-00011 P2 — Message-ID 去重防止重复推送
-# v6：PRD-00008 P1 — 对外 API 限流表 + 公网模式默认配置
-# v7：PRD-00008 P2 — wait-message 异步探测缓存表
-# v8：PRD-00008 P1 — 上游真实探测结果缓存表
-# v9：PRD-00008 P2 — 多 API Key 表
-# v10：PRD-00008 P2 — 调用方日级使用统计表
-# v11：PRD-00009 MT-1 — 邮箱池字段（pool_status/claimed_by/...）+ account_claim_logs 表 + pool settings
-# v12：PRD-00009 P2 — external_api_keys 新增 pool_access 布尔权限
-# v13：PRD-00010 V1.90 — 邮件通知设置 + 统一通知游标/投递日志表
-# v14：PRD-00011 V1.91 — accounts 表新增简洁模式摘要字段，/api/accounts 只读持久化摘要
-# v15：2026-03-26 临时邮箱能力正式化 — temp_emails 扩展字段、temp_email_messages 复合唯一、temp_mail_* 设置项
-# v16：2026-03-28 patch — 修补 idx_temp_emails_task_token_unique 唯一索引（v15 旧库迁移代码未包含该索引，导致老库升级后缺失）
-# v17：2026-04-02 project-scoped pool reuse — accounts 表新增 email_domain 列，account_project_usage 表（project_key 防同项目重复领取），external_probe_cache 表新增 baseline_timestamp 列
-# v18：2026-04-09 CF临时邮箱接入邮箱池 — accounts 表新增 temp_mail_meta 列（JSON 格式存储 CF 邮箱元数据）
-# v19：2026-04-10 提取器置信度门控（BUG-00017）
-# v20：2026-04-10 验证码提取提速与 AI 增强（groups 表新增提取策略字段）
-# v21：2026-04-11 Outlook OAuth 验证码提取渠道记忆（accounts.preferred_verification_channel）
-# v22：2026-04-16 邮箱池项目维度成功复用（accounts.claimed_project_key + account_project_usage.success_*）
-# v23：2026-04-19 数据概览大盘（verification_extract_logs + overview 兼容字段）
-# v24：2026-07-01 临时邮箱接入邮箱池（temp_emails 新增池生命周期字段：pool_status/claimed_by/...，可被 claim-random 领取）
-# v25：ZER-537 — external_api_keys 新增 expires_at，支持 API Key 生命周期管理
-DB_SCHEMA_VERSION = 25
+DB_SCHEMA_VERSION = 24
 DB_SCHEMA_VERSION_KEY = "db_schema_version"
 DB_SCHEMA_LAST_UPGRADE_TRACE_ID_KEY = "db_schema_last_upgrade_trace_id"
 DB_SCHEMA_LAST_UPGRADE_ERROR_KEY = "db_schema_last_upgrade_error"
 
 
-def create_sqlite_connection(database_path: Optional[str] = None) -> sqlite3.Connection:
-    """创建 SQLite 连接（带基础一致性/并发配置）"""
-    path = database_path or config.get_database_path()
-    conn = sqlite3.connect(path, timeout=30)
-    conn.row_factory = sqlite3.Row
-    try:
-        conn.execute("PRAGMA foreign_keys = ON")
-    except Exception:
-        pass
-    try:
-        conn.execute("PRAGMA busy_timeout = 5000")
-    except Exception:
-        pass
+def create_sqlite_connection(database_path: Optional[str] = None) -> any:
+    """创建连接（支持本地 SQLite 或云端 Turso）"""
+    turso_url = os.getenv("TURSO_URL")
+    turso_token = os.getenv("TURSO_TOKEN")
+
+    # 如果配置了 TURSO_URL 且 libsql 模块导入成功，则连接到 Turso
+    if turso_url and libsql is not None:
+        # 将 None 安全地转换为 "" (空字符串)，避免 libsql 库底层 Rust 类型转换崩溃
+        safe_token = turso_token or ""
+        print(f"[Database] 检测到配置，正在连接到 Turso 云数据库: {turso_url}")
+        if not turso_token:
+            print("[Database] ⚠️ 警告：检测到配置了 TURSO_URL，但环境变量中未发现 TURSO_TOKEN！")
+
+        conn_raw = libsql.connect(turso_url, auth_token=safe_token)
+        # 核心：使用自定义的包装器来提供 Row 映射支持
+        conn = LibsqlConnectionWrapper(conn_raw)
+    else:
+        # 否则回退到原生本地 SQLite 模式
+        path = database_path or config.get_database_path()
+        conn = sqlite3.connect(path, timeout=30)
+        conn.row_factory = sqlite3.Row
+        try:
+            conn.execute("PRAGMA foreign_keys = ON")
+        except Exception:
+            pass
+        try:
+            conn.execute("PRAGMA busy_timeout = 5000")
+        except Exception:
+            pass
     return conn
 
 
-def get_db() -> sqlite3.Connection:
-    """获取数据库连接（绑定到 flask.g 生命周期）"""
+def get_db() -> any:
+    """获取数据库连接（绑定 to flask.g 生命周期）"""
     db = getattr(g, "_database", None)
     if db is None:
         db = g._database = create_sqlite_connection()
@@ -96,12 +219,13 @@ def init_db(database_path: Optional[str] = None):
     conn = create_sqlite_connection(path)
     cursor = conn.cursor()
 
-    # 基础并发配置（对既存数据库同样生效）
-    try:
-        cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.execute("PRAGMA synchronous=NORMAL")
-    except Exception:
-        pass
+    # 基础并发配置（对既存数据库同样生效。注意：如果使用了 Turso 云数据库，则直接跳过 WAL 等本地 PRAGMA，因为云端不支持）
+    if not os.getenv("TURSO_URL"):
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+        except Exception:
+            pass
 
     migration_id = None
     migration_trace_id = None
@@ -249,7 +373,7 @@ def init_db(database_path: Optional[str] = None):
             )
             """)
 
-        # 刷新记录表（账号级）
+        # 刷新运行记录
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS account_refresh_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -351,7 +475,7 @@ def init_db(database_path: Optional[str] = None):
             )
             """)
 
-        # 刷新运行记录（用于“最近触发/来源/统计/运行中状态”的可验证性）
+        # 刷新运行记录
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS refresh_runs (
                 id TEXT PRIMARY KEY,
@@ -472,10 +596,7 @@ def init_db(database_path: Optional[str] = None):
             if col_def[0] not in temp_email_columns:
                 cursor.execute(f"ALTER TABLE temp_emails ADD COLUMN {col_def[0]} {col_def[1]}")
 
-        # P0: task_token 需要唯一约束；旧库通过 ADD COLUMN 无法携带 UNIQUE
-        # - 先把空字符串规范为 NULL（避免 '' 触发唯一冲突）
-        # - 若存在重复 token：中止升级并给出可执行 SQL 指引（不自动修复）
-        # - 无重复：补齐唯一索引
+        # P0: task_token 需要唯一约束
         try:
             cursor.execute("UPDATE temp_emails SET task_token = NULL WHERE task_token IS NOT NULL AND TRIM(task_token) = ''")
         except Exception:
@@ -519,7 +640,7 @@ def init_db(database_path: Optional[str] = None):
                 "  HAVING COUNT(*) > 1\n"
                 ")\n"
                 "ORDER BY task_token, id;\n\n"
-                "-- 3) 示例（请先备份并人工确认）：保留每个 task_token 的第一条，其余置空\n"
+                "-- 3) 示例：保留第一个，其余置空\n"
                 "WITH d AS (\n"
                 "  SELECT id, task_token,\n"
                 "         ROW_NUMBER() OVER (PARTITION BY task_token ORDER BY id) AS rn\n"
@@ -689,7 +810,7 @@ def init_db(database_path: Optional[str] = None):
             VALUES ('temp_mail_prefix_rules', '{"min_length":1,"max_length":32,"pattern":"^[a-z0-9][a-z0-9._-]*$"}')
             """)
 
-        # v0.3: 设置页面 Tab 重构 — CF Worker 独立域名 key
+        # v0.3: 设置页面 Tab 重构
         cursor.execute("""
             INSERT OR IGNORE INTO settings (key, value)
             VALUES ('cf_worker_domains', '[]')
@@ -703,7 +824,7 @@ def init_db(database_path: Optional[str] = None):
             VALUES ('cf_worker_prefix_rules', '{"min_length":1,"max_length":32,"pattern":"^[a-z0-9][a-z0-9._-]*$"}')
             """)
 
-        # PRD-00008 / FD-00008：对外开放 API Key（默认空，建议加密存储）
+        # PRD-00008 / FD-00008：对外开放 API Key
         cursor.execute("""
             INSERT OR IGNORE INTO settings (key, value)
             VALUES ('external_api_key', '')
@@ -816,7 +937,7 @@ def init_db(database_path: Optional[str] = None):
             ON telegram_push_log(pushed_at)
             """)
 
-        # v13: 统一通知游标表（V1.90 邮件通知增强）
+        # v13: 统一通知游标表
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS notification_cursor_states (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -834,7 +955,7 @@ def init_db(database_path: Optional[str] = None):
             ON notification_cursor_states(channel, source_type, source_key)
             """)
 
-        # v13: 统一通知投递日志（用于跨通道去重）
+        # v13: 统一通知投递日志
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS notification_delivery_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -855,7 +976,7 @@ def init_db(database_path: Optional[str] = None):
             ON notification_delivery_logs(channel, source_type, source_key, delivered_at)
             """)
 
-        # v6: 对外 API 限流表 + 公网模式默认配置（PRD-00008 P1）
+        # v6: 对外 API 限流表 + 公网模式默认配置
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS external_api_rate_limits (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -883,7 +1004,7 @@ def init_db(database_path: Optional[str] = None):
                 (key, default),
             )
 
-        # v7: wait-message 异步探测缓存表（PRD-00008 P2）
+        # v7: wait-message 异步探测缓存表
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS external_probe_cache (
                 id TEXT PRIMARY KEY,
@@ -912,7 +1033,7 @@ def init_db(database_path: Optional[str] = None):
             ON external_probe_cache(email_addr, status)
             """)
 
-        # v8: 上游真实探测结果缓存表（PRD-00008 P1）
+        # v8: 上游真实探测结果缓存表
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS external_upstream_probes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -936,7 +1057,7 @@ def init_db(database_path: Optional[str] = None):
             ON external_upstream_probes(email_addr, updated_at)
             """)
 
-        # v9: 对外 API 多 Key 配置表（PRD-00008 P2）
+        # v9: 对外 API 多 Key 配置表
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS external_api_keys (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -945,7 +1066,6 @@ def init_db(database_path: Optional[str] = None):
                 allowed_emails_json TEXT NOT NULL DEFAULT '[]',
                 pool_access INTEGER NOT NULL DEFAULT 0,
                 enabled INTEGER NOT NULL DEFAULT 1,
-                expires_at TIMESTAMP,
                 last_used_at TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -955,90 +1075,16 @@ def init_db(database_path: Optional[str] = None):
         external_api_keys_columns = [col[1] for col in cursor.fetchall()]
         if "pool_access" not in external_api_keys_columns:
             cursor.execute("ALTER TABLE external_api_keys ADD COLUMN pool_access INTEGER NOT NULL DEFAULT 0")
-        if "expires_at" not in external_api_keys_columns:
-            cursor.execute("ALTER TABLE external_api_keys ADD COLUMN expires_at TIMESTAMP")
-        expected_enabled_index_columns = ["enabled", "expires_at", "updated_at"]
-        enabled_index_columns = [
-            row[2] for row in cursor.execute("PRAGMA index_info('idx_external_api_keys_enabled')").fetchall()
-        ]
-        if enabled_index_columns and enabled_index_columns != expected_enabled_index_columns:
-            cursor.execute("DROP INDEX idx_external_api_keys_enabled")
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_external_api_keys_enabled
-            ON external_api_keys(enabled, expires_at, updated_at)
+            ON external_api_keys(enabled, updated_at)
+            """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_external_api_keys_name
+            ON external_api_keys(name)
             """)
 
-        # API Key 名称必须由数据库保证原子唯一，避免并发请求绕过应用层预检查。
-        # 旧库若已有大小写不敏感的重复名称，遵循既有迁移纪律：中止并给出修复 SQL，
-        # 不自动删除、禁用或重命名仍可能有效的凭据。
-        unique_name_index_row = cursor.execute(
-            "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'idx_external_api_keys_name_unique'"
-        ).fetchone()
-        unique_name_index_sql = str(unique_name_index_row["sql"] or "") if unique_name_index_row else ""
-        normalized_unique_name_index_sql = "".join(unique_name_index_sql.lower().split())
-        if unique_name_index_row and "onexternal_api_keys(lower(trim(name)))" not in normalized_unique_name_index_sql:
-            cursor.execute("DROP INDEX idx_external_api_keys_name_unique")
-            unique_name_index_row = None
-
-        if not unique_name_index_row:
-            duplicate_name_sample = cursor.execute("""
-                SELECT LOWER(TRIM(name)) AS normalized_name, COUNT(*) AS c
-                FROM external_api_keys
-                GROUP BY LOWER(TRIM(name))
-                HAVING COUNT(*) > 1
-                LIMIT 5
-                """).fetchall()
-            if duplicate_name_sample:
-                duplicate_name_count_row = cursor.execute("""
-                    SELECT COUNT(*) AS c
-                    FROM (
-                        SELECT LOWER(TRIM(name)) AS normalized_name
-                        FROM external_api_keys
-                        GROUP BY LOWER(TRIM(name))
-                        HAVING COUNT(*) > 1
-                    )
-                    """).fetchone()
-                duplicate_name_count = int(
-                    duplicate_name_count_row["c"]
-                    if duplicate_name_count_row and duplicate_name_count_row["c"] is not None
-                    else 0
-                )
-                trace_text = str(migration_trace_id or "").strip()
-                sql_hint = (
-                    "-- 1) 找出大小写不敏感的重复名称\n"
-                    "SELECT LOWER(TRIM(name)) AS normalized_name, COUNT(*) AS c\n"
-                    "FROM external_api_keys\n"
-                    "GROUP BY LOWER(TRIM(name))\n"
-                    "HAVING COUNT(*) > 1;\n\n"
-                    "-- 2) 查看重复名称对应的 Key；请备份后人工决定新名称\n"
-                    "SELECT id, name, enabled, created_at, updated_at\n"
-                    "FROM external_api_keys\n"
-                    "WHERE LOWER(TRIM(name)) IN (\n"
-                    "  SELECT LOWER(TRIM(name))\n"
-                    "  FROM external_api_keys\n"
-                    "  GROUP BY LOWER(TRIM(name))\n"
-                    "  HAVING COUNT(*) > 1\n"
-                    ")\n"
-                    "ORDER BY LOWER(TRIM(name)), id;\n\n"
-                    "-- 3) 示例：为指定重复项设置人工确认后的唯一名称\n"
-                    "UPDATE external_api_keys SET name = '<unique-name>' WHERE id = <duplicate-id>;\n"
-                )
-                raise Exception(
-                    "数据库升级被中止：检测到 external_api_keys.name 存在大小写不敏感的重复值，"
-                    "无法创建唯一索引。"
-                    f" duplicate_external_api_key_name_count={duplicate_name_count or len(duplicate_name_sample)}"
-                    + (f" trace_id={trace_text}" if trace_text else "")
-                    + "\n请先备份数据库并重命名重复 API Key 后重试。参考 SQL：\n"
-                    + sql_hint
-                )
-            cursor.execute("""
-                CREATE UNIQUE INDEX idx_external_api_keys_name_unique
-                ON external_api_keys(LOWER(TRIM(name)))
-                """)
-
-        cursor.execute("DROP INDEX IF EXISTS idx_external_api_keys_name")
-
-        # v10: 调用方日级使用统计（PRD-00008 P2）
+        # v10: 调用方日级使用统计
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS external_api_consumer_usage_daily (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1081,7 +1127,7 @@ def init_db(database_path: Optional[str] = None):
                 END
             """)
 
-        # v11: 邮箱池字段 + account_claim_logs 表（PRD-00009 MT-1）
+        # v11: 邮箱池字段 + account_claim_logs 表
         cursor.execute("PRAGMA table_info(accounts)")
         accounts_columns_v11 = [col[1] for col in cursor.fetchall()]
         for col_def in [
@@ -1143,12 +1189,12 @@ def init_db(database_path: Optional[str] = None):
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('pool_cooldown_seconds', '86400')")
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('pool_default_lease_seconds', '600')")
 
-        # v17: project-scoped pool reuse — email_domain 列 + account_project_usage 表
+        # v17: project-scoped pool reuse
         cursor.execute("PRAGMA table_info(accounts)")
         accounts_columns_v17 = [col[1] for col in cursor.fetchall()]
         if "email_domain" not in accounts_columns_v17:
             cursor.execute("ALTER TABLE accounts ADD COLUMN email_domain TEXT DEFAULT NULL")
-        # 回填 email_domain（从 email 列提取域名部分）
+        # 回填 email_domain
         cursor.execute("""
             UPDATE accounts
             SET email_domain = LOWER(SUBSTR(email, INSTR(email, '@') + 1))
@@ -1184,13 +1230,13 @@ def init_db(database_path: Optional[str] = None):
             ON account_project_usage(account_id)
         """)
 
-        # v17: 给 external_probe_cache 加 baseline_timestamp 列（PR#27 probe 与 claim 关联）
+        # v17: 给 external_probe_cache 加 baseline_timestamp 列
         cursor.execute("PRAGMA table_info(external_probe_cache)")
         probe_columns_v17 = [col[1] for col in cursor.fetchall()]
         if "baseline_timestamp" not in probe_columns_v17:
             cursor.execute("ALTER TABLE external_probe_cache ADD COLUMN baseline_timestamp INTEGER DEFAULT NULL")
 
-        # v18: CF临时邮箱接入邮箱池 — accounts 表新增 temp_mail_meta 列
+        # v18: CF临时邮箱接入邮箱池
         cursor.execute("PRAGMA table_info(accounts)")
         accounts_columns_v18 = [col[1] for col in cursor.fetchall()]
         if "temp_mail_meta" not in accounts_columns_v18:
@@ -1202,15 +1248,12 @@ def init_db(database_path: Optional[str] = None):
         if "preferred_verification_channel" not in accounts_columns_v21:
             cursor.execute("ALTER TABLE accounts ADD COLUMN preferred_verification_channel TEXT")
 
-        # v22: 邮箱池项目维度成功复用 (FD: docs/FD/2026-04-16-邮箱池项目维度成功复用FD.md)
-        # 核心语义：长期邮箱 success 后回 available 而非 used，同 caller+project 只防成功不防失败
-        # claimed_project_key：claim 时写入、complete/release/expire 时清除，用于 complete 阶段自动判定复用路径
+        # v22: 邮箱池项目维度成功复用
         cursor.execute("PRAGMA table_info(accounts)")
         accounts_columns_v22 = [col[1] for col in cursor.fetchall()]
         if "claimed_project_key" not in accounts_columns_v22:
             cursor.execute("ALTER TABLE accounts ADD COLUMN claimed_project_key TEXT DEFAULT NULL")
 
-        # success_count > 0 是 claim_atomic 排除同项目复用的唯一门控条件（TDD §4.1 N-02）
         cursor.execute("PRAGMA table_info(account_project_usage)")
         project_usage_columns_v22 = [col[1] for col in cursor.fetchall()]
         if "first_success_at" not in project_usage_columns_v22:
@@ -1220,8 +1263,7 @@ def init_db(database_path: Optional[str] = None):
         if "success_count" not in project_usage_columns_v22:
             cursor.execute("ALTER TABLE account_project_usage ADD COLUMN success_count INTEGER NOT NULL DEFAULT 0")
 
-        # 一次性数据迁移：历史 used 长期邮箱回 available，释放被旧语义"锁死"的邮箱资产
-        # 临时邮箱（cloudflare_temp_mail / temp_mail）不参与迁移，因其生命周期由 CF 管理
+        # 一次性数据迁移
         if current_version < 22:
             cursor.execute("""
                 UPDATE accounts
@@ -1264,9 +1306,7 @@ def init_db(database_path: Optional[str] = None):
             ON verification_extract_logs(result_type)
             """)
 
-        # v24: 临时邮箱接入邮箱池 — temp_emails 新增池生命周期字段
-        # 语义：所有临时邮箱自动进池，claim-random 在 accounts 无命中时可领取 temp_emails；
-        #       account_id 通过 TEMP_POOL_ID_OFFSET 偏移与 accounts 区分（见 repositories/pool.py）。
+        # v24: 临时邮箱接入邮箱池
         cursor.execute("PRAGMA table_info(temp_emails)")
         temp_email_columns_v24 = [col[1] for col in cursor.fetchall()]
         for col_def in [
@@ -1288,8 +1328,6 @@ def init_db(database_path: Optional[str] = None):
             CREATE INDEX IF NOT EXISTS idx_temp_emails_claim_token
             ON temp_emails(claim_token)
             """)
-        # 回填历史行的 domain/prefix：老库存在 domain IS NULL 的临时邮箱，
-        # 否则按 email_domain 领取时会被过滤而继续返回 NO_AVAILABLE_ACCOUNT。
         cursor.execute("""
             UPDATE temp_emails
             SET domain = substr(email, instr(email, '@') + 1)
@@ -1304,7 +1342,7 @@ def init_db(database_path: Optional[str] = None):
         # 迁移现有明文数据为加密数据
         migrate_sensitive_data(conn)
 
-        # 升级完成标记：写入 schema 版本，便于“升级可验证”
+        # 升级完成标记
         cursor.execute(
             """
             INSERT OR REPLACE INTO settings (key, value, updated_at)
@@ -1392,19 +1430,14 @@ def init_db(database_path: Optional[str] = None):
 
 
 def migrate_sensitive_data(conn: sqlite3.Connection):
-    """迁移现有明文敏感数据为加密数据。
-
-    v22 改为通过 PRAGMA table_info 动态检测列是否存在，
-    避免在早期 schema（如 v21 seed 数据中没有 password/refresh_token 列）上执行 SELECT 时报错。
-    列名来自 SQLite 内置 PRAGMA 返回值，不存在 SQL 注入风险。
-    """
+    """迁移现有明文敏感数据为加密数据。"""
     cursor = conn.cursor()
     account_columns = {row[1] for row in cursor.execute("PRAGMA table_info(accounts)").fetchall()}
     has_password = "password" in account_columns
     has_refresh_token = "refresh_token" in account_columns
     has_imap_password = "imap_password" in account_columns
 
-    # 动态构建 SELECT，缺失列用 NULL AS 占位保持列数一致
+    # 动态构建 SELECT
     select_fields = ["id"]
     select_fields.append("password" if has_password else "NULL AS password")
     select_fields.append("refresh_token" if has_refresh_token else "NULL AS refresh_token")
@@ -1449,7 +1482,7 @@ def migrate_sensitive_data(conn: sqlite3.Connection):
     if migrated_count > 0:
         print(f"已迁移 {migrated_count} 个账号的敏感数据为加密存储")
 
-    # 迁移 settings 表中明文存储的 cf_worker_admin_key
+    # 迁移 settings 表中明文存储 of cf_worker_admin_key
     _SETTINGS_SENSITIVE_KEYS = ["cf_worker_admin_key"]
     for key in _SETTINGS_SENSITIVE_KEYS:
         row = cursor.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
